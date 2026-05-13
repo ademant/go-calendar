@@ -1,0 +1,3 @@
+server:
+  port: 8000
+  token_expiration_hours: 24
