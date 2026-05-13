@@ -143,6 +143,68 @@ DELETE /api/v1/users/{id}
 
 **Response:** `204 No Content`
 
+### Musician
+#### Get all musicians
+```bash
+GET /api/v1/musicians
+```
+
+**Response:**
+```json
+[
+  {
+    "id": 1,
+    "bandname": "BonnerTruppe",
+    "internetsite": "www.balfolk.site",
+    "created_at": "2026-05-13T12:00:00"
+  }
+]
+```
+
+#### Create musician
+```bash
+POST /api/v1/musicians
+Content-Type: application/json
+
+{
+  "bandname": "BonnerTruppe",
+  "internetsite": "www.balfolk.site"
+}
+```
+
+**Response:** `201 Created`
+```json
+{
+  "id": 1,
+  "bandname": "BonnerTruppe",
+  "internetsite": "www.balfolk.site",
+  "created_at": "2026-05-13T12:00:00"
+}
+```
+
+#### Get single musician
+```bash
+GET /api/v1/musicians/{id}
+```
+
+#### Update musician (bandname or internetsite)
+```bash
+PUT /api/v1/musicians/{id}
+Content-Type: application/json
+
+{
+  "bandname": "BonnerTruppe Updated",
+  "internetsite": "www.bonner-gruppe.de"
+}
+```
+
+#### Delete musician
+```bash
+DELETE /api/v1/musicians/{id}
+```
+
+**Response:** `204 No Content`
+
 ### Locations
 #### Create location
 ```bash
@@ -179,7 +241,7 @@ Content-Type: application/json
 }
 ```
 
-#### Delete user
+#### Delete locations
 ```bash
 DELETE /api/v1/locations/{id}
 ```
@@ -191,6 +253,21 @@ DELETE /api/v1/locations/{id}
 GET /api/v1/events
 ```
 
+**Query Parameters:**
+- `start_time_after`: Filter events with start time after this datetime (RFC3339 format)
+- `start_time_before`: Filter events with start time before this datetime
+- `end_time_after`: Filter events with end time after this datetime
+- `end_time_before`: Filter events with end time before this datetime
+- `location`: Filter events by location name (partial match)
+- `has_ball`: Filter by has_ball flag (`true` or `false`)
+- `has_workshop`: Filter by has_workshop flag (`true` or `false`)
+- `is_published`: Filter by publication status (`true` or `false`, requires "user" or "admin" role)
+
+**Visibility Rules:**
+- **Anonymous requests**: Only see events where `is_published = true`
+- **Authorized with "viewer" role**: Only see events where `is_published = true`
+- **Authorized with "user" or "admin" role**: See all events (both published and unpublished), optionally filtered by `is_published` parameter
+
 **Response:**
 ```json
 [
@@ -200,6 +277,10 @@ GET /api/v1/events
     "description": "Monthly planning",
     "start_time": "2026-05-15T10:00:00",
     "end_time": "2026-05-15T11:00:00",
+    "has_ball": true,
+    "has_workshop": true,
+    "tags": ["Festival","Köln"],
+    "is_published": true,
     "created_at": "2026-05-13T12:00:00"
   }
 ]
@@ -214,7 +295,20 @@ Content-Type: application/json
   "title": "Team Meeting",
   "description": "Monthly planning",
   "start_time": "2026-05-15T10:00:00",
-  "end_time": "2026-05-15T11:00:00"
+  "end_time": "2026-05-15T11:00:00",
+  "has_ball": true,
+  "has_workshop": true,
+  "tags": ["Festival","Köln"],
+  "musicians": ["MusicianA","MusicianB"],
+  "location": {
+    "location": "Bahnhof",
+    "address": "Bahnhofstrasse",
+    "zipcode": "12345",
+    "town": "Berlin",
+    "latitude": 48,
+    "longitude": 10,
+    "eventsite": "www.balfolk.jetzt/42"
+  }
 }
 ```
 
@@ -226,9 +320,18 @@ Content-Type: application/json
   "description": "Monthly planning",
   "start_time": "2026-05-15T10:00:00",
   "end_time": "2026-05-15T11:00:00",
+  "has_ball": true,
+  "has_workshop": true,
+  "tags": ["Festival","Köln"],
+  "is_published": true,
   "created_at": "2026-05-13T12:00:00"
 }
 ```
+
+**Publication Status:**
+- **Anonymous request** (no Authorization header): `is_published = false`
+- **Authorized request with role "user" or "admin"**: `is_published = true`
+- **Authorized request with role "viewer"**: `is_published = false`
 
 #### Get single event
 ```bash

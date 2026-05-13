@@ -301,18 +301,30 @@ func updateUser(w http.ResponseWriter, r *http.Request) {
 func deleteUser(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
+	requesterRole := r.Header.Get("X-User-Role")
+	if requesterRole != RoleAdmin {
+		http.Error(w, "Forbidden: only admins may delete users", http.StatusForbidden)
+		return
+	}
+
 	vars := mux.Vars(r)
 	id := vars["id"]
 
-	// Check if user exists
+	// Check if user exists and prevent deletion of admin accounts
 	var userID int
-	err := db.QueryRow("SELECT id FROM users WHERE id = ?", id).Scan(&userID)
+	var userRole string
+	err := db.QueryRow("SELECT id, role FROM users WHERE id = ?", id).Scan(&userID, &userRole)
 	if err == sql.ErrNoRows {
 		http.Error(w, "User not found", http.StatusNotFound)
 		return
 	}
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	if userRole == RoleAdmin {
+		http.Error(w, "Forbidden: admin users may not be deleted", http.StatusForbidden)
 		return
 	}
 

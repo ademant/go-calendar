@@ -134,6 +134,12 @@ func getLocation(w http.ResponseWriter, r *http.Request) {
 func updateLocation(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
+	requesterRole := r.Header.Get("X-User-Role")
+	if requesterRole != RoleAdmin {
+		http.Error(w, "Forbidden: only admins may update locations", http.StatusForbidden)
+		return
+	}
+
 	vars := mux.Vars(r)
 	id := vars["id"]
 
@@ -192,6 +198,12 @@ func updateLocation(w http.ResponseWriter, r *http.Request) {
 // DELETE /api/v1/locations/{id} - Delete a location
 func deleteLocation(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
+
+	requesterRole := r.Header.Get("X-User-Role")
+	if requesterRole != RoleAdmin {
+		http.Error(w, "Forbidden: only admins may delete locations", http.StatusForbidden)
+		return
+	}
 
 	vars := mux.Vars(r)
 	id := vars["id"]

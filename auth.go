@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"strings"
 	"time"
@@ -119,6 +120,48 @@ func parseTokenExpiration(value string) (time.Time, error) {
 	return time.Time{}, fmt.Errorf("unsupported expiration format")
 }
 
+func getClientIP(r *http.Request) string {
+	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
+		parts := strings.Split(xff, ",")
+		if len(parts) > 0 {
+			return strings.TrimSpace(parts[0])
+		}
+	}
+	if xr := r.Header.Get("X-Real-IP"); xr != "" {
+		return strings.TrimSpace(xr)
+	}
+	if host, _, err := net.SplitHostPort(r.RemoteAddr); err == nil {
+		return host
+	}
+	return r.RemoteAddr
+}
+
+func adminLoginAllowed(ip string) bool {
+	if config == nil || len(config.Server.AdminAllowedIPs) == 0 {
+		return true
+	}
+
+	parsedIP := net.ParseIP(ip)
+	if parsedIP == nil {
+		return false
+	}
+
+	for _, allowed := range config.Server.AdminAllowedIPs {
+		if strings.Contains(allowed, "/") {
+			_, cidr, err := net.ParseCIDR(allowed)
+			if err == nil && cidr.Contains(parsedIP) {
+				return true
+			}
+			continue
+		}
+		if net.ParseIP(allowed) != nil && net.ParseIP(allowed).Equal(parsedIP) {
+			return true
+		}
+	}
+
+	return false
+}
+
 // GET /api/v1/login - Login endpoint to get OAuth token
 func login(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
@@ -176,6 +219,13 @@ func login(w http.ResponseWriter, r *http.Request) {
 	if hashPassword(req.Password) != passwordHash {
 		w.WriteHeader(http.StatusUnauthorized)
 		json.NewEncoder(w).Encode(TokenError{Error: "Invalid username or password"})
+		return
+	}
+
+	clientIP := getClientIP(r)
+	if user.Role == RoleAdmin && !adminLoginAllowed(clientIP) {
+		w.WriteHeader(http.StatusForbidden)
+		json.NewEncoder(w).Encode(TokenError{Error: "Admin login not allowed from this IP address"})
 		return
 	}
 

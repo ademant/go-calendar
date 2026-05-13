@@ -9,8 +9,10 @@ import (
 )
 
 type ServerConfig struct {
-	Port                 int `yaml:"port"`
-	TokenExpirationHours int `yaml:"token_expiration_hours"`
+	Port                 int      `yaml:"port"`
+	TokenExpirationHours int      `yaml:"token_expiration_hours"`
+	AdminAllowedIPs      []string `yaml:"admin_allowed_ips"`
+	RateLimit            int      `yaml:"rate_limit"`
 }
 
 type Config struct {

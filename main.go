@@ -2,18 +2,84 @@ package main
 
 import (
 	"database/sql"
-	"encoding/json"
 	"log"
+	"net"
 	"net/http"
+	"strings"
+	"sync"
+	"time"
 
 	"github.com/gorilla/mux"
 	_ "github.com/mattn/go-sqlite3"
 )
 
 var db *sql.DB
+var rateLimiter *RateLimiter
+
+type RateLimiter struct {
+	mu       sync.Mutex
+	requests map[string][]time.Time
+	limit    int
+	window   time.Duration
+}
+
+func NewRateLimiter(limit int, window time.Duration) *RateLimiter {
+	return &RateLimiter{
+		requests: make(map[string][]time.Time),
+		limit:    limit,
+		window:   window,
+	}
+}
+
+func (rl *RateLimiter) Allow(ip string) bool {
+	rl.mu.Lock()
+	defer rl.mu.Unlock()
+	now := time.Now()
+	if times, ok := rl.requests[ip]; ok {
+		var valid []time.Time
+		for _, t := range times {
+			if now.Sub(t) < rl.window {
+				valid = append(valid, t)
+			}
+		}
+		rl.requests[ip] = valid
+		if len(valid) >= rl.limit {
+			return false
+		}
+	}
+	rl.requests[ip] = append(rl.requests[ip], now)
+	return true
+}
+
+func RateLimitMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ip := getIP(r)
+		if !rateLimiter.Allow(ip) {
+			http.Error(w, "Rate limit exceeded", http.StatusTooManyRequests)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+func getIP(r *http.Request) string {
+	if ip := r.Header.Get("X-Forwarded-For"); ip != "" {
+		return strings.TrimSpace(strings.Split(ip, ",")[0])
+	}
+	if ip := r.Header.Get("X-Real-IP"); ip != "" {
+		return strings.TrimSpace(ip)
+	}
+	ip, _, _ := net.SplitHostPort(r.RemoteAddr)
+	return ip
+}
 
 func init() {
 	var err error
+	config, err = loadConfig("config.yaml")
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	db, err = sql.Open("sqlite3", "./calendar.db")
 	if err != nil {
 		log.Fatal(err)
@@ -28,6 +94,8 @@ func init() {
 	}
 
 	ensureAdminUser(db)
+
+	rateLimiter = NewRateLimiter(config.Server.RateLimit, time.Minute)
 
 	log.Println("Database initialized successfully")
 }
@@ -48,7 +116,13 @@ func createTables() error {
 		description TEXT,
 		start_time DATETIME NOT NULL,
 		end_time DATETIME NOT NULL,
-		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+		location_id INTEGER,
+		has_ball INTEGER DEFAULT 0,
+		has_workshop INTEGER DEFAULT 0,
+		tags TEXT,
+		is_published INTEGER DEFAULT 0,
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		FOREIGN KEY (location_id) REFERENCES locations(id)
 	);
 	CREATE TABLE IF NOT EXISTS tokens (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -69,119 +143,20 @@ func createTables() error {
 		internetsite TEXT,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 	);
+	CREATE TABLE IF NOT EXISTS musicians (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		bandname TEXT NOT NULL,
+		internetsite TEXT,
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+	);
 	`
 	_, err := db.Exec(schema)
 	return err
 }
 
-type Event struct {
-	ID          int    `json:"id"`
-	Title       string `json:"title"`
-	Description string `json:"description"`
-	StartTime   string `json:"start_time"`
-	EndTime     string `json:"end_time"`
-	CreatedAt   string `json:"created_at"`
-}
-
-// GET /api/v1/events
-func getEvents(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-
-	rows, err := db.Query("SELECT id, title, description, start_time, end_time, created_at FROM events")
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	defer rows.Close()
-
-	events := []Event{}
-	for rows.Next() {
-		var event Event
-		if err := rows.Scan(&event.ID, &event.Title, &event.Description, &event.StartTime, &event.EndTime, &event.CreatedAt); err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		events = append(events, event)
-	}
-
-	json.NewEncoder(w).Encode(events)
-}
-
-// POST /api/v1/events
-func createEvent(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-
-	var event Event
-	if err := json.NewDecoder(r.Body).Decode(&event); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-
-	result, err := db.Exec(
-		"INSERT INTO events (title, description, start_time, end_time) VALUES (?, ?, ?, ?)",
-		event.Title, event.Description, event.StartTime, event.EndTime,
-	)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	id, _ := result.LastInsertId()
-	event.ID = int(id)
-
-	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(event)
-}
-
-// GET /api/v1/events/{id}
-func getEvent(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-
-	vars := mux.Vars(r)
-	id := vars["id"]
-
-	var event Event
-	err := db.QueryRow(
-		"SELECT id, title, description, start_time, end_time, created_at FROM events WHERE id = ?",
-		id,
-	).Scan(&event.ID, &event.Title, &event.Description, &event.StartTime, &event.EndTime, &event.CreatedAt)
-
-	if err == sql.ErrNoRows {
-		http.Error(w, "Event not found", http.StatusNotFound)
-		return
-	}
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	json.NewEncoder(w).Encode(event)
-}
-
-// DELETE /api/v1/events/{id}
-func deleteEvent(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-
-	vars := mux.Vars(r)
-	id := vars["id"]
-
-	result, err := db.Exec("DELETE FROM events WHERE id = ?", id)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	rowsAffected, _ := result.RowsAffected()
-	if rowsAffected == 0 {
-		http.Error(w, "Event not found", http.StatusNotFound)
-		return
-	}
-
-	w.WriteHeader(http.StatusNoContent)
-}
-
 func main() {
 	router := mux.NewRouter()
+	router.Use(RateLimitMiddleware)
 
 	// Authentication endpoint (no token required)
 	router.HandleFunc("/api/v1/login", login).Methods("GET", "POST")
@@ -203,6 +178,15 @@ func main() {
 	locationRoutes.HandleFunc("/{id}", getLocation).Methods("GET")
 	locationRoutes.HandleFunc("/{id}", updateLocation).Methods("PUT")
 	locationRoutes.HandleFunc("/{id}", deleteLocation).Methods("DELETE")
+
+	// Musician endpoints (protected)
+	musicianRoutes := router.PathPrefix("/api/v1/musicians").Subrouter()
+	musicianRoutes.Use(TokenMiddleware)
+	musicianRoutes.HandleFunc("", getMusicians).Methods("GET")
+	musicianRoutes.HandleFunc("", createMusician).Methods("POST")
+	musicianRoutes.HandleFunc("/{id}", getMusician).Methods("GET")
+	musicianRoutes.HandleFunc("/{id}", updateMusician).Methods("PUT")
+	musicianRoutes.HandleFunc("/{id}", deleteMusician).Methods("DELETE")
 
 	// Event endpoints (protected)
 	eventRoutes := router.PathPrefix("/api/v1/events").Subrouter()
