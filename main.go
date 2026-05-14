@@ -259,6 +259,10 @@ func main() {
 	router.HandleFunc("/events/tag/{tag}.ics", publicGetEventsByTagICS).Methods("GET")
 	router.HandleFunc("/events/town/{town}.ics", publicGetEventsByTownICS).Methods("GET")
 
+	// Info endpoint (public)
+	router.HandleFunc("/api/v1/info", getInfo).Methods("GET")
+	router.HandleFunc("/api/v1/info", handleOptions).Methods("OPTIONS")
+
 	// Authentication endpoint (no token required)
 	router.HandleFunc("/api/v1/login", login).Methods("GET", "POST")
 	router.HandleFunc("/api/v1/login", handleOptions).Methods("OPTIONS")
