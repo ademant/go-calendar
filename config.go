@@ -13,6 +13,14 @@ type ServerConfig struct {
 	TokenExpirationHours int      `yaml:"token_expiration_hours"`
 	AdminAllowedIPs      []string `yaml:"admin_allowed_ips"`
 	RateLimit            int      `yaml:"rate_limit"`
+	MaxBodyBytes         int64    `yaml:"max_body_bytes"`
+	ReadTimeoutSecs      int      `yaml:"read_timeout_secs"`
+	WriteTimeoutSecs     int      `yaml:"write_timeout_secs"`
+	IdleTimeoutSecs      int      `yaml:"idle_timeout_secs"`
+	MaxConnsPerIP        int      `yaml:"max_conns_per_ip"`
+	ImagesDir            string   `yaml:"images_dir"`
+	ImageXMax            int      `yaml:"image_x_max"`
+	ImageYMax            int      `yaml:"image_y_max"`
 }
 
 type Config struct {
@@ -51,8 +59,31 @@ func init() {
 			Server: ServerConfig{Port: 8000, TokenExpirationHours: 24},
 		}
 	}
-	// Set default token expiration if not configured
 	if config.Server.TokenExpirationHours == 0 {
 		config.Server.TokenExpirationHours = 24
+	}
+	if config.Server.MaxBodyBytes == 0 {
+		config.Server.MaxBodyBytes = 1 << 20 // 1 MiB
+	}
+	if config.Server.ReadTimeoutSecs == 0 {
+		config.Server.ReadTimeoutSecs = 10
+	}
+	if config.Server.WriteTimeoutSecs == 0 {
+		config.Server.WriteTimeoutSecs = 30
+	}
+	if config.Server.IdleTimeoutSecs == 0 {
+		config.Server.IdleTimeoutSecs = 60
+	}
+	if config.Server.MaxConnsPerIP == 0 {
+		config.Server.MaxConnsPerIP = 10
+	}
+	if config.Server.ImagesDir == "" {
+		config.Server.ImagesDir = "./images"
+	}
+	if config.Server.ImageXMax == 0 {
+		config.Server.ImageXMax = 1024
+	}
+	if config.Server.ImageYMax == 0 {
+		config.Server.ImageYMax = 1024
 	}
 }

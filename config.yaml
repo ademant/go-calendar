@@ -5,4 +5,12 @@ server:
     - "127.0.0.1"
     - "::1"
   rate_limit: 100
+  max_body_bytes: 1048576  # 1 MiB
+  read_timeout_secs: 10
+  write_timeout_secs: 30
+  idle_timeout_secs: 60
+  max_conns_per_ip: 10
+  images_dir: "./images"
+  image_x_max: 1024
+  image_y_max: 1024
 

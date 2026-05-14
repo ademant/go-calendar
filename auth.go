@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"net"
@@ -171,18 +172,24 @@ func login(w http.ResponseWriter, r *http.Request) {
 	// Parse request body based on content type
 	contentType := r.Header.Get("Content-Type")
 	if strings.Contains(contentType, "application/x-www-form-urlencoded") {
-		// Parse form data
 		if err := r.ParseForm(); err != nil {
-			w.WriteHeader(http.StatusBadRequest)
+			status := http.StatusBadRequest
+			if errors.As(err, new(*http.MaxBytesError)) {
+				status = http.StatusRequestEntityTooLarge
+			}
+			w.WriteHeader(status)
 			json.NewEncoder(w).Encode(TokenError{Error: "Invalid form data"})
 			return
 		}
 		req.Username = r.FormValue("username")
 		req.Password = r.FormValue("password")
 	} else {
-		// Default to JSON parsing
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			w.WriteHeader(http.StatusBadRequest)
+			status := http.StatusBadRequest
+			if errors.As(err, new(*http.MaxBytesError)) {
+				status = http.StatusRequestEntityTooLarge
+			}
+			w.WriteHeader(status)
 			json.NewEncoder(w).Encode(TokenError{Error: "Invalid request body"})
 			return
 		}

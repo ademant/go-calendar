@@ -15,6 +15,48 @@ import (
 
 var db *sql.DB
 var rateLimiter *RateLimiter
+var connLimiter *ConnLimiter
+
+type ConnLimiter struct {
+	mu     sync.Mutex
+	active map[string]int
+	limit  int
+}
+
+func NewConnLimiter(limit int) *ConnLimiter {
+	return &ConnLimiter{active: make(map[string]int), limit: limit}
+}
+
+func (cl *ConnLimiter) acquire(ip string) bool {
+	cl.mu.Lock()
+	defer cl.mu.Unlock()
+	if cl.active[ip] >= cl.limit {
+		return false
+	}
+	cl.active[ip]++
+	return true
+}
+
+func (cl *ConnLimiter) release(ip string) {
+	cl.mu.Lock()
+	defer cl.mu.Unlock()
+	cl.active[ip]--
+	if cl.active[ip] <= 0 {
+		delete(cl.active, ip)
+	}
+}
+
+func ConnLimitMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ip := getIP(r)
+		if !connLimiter.acquire(ip) {
+			http.Error(w, "Too many concurrent connections", http.StatusTooManyRequests)
+			return
+		}
+		defer connLimiter.release(ip)
+		next.ServeHTTP(w, r)
+	})
+}
 
 type RateLimiter struct {
 	mu       sync.Mutex
@@ -24,31 +66,61 @@ type RateLimiter struct {
 }
 
 func NewRateLimiter(limit int, window time.Duration) *RateLimiter {
-	return &RateLimiter{
+	rl := &RateLimiter{
 		requests: make(map[string][]time.Time),
 		limit:    limit,
 		window:   window,
 	}
+	go rl.sweepLoop()
+	return rl
 }
 
 func (rl *RateLimiter) Allow(ip string) bool {
 	rl.mu.Lock()
 	defer rl.mu.Unlock()
 	now := time.Now()
-	if times, ok := rl.requests[ip]; ok {
-		var valid []time.Time
-		for _, t := range times {
-			if now.Sub(t) < rl.window {
-				valid = append(valid, t)
-			}
-		}
-		rl.requests[ip] = valid
-		if len(valid) >= rl.limit {
-			return false
+	valid := rl.prune(rl.requests[ip], now)
+	if len(valid) >= rl.limit {
+		return false
+	}
+	rl.requests[ip] = append(valid, now)
+	return true
+}
+
+// prune removes timestamps outside the window and deletes the map key when empty.
+func (rl *RateLimiter) prune(times []time.Time, now time.Time) []time.Time {
+	var valid []time.Time
+	for _, t := range times {
+		if now.Sub(t) < rl.window {
+			valid = append(valid, t)
 		}
 	}
-	rl.requests[ip] = append(rl.requests[ip], now)
-	return true
+	return valid
+}
+
+// sweepLoop periodically removes stale IP entries from the map.
+func (rl *RateLimiter) sweepLoop() {
+	ticker := time.NewTicker(rl.window)
+	defer ticker.Stop()
+	for range ticker.C {
+		rl.mu.Lock()
+		now := time.Now()
+		for ip, times := range rl.requests {
+			if valid := rl.prune(times, now); len(valid) == 0 {
+				delete(rl.requests, ip)
+			} else {
+				rl.requests[ip] = valid
+			}
+		}
+		rl.mu.Unlock()
+	}
+}
+
+func MaxBodyMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		r.Body = http.MaxBytesReader(w, r.Body, config.Server.MaxBodyBytes)
+		next.ServeHTTP(w, r)
+	})
 }
 
 func RateLimitMiddleware(next http.Handler) http.Handler {
@@ -84,6 +156,11 @@ func handleOptions(w http.ResponseWriter, r *http.Request) {
 
 func init() {
 	var err error
+	berlinLoc, err = time.LoadLocation("Europe/Berlin")
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	config, err = loadConfig("config.yaml")
 	if err != nil {
 		log.Fatal(err)
@@ -105,6 +182,7 @@ func init() {
 	ensureAdminUser(db)
 
 	rateLimiter = NewRateLimiter(config.Server.RateLimit, time.Minute)
+	connLimiter = NewConnLimiter(config.Server.MaxConnsPerIP)
 
 	log.Println("Database initialized successfully")
 }
@@ -123,8 +201,8 @@ func createTables() error {
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		title TEXT NOT NULL,
 		description TEXT,
-		start_time DATETIME NOT NULL,
-		end_time DATETIME NOT NULL,
+		start_time INTEGER NOT NULL,
+		end_time INTEGER NOT NULL,
 		location_id INTEGER,
 		has_ball INTEGER DEFAULT 0,
 		has_workshop INTEGER DEFAULT 0,
@@ -159,6 +237,10 @@ func createTables() error {
 		internetsite TEXT,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 	);
+	CREATE INDEX IF NOT EXISTS idx_events_published_start ON events(is_published, start_time);
+	CREATE INDEX IF NOT EXISTS idx_events_title_location  ON events(title, location_id);
+	CREATE INDEX IF NOT EXISTS idx_events_location_id     ON events(location_id);
+	CREATE INDEX IF NOT EXISTS idx_locations_location     ON locations(location);
 	`
 	_, err := db.Exec(schema)
 	return err
@@ -166,11 +248,16 @@ func createTables() error {
 
 func main() {
 	router := mux.NewRouter()
+	router.Use(MaxBodyMiddleware)
+	router.Use(ConnLimitMiddleware)
 	router.Use(RateLimitMiddleware)
 
 	// Public endpoints (no authentication required)
 	router.HandleFunc("/events", publicGetEvents).Methods("GET")
 	router.HandleFunc("/events", handleOptions).Methods("OPTIONS")
+	router.HandleFunc("/events.ics", publicGetEventsICS).Methods("GET")
+	router.HandleFunc("/events/tag/{tag}.ics", publicGetEventsByTagICS).Methods("GET")
+	router.HandleFunc("/events/town/{town}.ics", publicGetEventsByTownICS).Methods("GET")
 
 	// Authentication endpoint (no token required)
 	router.HandleFunc("/api/v1/login", login).Methods("GET", "POST")
@@ -218,6 +305,16 @@ func main() {
 	eventRoutes.HandleFunc("/{id}", getEvent).Methods("GET")
 	eventRoutes.HandleFunc("/{id}", deleteEvent).Methods("DELETE")
 	eventRoutes.HandleFunc("/{id}", handleOptions).Methods("OPTIONS")
+	eventRoutes.HandleFunc("/{id}/publish", publishEvent).Methods("POST")
+	eventRoutes.HandleFunc("/{id}/publish", handleOptions).Methods("OPTIONS")
+
+	// Image upload (protected)
+	imageRoutes := router.PathPrefix("/api/v1/images").Subrouter()
+	imageRoutes.Use(TokenMiddleware)
+	imageRoutes.HandleFunc("/{event_id}", getEventImage).Methods("GET")
+	imageRoutes.HandleFunc("/{event_id}", uploadEventImage).Methods("POST")
+	imageRoutes.HandleFunc("/{event_id}", deleteEventImage).Methods("DELETE")
+	imageRoutes.HandleFunc("/{event_id}", handleOptions).Methods("OPTIONS")
 
 	// Tags endpoint (protected)
 	tagsRoutes := router.PathPrefix("/api/v1/tags").Subrouter()
@@ -227,7 +324,14 @@ func main() {
 
 	port := getPort()
 	log.Printf("Server starting on %s\n", port)
-	if err := http.ListenAndServe(port, router); err != nil {
+	srv := &http.Server{
+		Addr:         port,
+		Handler:      router,
+		ReadTimeout:  time.Duration(config.Server.ReadTimeoutSecs) * time.Second,
+		WriteTimeout: time.Duration(config.Server.WriteTimeoutSecs) * time.Second,
+		IdleTimeout:  time.Duration(config.Server.IdleTimeoutSecs) * time.Second,
+	}
+	if err := srv.ListenAndServe(); err != nil {
 		log.Fatal(err)
 	}
 }
