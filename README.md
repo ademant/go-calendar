@@ -333,6 +333,34 @@ Content-Type: application/json
 - **Authorized request with role "user" or "admin"**: `is_published = true`
 - **Authorized request with role "viewer"**: `is_published = false`
 
+#### Create event series
+```bash
+POST /api/v1/events
+Content-Type: application/json
+
+{
+  "title": "Team Meeting",
+  "date":[{
+    "description": "Monthly planning",
+    "start_time": "2026-05-15T10:00:00",
+    "end_time": "2026-05-15T11:00:00",
+    }],
+  "has_ball": true,
+  "has_workshop": true,
+  "tags": ["Festival","Köln"],
+  "musicians": ["MusicianA","MusicianB"],
+  "location": {
+    "location": "Bahnhof",
+    "address": "Bahnhofstrasse",
+    "zipcode": "12345",
+    "town": "Berlin",
+    "latitude": 48,
+    "longitude": 10,
+    "eventsite": "www.balfolk.jetzt/42"
+  }
+}
+```
+
 #### Get single event
 ```bash
 GET /api/v1/events/{id}

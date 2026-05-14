@@ -250,6 +250,12 @@ func login(w http.ResponseWriter, r *http.Request) {
 // TokenMiddleware validates the token in the Authorization header
 func TokenMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Allow OPTIONS requests to pass through for CORS preflight
+		if r.Method == "OPTIONS" {
+			next.ServeHTTP(w, r)
+			return
+		}
+
 		authHeader := r.Header.Get("Authorization")
 		if authHeader == "" {
 			w.Header().Set("Content-Type", "application/json")

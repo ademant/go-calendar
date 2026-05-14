@@ -73,6 +73,15 @@ func getIP(r *http.Request) string {
 	return ip
 }
 
+// OPTIONS handler for CORS preflight requests
+func handleOptions(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-User-Role, X-User-ID")
+	w.Header().Set("Access-Control-Max-Age", "86400")
+	w.WriteHeader(http.StatusOK)
+}
+
 func init() {
 	var err error
 	config, err = loadConfig("config.yaml")
@@ -121,6 +130,7 @@ func createTables() error {
 		has_workshop INTEGER DEFAULT 0,
 		tags TEXT,
 		is_published INTEGER DEFAULT 0,
+		short_code TEXT UNIQUE,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		FOREIGN KEY (location_id) REFERENCES locations(id)
 	);
@@ -158,43 +168,56 @@ func main() {
 	router := mux.NewRouter()
 	router.Use(RateLimitMiddleware)
 
+	// Public endpoints (no authentication required)
+	router.HandleFunc("/events", publicGetEvents).Methods("GET")
+	router.HandleFunc("/events", handleOptions).Methods("OPTIONS")
+
 	// Authentication endpoint (no token required)
 	router.HandleFunc("/api/v1/login", login).Methods("GET", "POST")
+	router.HandleFunc("/api/v1/login", handleOptions).Methods("OPTIONS")
 
 	// User endpoints (protected)
 	userRoutes := router.PathPrefix("/api/v1/users").Subrouter()
 	userRoutes.Use(TokenMiddleware)
 	userRoutes.HandleFunc("", getUsers).Methods("GET")
 	userRoutes.HandleFunc("", createUser).Methods("POST")
+	userRoutes.HandleFunc("", handleOptions).Methods("OPTIONS")
 	userRoutes.HandleFunc("/{id}", getUser).Methods("GET")
 	userRoutes.HandleFunc("/{id}", updateUser).Methods("PUT")
 	userRoutes.HandleFunc("/{id}", deleteUser).Methods("DELETE")
+	userRoutes.HandleFunc("/{id}", handleOptions).Methods("OPTIONS")
 
 	// Location endpoints (protected)
 	locationRoutes := router.PathPrefix("/api/v1/locations").Subrouter()
 	locationRoutes.Use(TokenMiddleware)
 	locationRoutes.HandleFunc("", getLocations).Methods("GET")
 	locationRoutes.HandleFunc("", createLocation).Methods("POST")
+	locationRoutes.HandleFunc("", handleOptions).Methods("OPTIONS")
 	locationRoutes.HandleFunc("/{id}", getLocation).Methods("GET")
 	locationRoutes.HandleFunc("/{id}", updateLocation).Methods("PUT")
 	locationRoutes.HandleFunc("/{id}", deleteLocation).Methods("DELETE")
+	locationRoutes.HandleFunc("/{id}", handleOptions).Methods("OPTIONS")
 
 	// Musician endpoints (protected)
 	musicianRoutes := router.PathPrefix("/api/v1/musicians").Subrouter()
 	musicianRoutes.Use(TokenMiddleware)
 	musicianRoutes.HandleFunc("", getMusicians).Methods("GET")
 	musicianRoutes.HandleFunc("", createMusician).Methods("POST")
+	musicianRoutes.HandleFunc("", handleOptions).Methods("OPTIONS")
 	musicianRoutes.HandleFunc("/{id}", getMusician).Methods("GET")
 	musicianRoutes.HandleFunc("/{id}", updateMusician).Methods("PUT")
 	musicianRoutes.HandleFunc("/{id}", deleteMusician).Methods("DELETE")
+	musicianRoutes.HandleFunc("/{id}", handleOptions).Methods("OPTIONS")
 
 	// Event endpoints (protected)
 	eventRoutes := router.PathPrefix("/api/v1/events").Subrouter()
 	eventRoutes.Use(TokenMiddleware)
 	eventRoutes.HandleFunc("", getEvents).Methods("GET")
 	eventRoutes.HandleFunc("", createEvent).Methods("POST")
+	eventRoutes.HandleFunc("", handleOptions).Methods("OPTIONS")
 	eventRoutes.HandleFunc("/{id}", getEvent).Methods("GET")
 	eventRoutes.HandleFunc("/{id}", deleteEvent).Methods("DELETE")
+	eventRoutes.HandleFunc("/{id}", handleOptions).Methods("OPTIONS")
 
 	port := getPort()
 	log.Printf("Server starting on %s\n", port)
