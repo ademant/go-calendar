@@ -367,11 +367,20 @@ func createEvent(w http.ResponseWriter, r *http.Request) {
 
 		// Parse all events from the calendar
 		for _, event := range cal.Events() {
+			var eventStartTime, eventEndTime string
+			if dtStart := event.GetProperty(ics.ComponentPropertyDtStart); dtStart != nil {
+				eventStartTime = dtStart.Value
+			}
+			if dtEnd := event.GetProperty(ics.ComponentPropertyDtEnd); dtEnd != nil {
+				eventEndTime = dtEnd.Value
+			}
 			req := EventCreateRequest{
 				Title:       event.GetProperty(ics.ComponentPropertySummary).Value,
 				Description: event.GetProperty(ics.ComponentPropertyDescription).Value,
-				StartTime:   event.GetProperty(ics.ComponentPropertyDtStart).Value,
-				EndTime:     event.GetProperty(ics.ComponentPropertyDtEnd).Value,
+				StartTime:   eventStartTime,
+				EndTime:     eventEndTime,
+				//				StartTime:   event.GetProperty(ics.ComponentPropertyDtStart).Value,
+				//				EndTime: event.GetProperty(ics.ComponentPropertyDtEnd).Value,
 				Location: EventLocationRequest{
 					Location:  event.GetProperty(ics.ComponentPropertyLocation).Value,
 					Address:   "",
@@ -397,18 +406,29 @@ func createEvent(w http.ResponseWriter, r *http.Request) {
 	// Process all requests
 	var allCreatedEvents []Event
 	for _, req := range requests {
-		// Insert location
-		result, err := db.Exec(
-			"INSERT INTO locations (location, address, zipcode, town, latitude, longitude, internetsite) VALUES (?, ?, ?, ?, ?, ?, ?)",
-			req.Location.Location, req.Location.Address, req.Location.Zipcode, req.Location.Town, req.Location.Latitude, req.Location.Longitude, req.Location.Eventsite,
-		)
-		if err != nil {
+		// Check for existing location with same name to avoid duplicates
+		var locationID int64
+		err := db.QueryRow(
+			"SELECT id FROM locations WHERE location = ? ",
+			req.Location.Location).Scan(&locationID)
+
+		if err != nil && err != sql.ErrNoRows {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
+		} else if err == sql.ErrNoRows {
+
+			// Insert location
+			result, err := db.Exec(
+				"INSERT INTO locations (location, address, zipcode, town, latitude, longitude, internetsite) VALUES (?, ?, ?, ?, ?, ?, ?)",
+				req.Location.Location, req.Location.Address, req.Location.Zipcode, req.Location.Town, req.Location.Latitude, req.Location.Longitude, req.Location.Eventsite,
+			)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+
+			locationID, _ = result.LastInsertId()
 		}
-
-		locationID, _ := result.LastInsertId()
-
 		// Create events from this request
 		createdEvents, err := createEventFromRequest(req, locationID, isPublished)
 		if err != nil {
@@ -631,4 +651,54 @@ func publicGetEvents(w http.ResponseWriter, r *http.Request) {
 	}
 
 	json.NewEncoder(w).Encode(events)
+}
+
+// GET /api/v1/tags
+func getTags(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	// Check user authorization status
+	userRole := r.Header.Get("X-User-Role")
+	isAuthorizedAdmin := userRole == "user" || userRole == "admin"
+
+	query := "SELECT tags FROM events WHERE 1=1"
+	args := []interface{}{}
+
+	// Add is_published filter based on authorization
+	if !isAuthorizedAdmin {
+		// Non-authorized or viewers can only see tags from published events
+		query += " AND is_published = 1"
+	}
+
+	rows, err := db.Query(query, args...)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	tagSet := make(map[string]bool)
+	for rows.Next() {
+		var tagsJSON string
+		err := rows.Scan(&tagsJSON)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		if tagsJSON != "" {
+			var tags []string
+			json.Unmarshal([]byte(tagsJSON), &tags)
+			for _, tag := range tags {
+				tagSet[tag] = true
+			}
+		}
+	}
+
+	// Convert map to slice
+	var tags []string
+	for tag := range tagSet {
+		tags = append(tags, tag)
+	}
+
+	json.NewEncoder(w).Encode(tags)
 }

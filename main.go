@@ -219,6 +219,12 @@ func main() {
 	eventRoutes.HandleFunc("/{id}", deleteEvent).Methods("DELETE")
 	eventRoutes.HandleFunc("/{id}", handleOptions).Methods("OPTIONS")
 
+	// Tags endpoint (protected)
+	tagsRoutes := router.PathPrefix("/api/v1/tags").Subrouter()
+	tagsRoutes.Use(TokenMiddleware)
+	tagsRoutes.HandleFunc("", getTags).Methods("GET")
+	tagsRoutes.HandleFunc("", handleOptions).Methods("OPTIONS")
+
 	port := getPort()
 	log.Printf("Server starting on %s\n", port)
 	if err := http.ListenAndServe(port, router); err != nil {
