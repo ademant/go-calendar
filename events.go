@@ -364,6 +364,12 @@ func getEvents(w http.ResponseWriter, r *http.Request) {
 		args = append(args, boolParam(v))
 	}
 
+	// Exclude past events by default; authorized users can opt in with include_past=true
+	if r.URL.Query().Get("include_past") != "true" {
+		query += " AND e.end_time >= ?"
+		args = append(args, time.Now().Unix())
+	}
+
 	// end_time filters (not exposed on public endpoint)
 	if v := r.URL.Query().Get("end_time_after"); v != "" {
 		if n, err := strconv.ParseInt(v, 10, 64); err == nil {
@@ -495,22 +501,10 @@ func createEvent(w http.ResponseWriter, r *http.Request) {
 	var allCreatedEvents []Event
 	allCreated := true
 	for _, req := range requests {
-		var locationID int64
-		err := db.QueryRow("SELECT id FROM locations WHERE location = ?", req.Location.Location).Scan(&locationID)
-		if err != nil && err != sql.ErrNoRows {
+		locationID, err := ensureLocation(req.Location)
+		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
-		} else if err == sql.ErrNoRows {
-			result, err := db.Exec(
-				"INSERT INTO locations (location, address, zipcode, town, latitude, longitude, internetsite) VALUES (?, ?, ?, ?, ?, ?, ?)",
-				req.Location.Location, req.Location.Address, req.Location.Zipcode, req.Location.Town,
-				req.Location.Latitude, req.Location.Longitude, req.Location.Eventsite,
-			)
-			if err != nil {
-				http.Error(w, err.Error(), http.StatusInternalServerError)
-				return
-			}
-			locationID, _ = result.LastInsertId()
 		}
 
 		createdEvents, created, err := createEventFromRequest(req, locationID, isPublished)

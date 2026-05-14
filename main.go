@@ -237,6 +237,14 @@ func createTables() error {
 		internetsite TEXT,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 	);
+	CREATE TABLE IF NOT EXISTS fetch_sources (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		url TEXT UNIQUE NOT NULL,
+		type TEXT NOT NULL DEFAULT 'ical',
+		tags TEXT,
+		last_fetched_at DATETIME,
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+	);
 	CREATE INDEX IF NOT EXISTS idx_events_published_start ON events(is_published, start_time);
 	CREATE INDEX IF NOT EXISTS idx_events_title_location  ON events(title, location_id);
 	CREATE INDEX IF NOT EXISTS idx_events_location_id     ON events(location_id);
@@ -319,6 +327,19 @@ func main() {
 	imageRoutes.HandleFunc("/{event_id}", uploadEventImage).Methods("POST")
 	imageRoutes.HandleFunc("/{event_id}", deleteEventImage).Methods("DELETE")
 	imageRoutes.HandleFunc("/{event_id}", handleOptions).Methods("OPTIONS")
+
+	// Fetch URL endpoints (protected)
+	fetchRoutes := router.PathPrefix("/api/v1/fetchurl").Subrouter()
+	fetchRoutes.Use(TokenMiddleware)
+	fetchRoutes.HandleFunc("", getFetchSources).Methods("GET")
+	fetchRoutes.HandleFunc("", fetchURL).Methods("POST")
+	fetchRoutes.HandleFunc("", handleOptions).Methods("OPTIONS")
+	fetchRoutes.HandleFunc("/fetch-all", fetchAllURLs).Methods("POST")
+	fetchRoutes.HandleFunc("/fetch-all", handleOptions).Methods("OPTIONS")
+	fetchRoutes.HandleFunc("/{id}", getFetchSource).Methods("GET")
+	fetchRoutes.HandleFunc("/{id}/fetch", fetchURLByID).Methods("POST")
+	fetchRoutes.HandleFunc("/{id}/fetch", handleOptions).Methods("OPTIONS")
+	fetchRoutes.HandleFunc("/{id}", handleOptions).Methods("OPTIONS")
 
 	// Tags endpoint (protected)
 	tagsRoutes := router.PathPrefix("/api/v1/tags").Subrouter()
