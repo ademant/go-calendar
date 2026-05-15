@@ -17,13 +17,66 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
+	"sync"
 
 	ics "github.com/arran4/golang-ical"
 	"github.com/gen2brain/avif"
 	"github.com/gorilla/mux"
 	xdraw "golang.org/x/image/draw"
 )
+
+// imageCache is an in-memory set of event IDs that have an image on disk.
+// It avoids an os.Stat syscall per event row when building list responses.
+type imageCache struct {
+	mu  sync.RWMutex
+	ids map[int]struct{}
+}
+
+var imgCache = &imageCache{ids: make(map[int]struct{})}
+
+// initImageCache populates the cache by scanning the images directory.
+// Called once at startup; the cache is kept up-to-date via add/remove.
+func initImageCache(dir string) {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return // directory may not exist yet
+	}
+	imgCache.mu.Lock()
+	defer imgCache.mu.Unlock()
+	for _, e := range entries {
+		if e.IsDir() {
+			continue
+		}
+		name := e.Name()
+		if !strings.HasSuffix(name, ".avif") {
+			continue
+		}
+		if id, err := strconv.Atoi(strings.TrimSuffix(name, ".avif")); err == nil {
+			imgCache.ids[id] = struct{}{}
+		}
+	}
+}
+
+func hasImage(id int) bool {
+	imgCache.mu.RLock()
+	_, ok := imgCache.ids[id]
+	imgCache.mu.RUnlock()
+	return ok
+}
+
+func (c *imageCache) add(id int) {
+	c.mu.Lock()
+	c.ids[id] = struct{}{}
+	c.mu.Unlock()
+}
+
+func (c *imageCache) remove(id int) {
+	c.mu.Lock()
+	delete(c.ids, id)
+	c.mu.Unlock()
+}
 
 var errNotImage = errors.New("data is not an image")
 
@@ -54,13 +107,14 @@ func saveImageFromReader(eventID int, r io.Reader) error {
 	if err := avif.Encode(f, img); err != nil {
 		return fmt.Errorf("encode avif: %w", err)
 	}
+	imgCache.add(eventID)
 	return nil
 }
 
 // attachImagesFromICalEvent downloads and stores the first image ATTACH from a vevent.
 // Skips silently if an image already exists for the event.
 func attachImagesFromICalEvent(eventID int, vevent *ics.VEvent) {
-	if _, err := os.Stat(filepath.Join(config.Server.ImagesDir, fmt.Sprintf("%d.avif", eventID))); err == nil {
+	if hasImage(eventID) {
 		return
 	}
 	for _, prop := range vevent.GetProperties(ics.ComponentPropertyAttach) {
@@ -187,7 +241,8 @@ func deleteEventImage(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-
+	id, _ := strconv.Atoi(eventID)
+	imgCache.remove(id)
 	w.WriteHeader(http.StatusNoContent)
 }
 

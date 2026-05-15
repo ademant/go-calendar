@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"flag"
+	"fmt"
 	"log"
 	"net"
 	"net/http"
@@ -300,10 +301,15 @@ func main() {
 	}
 	applyDefaults(config)
 
-	db, err = sql.Open("sqlite3", config.Server.DBPath)
+	dsn := fmt.Sprintf("%s?_journal_mode=WAL&_synchronous=NORMAL&_busy_timeout=5000&_foreign_keys=ON",
+		config.Server.DBPath)
+	db, err = sql.Open("sqlite3", dsn)
 	if err != nil {
 		log.Fatal(err)
 	}
+	db.SetMaxOpenConns(config.Server.DBMaxConns)
+	db.SetMaxIdleConns(max(1, config.Server.DBMaxConns/2))
+	db.SetConnMaxLifetime(time.Hour)
 	if err = db.Ping(); err != nil {
 		log.Fatal(err)
 	}
@@ -311,6 +317,7 @@ func main() {
 		log.Fatal(err)
 	}
 	migrateDB()
+	initImageCache(config.Server.ImagesDir)
 	log.Println("Database initialized successfully")
 
 	rateLimiter = NewRateLimiter(config.Server.RateLimit, time.Minute)

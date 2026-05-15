@@ -8,8 +8,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -104,10 +102,9 @@ func boolParam(s string) int {
 	return 0
 }
 
-// eventImageURL returns the API path for an event's image if one exists on disk.
+// eventImageURL returns the API path for an event's image if the cache knows one exists.
 func eventImageURL(id int) string {
-	path := filepath.Join(config.Server.ImagesDir, fmt.Sprintf("%d.avif", id))
-	if _, err := os.Stat(path); err == nil {
+	if hasImage(id) {
 		return fmt.Sprintf("/api/v1/images/%d", id)
 	}
 	return ""
