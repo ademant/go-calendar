@@ -253,6 +253,9 @@ func migrateDB() {
 	db.Exec("ALTER TABLE events ADD COLUMN source TEXT")
 	db.Exec("ALTER TABLE users ADD COLUMN telegram TEXT")
 	db.Exec("ALTER TABLE users ADD COLUMN matrix TEXT")
+	db.Exec("ALTER TABLE users ADD COLUMN email_verified INTEGER DEFAULT 0")
+	db.Exec("ALTER TABLE users ADD COLUMN telegram_verified INTEGER DEFAULT 0")
+	db.Exec("ALTER TABLE users ADD COLUMN matrix_verified INTEGER DEFAULT 0")
 	db.Exec("ALTER TABLE locations ADD COLUMN organization_id INTEGER")
 	db.Exec("ALTER TABLE locations ADD COLUMN short_name TEXT")
 	db.Exec("ALTER TABLE musicians ADD COLUMN short_name TEXT")
@@ -271,6 +274,9 @@ func createTables() error {
 		role TEXT DEFAULT 'user' CHECK(role IN ('admin', 'user', 'publisher', 'viewer')),
 		telegram TEXT,
 		matrix TEXT,
+		email_verified INTEGER DEFAULT 0,
+		telegram_verified INTEGER DEFAULT 0,
+		matrix_verified INTEGER DEFAULT 0,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 	);
 	CREATE TABLE IF NOT EXISTS events (
