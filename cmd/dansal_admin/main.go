@@ -13,14 +13,21 @@ import (
 const defaultSocket = "./dansal.sock"
 
 type request struct {
-	Cmd      string `json:"cmd"`
-	Username string `json:"username,omitempty"`
-	Email    string `json:"email,omitempty"`
-	Password string `json:"password,omitempty"`
-	Role     string `json:"role,omitempty"`
-	OrgID    int    `json:"org_id,omitempty"`
-	Path     string `json:"path,omitempty"`
-	Since    string `json:"since,omitempty"`
+	Cmd          string `json:"cmd"`
+	Username     string `json:"username,omitempty"`
+	Email        string `json:"email,omitempty"`
+	Password     string `json:"password,omitempty"`
+	Role         string `json:"role,omitempty"`
+	OrgID        int    `json:"org_id,omitempty"`
+	Path         string `json:"path,omitempty"`
+	Since        string `json:"since,omitempty"`
+	SMTPHost     string `json:"smtp_host,omitempty"`
+	SMTPPort     int    `json:"smtp_port,omitempty"`
+	SMTPUsername string `json:"smtp_username,omitempty"`
+	SMTPFrom     string `json:"smtp_from,omitempty"`
+	SMTPFromName string `json:"smtp_from_name,omitempty"`
+	SMTPTLS      string `json:"smtp_tls,omitempty"`
+	SMTPTo       string `json:"smtp_to,omitempty"`
 }
 
 type response struct {
@@ -124,6 +131,14 @@ func main() {
 		cmdPasswordRestore(rest)
 	case "fill-location-fields":
 		cmdFillLocationFields(rest)
+	case "smtp-show":
+		cmdSMTPShow(rest)
+	case "smtp-set":
+		cmdSMTPSet(rest)
+	case "smtp-set-password":
+		cmdSMTPSetPassword(rest)
+	case "smtp-test":
+		cmdSMTPTest(rest)
 	default:
 		fmt.Fprintf(os.Stderr, "unknown command: %s\n\n", sub)
 		usage()
@@ -151,6 +166,13 @@ Organization management:
 Maintenance:
   fill-location-fields [--db PATH] [--apply]         Parse address/town from location names
   vacuum                                             Reclaim unused database space
+
+SMTP:
+  smtp-show                                          Show current SMTP configuration
+  smtp-set     [--host H] [--port P] [--username U]  Set SMTP server settings
+               [--from F] [--from-name N] [--tls M]
+  smtp-set-password [--password P]                   Set (obscured) SMTP account password
+  smtp-test    --to EMAIL                            Send a test email
   backup             [--output PATH]                 Full backup (config + db + images)
   incremental-backup --since RFC3339 [--output PATH] Backup only files changed since time
   restore            --input PATH                    Restore from a backup archive
@@ -218,6 +240,40 @@ Add a user to an organization. Has no effect if the user is already a member.
 Flags:
   --org-id    Organization ID (required)
   --username  Username to add (required)`,
+
+	"smtp-show": `Usage: dansal_admin smtp-show
+
+Show the current SMTP configuration. The password is never displayed.`,
+
+	"smtp-set": `Usage: dansal_admin smtp-set [--host H] [--port P] [--username U] [--from F] [--from-name N] [--tls M]
+
+Set SMTP server settings. Only provided flags are updated.
+
+Flags:
+  --host       SMTP server hostname
+  --port       SMTP server port (default 587 at send time)
+  --username   SMTP account username
+  --from       Envelope From address (defaults to username)
+  --from-name  Display name in the From header
+  --tls        TLS mode: starttls (default), tls (port 465), none`,
+
+	"smtp-set-password": `Usage: dansal_admin smtp-set-password [--password P]
+
+Set the SMTP account password. It is encrypted with AES-256-GCM and
+stored obscured in config.yaml. The encryption key is also stored in
+config.yaml; protect the file with mode 600.
+
+If --password is omitted the password is prompted from the terminal (no echo).
+
+Flags:
+  --password  SMTP account password (prompted if omitted)`,
+
+	"smtp-test": `Usage: dansal_admin smtp-test --to EMAIL
+
+Send a test email using the current SMTP configuration.
+
+Flags:
+  --to  Recipient email address (required)`,
 
 	"fill-location-fields": `Usage: dansal_admin fill-location-fields [--db PATH] [--apply]
 

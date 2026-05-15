@@ -8,14 +8,21 @@ import (
 )
 
 type adminRequest struct {
-	Cmd      string `json:"cmd"`
-	Username string `json:"username,omitempty"`
-	Email    string `json:"email,omitempty"`
-	Password string `json:"password,omitempty"`
-	Role     string `json:"role,omitempty"`
-	OrgID    int    `json:"org_id,omitempty"`
-	Path     string `json:"path,omitempty"`
-	Since    string `json:"since,omitempty"`
+	Cmd          string `json:"cmd"`
+	Username     string `json:"username,omitempty"`
+	Email        string `json:"email,omitempty"`
+	Password     string `json:"password,omitempty"`
+	Role         string `json:"role,omitempty"`
+	OrgID        int    `json:"org_id,omitempty"`
+	Path         string `json:"path,omitempty"`
+	Since        string `json:"since,omitempty"`
+	SMTPHost     string `json:"smtp_host,omitempty"`
+	SMTPPort     int    `json:"smtp_port,omitempty"`
+	SMTPUsername string `json:"smtp_username,omitempty"`
+	SMTPFrom     string `json:"smtp_from,omitempty"`
+	SMTPFromName string `json:"smtp_from_name,omitempty"`
+	SMTPTLS      string `json:"smtp_tls,omitempty"`
+	SMTPTo       string `json:"smtp_to,omitempty"`
 }
 
 type adminResponse struct {
@@ -90,6 +97,14 @@ func dispatchAdminCmd(req adminRequest) adminResponse {
 		return adminIncrementalBackup(req)
 	case "restore":
 		return adminRestore(req)
+	case "smtp-get":
+		return adminSMTPGet()
+	case "smtp-set":
+		return adminSMTPSet(req)
+	case "smtp-set-password":
+		return adminSMTPSetPassword(req)
+	case "smtp-test":
+		return adminSMTPTest(req)
 	default:
 		return adminResponse{OK: false, Error: "unknown command: " + req.Cmd}
 	}
@@ -246,6 +261,73 @@ func adminVacuum() adminResponse {
 		return adminResponse{OK: false, Error: err.Error()}
 	}
 	return adminResponse{OK: true}
+}
+
+func adminSMTPGet() adminResponse {
+	return adminResponse{OK: true, Data: smtpPublicConfig()}
+}
+
+func adminSMTPSet(req adminRequest) adminResponse {
+	if req.SMTPHost != "" {
+		config.SMTP.Host = req.SMTPHost
+	}
+	if req.SMTPPort != 0 {
+		config.SMTP.Port = req.SMTPPort
+	}
+	if req.SMTPUsername != "" {
+		config.SMTP.Username = req.SMTPUsername
+	}
+	if req.SMTPFrom != "" {
+		config.SMTP.From = req.SMTPFrom
+	}
+	if req.SMTPFromName != "" {
+		config.SMTP.FromName = req.SMTPFromName
+	}
+	if req.SMTPTLS != "" {
+		config.SMTP.TLS = req.SMTPTLS
+	}
+	if err := saveConfig(configFilePath); err != nil {
+		return adminResponse{OK: false, Error: "save config: " + err.Error()}
+	}
+	return adminResponse{OK: true, Data: smtpPublicConfig()}
+}
+
+func adminSMTPSetPassword(req adminRequest) adminResponse {
+	if req.Password == "" {
+		return adminResponse{OK: false, Error: "password is required"}
+	}
+	enc, key, err := smtpObscure(req.Password, config.SMTP.PasswordKey)
+	if err != nil {
+		return adminResponse{OK: false, Error: "encrypt: " + err.Error()}
+	}
+	config.SMTP.Password = enc
+	config.SMTP.PasswordKey = key
+	if err := saveConfig(configFilePath); err != nil {
+		return adminResponse{OK: false, Error: "save config: " + err.Error()}
+	}
+	return adminResponse{OK: true}
+}
+
+func adminSMTPTest(req adminRequest) adminResponse {
+	if req.SMTPTo == "" {
+		return adminResponse{OK: false, Error: "smtp_to is required"}
+	}
+	if err := SendEmail(req.SMTPTo, "Dansal SMTP Test", "This is a test email sent by Dansal to verify SMTP configuration."); err != nil {
+		return adminResponse{OK: false, Error: err.Error()}
+	}
+	return adminResponse{OK: true}
+}
+
+func smtpPublicConfig() map[string]interface{} {
+	return map[string]interface{}{
+		"host":         config.SMTP.Host,
+		"port":         config.SMTP.Port,
+		"username":     config.SMTP.Username,
+		"from":         config.SMTP.From,
+		"from_name":    config.SMTP.FromName,
+		"tls":          config.SMTP.TLS,
+		"password_set": config.SMTP.Password != "",
+	}
 }
 
 func adminRemoveMember(req adminRequest) adminResponse {

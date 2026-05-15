@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"strconv"
 
@@ -31,8 +32,20 @@ type ServerConfig struct {
 	MetricsAllowedIPs    []string `yaml:"metrics_allowed_ips"`
 }
 
+type SMTPConfig struct {
+	Host        string `yaml:"host,omitempty"`
+	Port        int    `yaml:"port,omitempty"`
+	Username    string `yaml:"username,omitempty"`
+	Password    string `yaml:"password,omitempty"`
+	PasswordKey string `yaml:"password_key,omitempty"`
+	From        string `yaml:"from,omitempty"`
+	FromName    string `yaml:"from_name,omitempty"`
+	TLS         string `yaml:"tls,omitempty"` // starttls | tls | none
+}
+
 type Config struct {
 	Server ServerConfig `yaml:"server"`
+	SMTP   SMTPConfig   `yaml:"smtp,omitempty"`
 }
 
 var config *Config
@@ -100,6 +113,23 @@ func applyDefaults(cfg *Config) {
 			"admin", "administrator", "root", "superuser", "sysadmin", "system", "su",
 		}
 	}
+}
+
+// saveConfig writes the current config back to disk atomically.
+func saveConfig(path string) error {
+	data, err := yaml.Marshal(config)
+	if err != nil {
+		return fmt.Errorf("marshal: %w", err)
+	}
+	tmp := path + ".tmp"
+	if err := os.WriteFile(tmp, data, 0600); err != nil {
+		return fmt.Errorf("write: %w", err)
+	}
+	if err := os.Rename(tmp, path); err != nil {
+		os.Remove(tmp)
+		return fmt.Errorf("rename: %w", err)
+	}
+	return nil
 }
 
 func getPort() string {
