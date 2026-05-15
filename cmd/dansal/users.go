@@ -25,6 +25,8 @@ type User struct {
 	Username  string `json:"username"`
 	Email     string `json:"email"`
 	Role      string `json:"role"`
+	Telegram  string `json:"telegram,omitempty"`
+	Matrix    string `json:"matrix,omitempty"`
 	CreatedAt string `json:"created_at"`
 }
 
@@ -33,11 +35,15 @@ type UserCreateRequest struct {
 	Email    string `json:"email"`
 	Password string `json:"password"`
 	Role     string `json:"role"`
+	Telegram string `json:"telegram"`
+	Matrix   string `json:"matrix"`
 }
 
 type UserUpdateRequest struct {
-	Email string `json:"email"`
-	Role  string `json:"role"`
+	Email    string `json:"email"`
+	Role     string `json:"role"`
+	Telegram string `json:"telegram"`
+	Matrix   string `json:"matrix"`
 }
 
 func isReservedUsername(username string) bool {
@@ -100,7 +106,7 @@ func validateRole(role string) bool {
 func getUsers(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
-	rows, err := db.Query("SELECT id, username, email, role, created_at FROM users")
+	rows, err := db.Query("SELECT id, username, email, role, COALESCE(telegram,''), COALESCE(matrix,''), created_at FROM users")
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -110,7 +116,7 @@ func getUsers(w http.ResponseWriter, r *http.Request) {
 	users := []User{}
 	for rows.Next() {
 		var user User
-		if err := rows.Scan(&user.ID, &user.Username, &user.Email, &user.Role, &user.CreatedAt); err != nil {
+		if err := rows.Scan(&user.ID, &user.Username, &user.Email, &user.Role, &user.Telegram, &user.Matrix, &user.CreatedAt); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
@@ -172,8 +178,8 @@ func createUser(w http.ResponseWriter, r *http.Request) {
 
 	// Insert user
 	result, err := db.Exec(
-		"INSERT INTO users (username, email, password_hash, role) VALUES (?, ?, ?, ?)",
-		req.Username, req.Email, passwordHash, req.Role,
+		"INSERT INTO users (username, email, password_hash, role, telegram, matrix) VALUES (?, ?, ?, ?, ?, ?)",
+		req.Username, req.Email, passwordHash, req.Role, req.Telegram, req.Matrix,
 	)
 	if err != nil {
 		http.Error(w, "Username or email already exists", http.StatusConflict)
@@ -186,6 +192,8 @@ func createUser(w http.ResponseWriter, r *http.Request) {
 		Username: req.Username,
 		Email:    req.Email,
 		Role:     req.Role,
+		Telegram: req.Telegram,
+		Matrix:   req.Matrix,
 	}
 
 	w.WriteHeader(http.StatusCreated)
@@ -201,9 +209,9 @@ func getUser(w http.ResponseWriter, r *http.Request) {
 
 	var user User
 	err := db.QueryRow(
-		"SELECT id, username, email, role, created_at FROM users WHERE id = ?",
+		"SELECT id, username, email, role, COALESCE(telegram,''), COALESCE(matrix,''), created_at FROM users WHERE id = ?",
 		id,
-	).Scan(&user.ID, &user.Username, &user.Email, &user.Role, &user.CreatedAt)
+	).Scan(&user.ID, &user.Username, &user.Email, &user.Role, &user.Telegram, &user.Matrix, &user.CreatedAt)
 
 	if err == sql.ErrNoRows {
 		http.Error(w, "User not found", http.StatusNotFound)
@@ -263,8 +271,8 @@ func updateUser(w http.ResponseWriter, r *http.Request) {
 
 	// Check if user exists
 	var user User
-	err = db.QueryRow("SELECT id, username, email, role, created_at FROM users WHERE id = ?", id).
-		Scan(&user.ID, &user.Username, &user.Email, &user.Role, &user.CreatedAt)
+	err = db.QueryRow("SELECT id, username, email, role, COALESCE(telegram,''), COALESCE(matrix,''), created_at FROM users WHERE id = ?", id).
+		Scan(&user.ID, &user.Username, &user.Email, &user.Role, &user.Telegram, &user.Matrix, &user.CreatedAt)
 	if err == sql.ErrNoRows {
 		http.Error(w, "User not found", http.StatusNotFound)
 		return
@@ -274,20 +282,22 @@ func updateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Update email if provided
 	if req.Email != "" {
 		user.Email = req.Email
 	}
-
-	// Update role if provided
 	if req.Role != "" {
 		user.Role = req.Role
 	}
+	if req.Telegram != "" {
+		user.Telegram = req.Telegram
+	}
+	if req.Matrix != "" {
+		user.Matrix = req.Matrix
+	}
 
-	// Execute update
 	_, err = db.Exec(
-		"UPDATE users SET email = ?, role = ? WHERE id = ?",
-		user.Email, user.Role, id,
+		"UPDATE users SET email = ?, role = ?, telegram = ?, matrix = ? WHERE id = ?",
+		user.Email, user.Role, user.Telegram, user.Matrix, id,
 	)
 	if err != nil {
 		http.Error(w, "Failed to update user", http.StatusInternalServerError)

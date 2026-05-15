@@ -251,6 +251,8 @@ func migrateDB() {
 	// Errors are silently ignored (column already exists).
 	db.Exec("ALTER TABLE events ADD COLUMN organization_id INTEGER")
 	db.Exec("ALTER TABLE events ADD COLUMN source TEXT")
+	db.Exec("ALTER TABLE users ADD COLUMN telegram TEXT")
+	db.Exec("ALTER TABLE users ADD COLUMN matrix TEXT")
 	db.Exec("ALTER TABLE locations ADD COLUMN organization_id INTEGER")
 	db.Exec("ALTER TABLE locations ADD COLUMN short_name TEXT")
 	db.Exec("ALTER TABLE musicians ADD COLUMN short_name TEXT")
@@ -267,6 +269,8 @@ func createTables() error {
 		email TEXT UNIQUE NOT NULL,
 		password_hash TEXT NOT NULL,
 		role TEXT DEFAULT 'user' CHECK(role IN ('admin', 'user', 'publisher', 'viewer')),
+		telegram TEXT,
+		matrix TEXT,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 	);
 	CREATE TABLE IF NOT EXISTS events (
