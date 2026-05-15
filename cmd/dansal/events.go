@@ -1,7 +1,7 @@
 package main
 
 import (
-	"crypto/md5"
+	"crypto/rand"
 	"database/sql"
 	"encoding/json"
 	"errors"
@@ -15,6 +15,13 @@ import (
 	ics "github.com/arran4/golang-ical"
 	"github.com/gorilla/mux"
 )
+
+// querier is satisfied by both *sql.DB and *sql.Tx, allowing helpers to
+// participate in a caller-managed transaction without changing their signature.
+type querier interface {
+	QueryRow(query string, args ...any) *sql.Row
+	Exec(query string, args ...any) (sql.Result, error)
+}
 
 type Event struct {
 	ID             int      `json:"id"`
@@ -147,13 +154,13 @@ func scanEventRow(s scanner) (Event, error) {
 }
 
 // fetchEventByID loads a single event by primary key (no location join).
-func fetchEventByID(id int) (Event, error) {
+func fetchEventByID(q querier, id int) (Event, error) {
 	var event Event
 	var hasBallInt, hasWorkshopInt, isPublishedInt int
 	var startEpoch, endEpoch int64
 	var orgID sql.NullInt64
 	var uid sql.NullString
-	err := db.QueryRow(
+	err := q.QueryRow(
 		"SELECT id, uid, title, description, start_time, end_time, has_ball, has_workshop, tags, is_published, short_code, created_at, organization_id FROM events WHERE id = ?", id,
 	).Scan(&event.ID, &uid, &event.Title, &event.Description, &startEpoch, &endEpoch,
 		&hasBallInt, &hasWorkshopInt, &event.TagsJSON, &isPublishedInt,
@@ -264,26 +271,27 @@ func applyPagination(r *http.Request, query *string, args *[]interface{}) {
 
 // ── event insert / update ──────────────────────────────────────────────────
 
-func generateShortCode(eventID int, title string) string {
-	hash := md5.Sum([]byte(fmt.Sprintf("%d-%s-%d", eventID, title, time.Now().Unix())))
-	return fmt.Sprintf("%x", hash)[:8]
+func generateShortCode() string {
+	b := make([]byte, 4)
+	rand.Read(b)
+	return fmt.Sprintf("%x", b)
 }
 
 // insertEvent upserts an event. Returns (id, shortCode, created, error) where
 // created=false means an existing event was updated instead of inserted.
 // When uid is non-empty, deduplication is done by uid; otherwise by title+location+time.
-func insertEvent(title, description string, startTime, endTime int64, locationID int64, hasBall, hasWorkshop bool, tags []string, isPublished bool, organizationID *int, uid string) (int, string, bool, error) {
+func insertEvent(q querier, title, description string, startTime, endTime int64, locationID int64, hasBall, hasWorkshop bool, tags []string, isPublished bool, organizationID *int, uid string) (int, string, bool, error) {
 	var existingID int
 	var existingShortCode string
 	var lookupErr error
 
 	if uid != "" {
-		lookupErr = db.QueryRow(
+		lookupErr = q.QueryRow(
 			"SELECT id, short_code FROM events WHERE uid = ?", uid,
 		).Scan(&existingID, &existingShortCode)
 	} else {
 		const threeHours = int64(3 * 60 * 60)
-		lookupErr = db.QueryRow(
+		lookupErr = q.QueryRow(
 			"SELECT id, short_code FROM events WHERE title = ? AND location_id = ? AND ABS(start_time - ?) < ?",
 			title, locationID, startTime, threeHours,
 		).Scan(&existingID, &existingShortCode)
@@ -296,7 +304,7 @@ func insertEvent(title, description string, startTime, endTime int64, locationID
 
 	if lookupErr == nil {
 		// Duplicate — update existing event
-		_, err := db.Exec(
+		_, err := q.Exec(
 			"UPDATE events SET description=?, start_time=?, end_time=?, location_id=?, has_ball=?, has_workshop=?, tags=?, is_published=? WHERE id=?",
 			description, startTime, endTime, locationID, hasBall, hasWorkshop, string(tagsJSON), isPublished, existingID,
 		)
@@ -314,25 +322,22 @@ func insertEvent(title, description string, startTime, endTime int64, locationID
 	if uid != "" {
 		uidArg = uid
 	}
-	result, err := db.Exec(
-		"INSERT INTO events (uid, title, description, start_time, end_time, location_id, has_ball, has_workshop, tags, is_published, organization_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-		uidArg, title, description, startTime, endTime, locationID, hasBall, hasWorkshop, string(tagsJSON), isPublished, orgIDArg,
+	// short_code is pre-computed so the INSERT is a single round-trip (no follow-up UPDATE).
+	shortCode := generateShortCode()
+	result, err := q.Exec(
+		"INSERT INTO events (uid, title, description, start_time, end_time, location_id, has_ball, has_workshop, tags, is_published, organization_id, short_code) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+		uidArg, title, description, startTime, endTime, locationID, hasBall, hasWorkshop, string(tagsJSON), isPublished, orgIDArg, shortCode,
 	)
 	if err != nil {
 		return 0, "", false, err
 	}
-
 	id, _ := result.LastInsertId()
-	shortCode := generateShortCode(int(id), title)
-	if _, err = db.Exec("UPDATE events SET short_code = ? WHERE id = ?", shortCode, id); err != nil {
-		return 0, "", false, err
-	}
 	return int(id), shortCode, true, nil
 }
 
 // createEventFromRequest inserts or updates all events described by req.
 // Returns (events, allCreated, error); allCreated=false if any event was updated.
-func createEventFromRequest(req EventCreateRequest, locationID int64, isPublished bool) ([]Event, bool, error) {
+func createEventFromRequest(q querier, req EventCreateRequest, locationID int64, isPublished bool) ([]Event, bool, error) {
 	var createdEvents []Event
 	allCreated := true
 
@@ -363,7 +368,7 @@ func createEventFromRequest(req EventCreateRequest, locationID int64, isPublishe
 			return nil, false, fmt.Errorf("end_time: %w", err)
 		}
 
-		id, shortCode, created, err := insertEvent(req.Title, entry.description, startTime, endTime, locationID, req.HasBall, req.HasWorkshop, req.Tags, isPublished, req.OrganizationID, req.UID)
+		id, shortCode, created, err := insertEvent(q, req.Title, entry.description, startTime, endTime, locationID, req.HasBall, req.HasWorkshop, req.Tags, isPublished, req.OrganizationID, req.UID)
 		if err != nil {
 			return nil, false, err
 		}
@@ -371,7 +376,7 @@ func createEventFromRequest(req EventCreateRequest, locationID int64, isPublishe
 			allCreated = false
 		}
 
-		event, err := fetchEventByID(id)
+		event, err := fetchEventByID(q, id)
 		if err != nil {
 			return nil, false, err
 		}
@@ -560,16 +565,23 @@ func createEvent(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	tx, err := db.Begin()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	defer tx.Rollback()
+
 	var allCreatedEvents []Event
 	allCreated := true
 	for i, req := range requests {
-		locationID, err := ensureLocation(req.Location)
+		locationID, err := ensureLocation(tx, req.Location)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 
-		createdEvents, created, err := createEventFromRequest(req, locationID, isPublished)
+		createdEvents, created, err := createEventFromRequest(tx, req, locationID, isPublished)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -577,12 +589,17 @@ func createEvent(w http.ResponseWriter, r *http.Request) {
 		if !created {
 			allCreated = false
 		}
+		allCreatedEvents = append(allCreatedEvents, createdEvents...)
 		if i < len(vevents) {
 			for _, ev := range createdEvents {
 				attachImagesFromICalEvent(ev.ID, vevents[i])
 			}
 		}
-		allCreatedEvents = append(allCreatedEvents, createdEvents...)
+	}
+
+	if err := tx.Commit(); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
 	}
 
 	if allCreated {

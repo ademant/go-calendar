@@ -32,19 +32,19 @@ var fetchClient = &http.Client{Timeout: 30 * time.Second}
 
 // ensureLocation returns the id of an existing location matching loc.Location,
 // or inserts a new one. Returns 0 with no error when loc.Location is empty.
-func ensureLocation(loc EventLocationRequest) (int64, error) {
+func ensureLocation(q querier, loc EventLocationRequest) (int64, error) {
 	if loc.Location == "" {
 		return 0, nil
 	}
 	var id int64
-	err := db.QueryRow("SELECT id FROM locations WHERE location = ?", loc.Location).Scan(&id)
+	err := q.QueryRow("SELECT id FROM locations WHERE location = ?", loc.Location).Scan(&id)
 	if err == nil {
 		return id, nil
 	}
 	if err != sql.ErrNoRows {
 		return 0, err
 	}
-	result, err := db.Exec(
+	result, err := q.Exec(
 		"INSERT INTO locations (location, address, zipcode, town, latitude, longitude, internetsite) VALUES (?, ?, ?, ?, ?, ?, ?)",
 		loc.Location, loc.Address, loc.Zipcode, loc.Town, loc.Latitude, loc.Longitude, loc.Eventsite,
 	)
@@ -185,6 +185,12 @@ func importFromSource(src FetchSource) ([]Event, bool, error) {
 
 	db.Exec("UPDATE fetch_sources SET last_fetched_at = CURRENT_TIMESTAMP WHERE id = ?", src.ID)
 
+	tx, err := db.Begin()
+	if err != nil {
+		return nil, false, err
+	}
+	defer tx.Rollback()
+
 	var allEvents []Event
 	allCreated := true
 
@@ -231,12 +237,12 @@ func importFromSource(src FetchSource) ([]Event, bool, error) {
 			continue
 		}
 
-		locationID, err := ensureLocation(eventReq.Location)
+		locationID, err := ensureLocation(tx, eventReq.Location)
 		if err != nil {
 			return nil, false, err
 		}
 
-		events, created, err := createEventFromRequest(eventReq, locationID, true)
+		events, created, err := createEventFromRequest(tx, eventReq, locationID, true)
 		if err != nil {
 			return nil, false, err
 		}
@@ -249,6 +255,9 @@ func importFromSource(src FetchSource) ([]Event, bool, error) {
 		allEvents = append(allEvents, events...)
 	}
 
+	if err := tx.Commit(); err != nil {
+		return nil, false, err
+	}
 	return allEvents, allCreated, nil
 }
 

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"compress/gzip"
 	"context"
 	"database/sql"
 	"flag"
@@ -122,6 +123,34 @@ func (rl *RateLimiter) sweepLoop() {
 		}
 		rl.mu.Unlock()
 	}
+}
+
+type gzipResponseWriter struct {
+	http.ResponseWriter
+	gz *gzip.Writer
+}
+
+func (g *gzipResponseWriter) Write(b []byte) (int, error) { return g.gz.Write(b) }
+func (g *gzipResponseWriter) WriteHeader(code int) {
+	g.Header().Del("Content-Length")
+	g.ResponseWriter.WriteHeader(code)
+}
+
+// GzipMiddleware compresses responses when the client supports gzip.
+// Image paths are excluded — AVIF is already compressed binary data.
+func GzipMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasPrefix(r.URL.Path, "/api/v1/images/") ||
+			!strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") {
+			next.ServeHTTP(w, r)
+			return
+		}
+		w.Header().Set("Content-Encoding", "gzip")
+		w.Header().Set("Vary", "Accept-Encoding")
+		gz, _ := gzip.NewWriterLevel(w, gzip.BestSpeed)
+		defer gz.Close()
+		next.ServeHTTP(&gzipResponseWriter{ResponseWriter: w, gz: gz}, r)
+	})
 }
 
 func MaxBodyMiddleware(next http.Handler) http.Handler {
@@ -325,6 +354,7 @@ func main() {
 	connLimiter = NewConnLimiter(config.Server.MaxConnsPerIP)
 
 	router := mux.NewRouter()
+	router.Use(GzipMiddleware)
 	router.Use(MaxBodyMiddleware)
 	router.Use(ConnLimitMiddleware)
 	router.Use(RateLimitMiddleware)
