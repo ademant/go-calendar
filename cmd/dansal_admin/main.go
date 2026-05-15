@@ -122,6 +122,8 @@ func main() {
 		cmdPasswordBackup(rest)
 	case "password-restore":
 		cmdPasswordRestore(rest)
+	case "fill-location-fields":
+		cmdFillLocationFields(rest)
 	default:
 		fmt.Fprintf(os.Stderr, "unknown command: %s\n\n", sub)
 		usage()
@@ -147,6 +149,7 @@ Organization management:
   remove-member --org-id INT --username STR          Remove user from an org
 
 Maintenance:
+  fill-location-fields [--db PATH] [--apply]         Parse address/town from location names
   vacuum                                             Reclaim unused database space
   backup             [--output PATH]                 Full backup (config + db + images)
   incremental-backup --since RFC3339 [--output PATH] Backup only files changed since time
@@ -215,6 +218,18 @@ Add a user to an organization. Has no effect if the user is already a member.
 Flags:
   --org-id    Organization ID (required)
   --username  Username to add (required)`,
+
+	"fill-location-fields": `Usage: dansal_admin fill-location-fields [--db PATH] [--apply]
+
+Parse address, zipcode, and town out of location names for rows where
+those columns are empty. Recognises German address patterns embedded in
+the location name, e.g. "KFZ, Biegenstr. 13, 35037 Marburg".
+
+Without --apply the command prints what would change (dry-run).
+
+Flags:
+  --db     Path to calendar.db (default: /var/lib/dansal/calendar.db)
+  --apply  Write the changes to the database`,
 
 	"vacuum": `Usage: dansal_admin vacuum
 
