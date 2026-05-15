@@ -7,10 +7,38 @@ import (
 	"crypto/tls"
 	"encoding/base64"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"mime"
+	"net/http"
 	"net/smtp"
 )
+
+// POST /api/v1/email/test
+func sendTestEmail(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	role := r.Header.Get("X-User-Role")
+	if role != RoleAdmin {
+		http.Error(w, "Forbidden: admin only", http.StatusForbidden)
+		return
+	}
+
+	var body struct {
+		EmailAddress string `json:"emailaddress"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.EmailAddress == "" {
+		http.Error(w, "emailaddress is required", http.StatusBadRequest)
+		return
+	}
+
+	if err := SendEmail(body.EmailAddress, "Dansal SMTP Test", "This is a test email sent by Dansal to verify SMTP configuration."); err != nil {
+		http.Error(w, err.Error(), http.StatusBadGateway)
+		return
+	}
+
+	json.NewEncoder(w).Encode(map[string]string{"status": "sent", "to": body.EmailAddress})
+}
 
 // smtpObscure encrypts password with AES-256-GCM.
 // Pass an existing keyHex to reuse the key; pass "" to generate a new one.

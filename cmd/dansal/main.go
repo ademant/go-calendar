@@ -526,6 +526,11 @@ func main() {
 	apiKeyRoutes.HandleFunc("", createAPIKey).Methods("POST")
 	apiKeyRoutes.HandleFunc("/{id}", deleteAPIKey).Methods("DELETE")
 
+	// Email test endpoint (admin only)
+	emailRoutes := router.PathPrefix("/api/v1/email").Subrouter()
+	emailRoutes.Use(TokenMiddleware)
+	emailRoutes.HandleFunc("/test", sendTestEmail).Methods("POST")
+
 	adminLn := startAdminSocket(config.Server.AdminSocket)
 	startMetricsServer()
 
