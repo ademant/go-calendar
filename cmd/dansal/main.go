@@ -164,6 +164,7 @@ func RateLimitMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ip := getIP(r)
 		if !rateLimiter.Allow(ip) {
+			rateLimitRejectionsTotal.Inc()
 			http.Error(w, "Rate limit exceeded", http.StatusTooManyRequests)
 			return
 		}
@@ -403,6 +404,7 @@ func main() {
 	}
 	migrateDB()
 	initImageCache(config.Server.ImagesDir)
+	initMetrics()
 	startTokenCleanup()
 	log.Println("Database initialized successfully")
 
@@ -411,6 +413,7 @@ func main() {
 	connLimiter = NewConnLimiter(config.Server.MaxConnsPerIP)
 
 	router := mux.NewRouter()
+	router.Use(MetricsMiddleware)
 	router.Use(CORSMiddleware)
 	router.Use(SecurityHeadersMiddleware)
 	router.Use(GzipMiddleware)
@@ -508,6 +511,7 @@ func main() {
 	apiKeyRoutes.HandleFunc("/{id}", deleteAPIKey).Methods("DELETE")
 
 	adminLn := startAdminSocket(config.Server.AdminSocket)
+	startMetricsServer()
 
 	port := getPort()
 	log.Printf("Server starting on %s\n", port)

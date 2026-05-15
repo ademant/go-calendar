@@ -27,6 +27,8 @@ type ServerConfig struct {
 	LoginTarpitSecs      int      `yaml:"login_tarpit_secs"`
 	ReservedUsernames    []string `yaml:"reserved_usernames"`
 	AllowedOrigins       []string `yaml:"allowed_origins"`
+	MetricsPort          int      `yaml:"metrics_port"`
+	MetricsAllowedIPs    []string `yaml:"metrics_allowed_ips"`
 }
 
 type Config struct {
