@@ -252,6 +252,7 @@ func migrateDB() {
 	db.Exec("ALTER TABLE events ADD COLUMN organization_id INTEGER")
 	db.Exec("ALTER TABLE locations ADD COLUMN organization_id INTEGER")
 	db.Exec("ALTER TABLE locations ADD COLUMN short_name TEXT")
+	db.Exec("ALTER TABLE musicians ADD COLUMN short_name TEXT")
 	db.Exec("ALTER TABLE events ADD COLUMN uid TEXT")
 	db.Exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_events_uid ON events(uid) WHERE uid IS NOT NULL")
 	db.Exec("ALTER TABLE api_keys ADD COLUMN expires_at DATETIME")
@@ -306,6 +307,7 @@ func createTables() error {
 	CREATE TABLE IF NOT EXISTS musicians (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		bandname TEXT NOT NULL,
+		short_name TEXT,
 		internetsite TEXT,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 	);

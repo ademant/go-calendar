@@ -11,17 +11,20 @@ import (
 type Musician struct {
 	ID           int    `json:"id"`
 	Bandname     string `json:"bandname"`
+	ShortName    string `json:"short_name,omitempty"`
 	Internetsite string `json:"internetsite"`
 	CreatedAt    string `json:"created_at"`
 }
 
 type MusicianCreateRequest struct {
 	Bandname     string `json:"bandname"`
+	ShortName    string `json:"short_name"`
 	Internetsite string `json:"internetsite"`
 }
 
 type MusicianUpdateRequest struct {
 	Bandname     string `json:"bandname"`
+	ShortName    string `json:"short_name"`
 	Internetsite string `json:"internetsite"`
 }
 
@@ -29,7 +32,7 @@ type MusicianUpdateRequest struct {
 func getMusicians(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
-	rows, err := db.Query("SELECT id, bandname, internetsite, created_at FROM musicians")
+	rows, err := db.Query("SELECT id, bandname, short_name, internetsite, created_at FROM musicians")
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -39,7 +42,7 @@ func getMusicians(w http.ResponseWriter, r *http.Request) {
 	musicians := []Musician{}
 	for rows.Next() {
 		var musician Musician
-		if err := rows.Scan(&musician.ID, &musician.Bandname, &musician.Internetsite, &musician.CreatedAt); err != nil {
+		if err := rows.Scan(&musician.ID, &musician.Bandname, &musician.ShortName, &musician.Internetsite, &musician.CreatedAt); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
@@ -58,9 +61,9 @@ func getMusician(w http.ResponseWriter, r *http.Request) {
 
 	var musician Musician
 	err := db.QueryRow(
-		"SELECT id, bandname, internetsite, created_at FROM musicians WHERE id = ?",
+		"SELECT id, bandname, short_name, internetsite, created_at FROM musicians WHERE id = ?",
 		id,
-	).Scan(&musician.ID, &musician.Bandname, &musician.Internetsite, &musician.CreatedAt)
+	).Scan(&musician.ID, &musician.Bandname, &musician.ShortName, &musician.Internetsite, &musician.CreatedAt)
 
 	if err == sql.ErrNoRows {
 		http.Error(w, "Musician not found", http.StatusNotFound)
@@ -84,8 +87,8 @@ func createMusician(w http.ResponseWriter, r *http.Request) {
 	}
 
 	result, err := db.Exec(
-		"INSERT INTO musicians (bandname, internetsite) VALUES (?, ?)",
-		req.Bandname, req.Internetsite,
+		"INSERT INTO musicians (bandname, short_name, internetsite) VALUES (?, ?, ?)",
+		req.Bandname, req.ShortName, req.Internetsite,
 	)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -96,6 +99,7 @@ func createMusician(w http.ResponseWriter, r *http.Request) {
 	musician := Musician{
 		ID:           int(id),
 		Bandname:     req.Bandname,
+		ShortName:    req.ShortName,
 		Internetsite: req.Internetsite,
 	}
 
@@ -129,8 +133,8 @@ func updateMusician(w http.ResponseWriter, r *http.Request) {
 	}
 
 	result, err := db.Exec(
-		"UPDATE musicians SET bandname = ?, internetsite = ? WHERE id = ?",
-		req.Bandname, req.Internetsite, id,
+		"UPDATE musicians SET bandname = ?, short_name = ?, internetsite = ? WHERE id = ?",
+		req.Bandname, req.ShortName, req.Internetsite, id,
 	)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -145,9 +149,9 @@ func updateMusician(w http.ResponseWriter, r *http.Request) {
 
 	var musician Musician
 	err = db.QueryRow(
-		"SELECT id, bandname, internetsite, created_at FROM musicians WHERE id = ?",
+		"SELECT id, bandname, short_name, internetsite, created_at FROM musicians WHERE id = ?",
 		id,
-	).Scan(&musician.ID, &musician.Bandname, &musician.Internetsite, &musician.CreatedAt)
+	).Scan(&musician.ID, &musician.Bandname, &musician.ShortName, &musician.Internetsite, &musician.CreatedAt)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
