@@ -250,6 +250,7 @@ func startTokenCleanup() {
 func migrateDB() {
 	// Errors are silently ignored (column already exists).
 	db.Exec("ALTER TABLE events ADD COLUMN organization_id INTEGER")
+	db.Exec("ALTER TABLE events ADD COLUMN source TEXT")
 	db.Exec("ALTER TABLE locations ADD COLUMN organization_id INTEGER")
 	db.Exec("ALTER TABLE locations ADD COLUMN short_name TEXT")
 	db.Exec("ALTER TABLE musicians ADD COLUMN short_name TEXT")
@@ -281,6 +282,7 @@ func createTables() error {
 		tags TEXT,
 		is_published INTEGER DEFAULT 0,
 		short_code TEXT UNIQUE,
+		source TEXT,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		FOREIGN KEY (location_id) REFERENCES locations(id)
 	);

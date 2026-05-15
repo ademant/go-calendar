@@ -35,6 +35,7 @@ type Event struct {
 	Tags           []string `json:"tags"`
 	IsPublished    bool     `json:"is_published"`
 	ShortCode      string   `json:"short_code"`
+	Source         string   `json:"source,omitempty"`
 	CreatedAt      string   `json:"created_at"`
 	ImageURL       string   `json:"image_url,omitempty"`
 	OrganizationID *int     `json:"organization_id,omitempty"`
@@ -60,6 +61,7 @@ type EventCreateRequest struct {
 	Location       EventLocationRequest `json:"location"`
 	Date           []EventDate          `json:"date"`
 	Musicians      []string             `json:"musicians"`
+	Source         string               `json:"source,omitempty"`
 	OrganizationID *int                 `json:"organization_id,omitempty"`
 }
 
@@ -84,7 +86,7 @@ var timeFormats = []string{
 }
 
 // SELECT used by all event list / single-event queries
-const eventListSelect = `SELECT e.id, e.uid, e.title, e.description, e.start_time, e.end_time, e.has_ball, e.has_workshop, e.tags, e.is_published, e.short_code, e.created_at, COALESCE(l.location, ''), e.organization_id FROM events e LEFT JOIN locations l ON e.location_id = l.id`
+const eventListSelect = `SELECT e.id, e.uid, e.title, e.description, e.start_time, e.end_time, e.has_ball, e.has_workshop, e.tags, e.is_published, e.short_code, COALESCE(e.source,''), e.created_at, COALESCE(l.location, ''), e.organization_id FROM events e LEFT JOIN locations l ON e.location_id = l.id`
 
 // ── low-level helpers ──────────────────────────────────────────────────────
 
@@ -131,7 +133,7 @@ func scanEventRow(s scanner) (Event, error) {
 	var uid sql.NullString
 	if err := s.Scan(&event.ID, &uid, &event.Title, &event.Description, &startEpoch, &endEpoch,
 		&hasBallInt, &hasWorkshopInt, &event.TagsJSON, &isPublishedInt,
-		&event.ShortCode, &event.CreatedAt, &event.Location, &orgID); err != nil {
+		&event.ShortCode, &event.Source, &event.CreatedAt, &event.Location, &orgID); err != nil {
 		return Event{}, err
 	}
 	if uid.Valid {
@@ -161,10 +163,10 @@ func fetchEventByID(q querier, id int) (Event, error) {
 	var orgID sql.NullInt64
 	var uid sql.NullString
 	err := q.QueryRow(
-		"SELECT id, uid, title, description, start_time, end_time, has_ball, has_workshop, tags, is_published, short_code, created_at, organization_id FROM events WHERE id = ?", id,
+		"SELECT id, uid, title, description, start_time, end_time, has_ball, has_workshop, tags, is_published, short_code, COALESCE(source,''), created_at, organization_id FROM events WHERE id = ?", id,
 	).Scan(&event.ID, &uid, &event.Title, &event.Description, &startEpoch, &endEpoch,
 		&hasBallInt, &hasWorkshopInt, &event.TagsJSON, &isPublishedInt,
-		&event.ShortCode, &event.CreatedAt, &orgID)
+		&event.ShortCode, &event.Source, &event.CreatedAt, &orgID)
 	if uid.Valid {
 		event.UID = uid.String
 	}
@@ -280,7 +282,7 @@ func generateShortCode() string {
 // insertEvent upserts an event. Returns (id, shortCode, created, error) where
 // created=false means an existing event was updated instead of inserted.
 // When uid is non-empty, deduplication is done by uid; otherwise by title+location+time.
-func insertEvent(q querier, title, description string, startTime, endTime int64, locationID int64, hasBall, hasWorkshop bool, tags []string, isPublished bool, organizationID *int, uid string) (int, string, bool, error) {
+func insertEvent(q querier, title, description string, startTime, endTime int64, locationID int64, hasBall, hasWorkshop bool, tags []string, isPublished bool, organizationID *int, uid, source string) (int, string, bool, error) {
 	var existingID int
 	var existingShortCode string
 	var lookupErr error
@@ -329,9 +331,13 @@ func insertEvent(q querier, title, description string, startTime, endTime int64,
 	var shortCode string
 	for range 5 {
 		shortCode = generateShortCode()
+		var sourceArg interface{}
+		if source != "" {
+			sourceArg = source
+		}
 		result, err = q.Exec(
-			"INSERT INTO events (uid, title, description, start_time, end_time, location_id, has_ball, has_workshop, tags, is_published, organization_id, short_code) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-			uidArg, title, description, startTime, endTime, locationID, hasBall, hasWorkshop, string(tagsJSON), isPublished, orgIDArg, shortCode,
+			"INSERT INTO events (uid, title, description, start_time, end_time, location_id, has_ball, has_workshop, tags, is_published, organization_id, short_code, source) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+			uidArg, title, description, startTime, endTime, locationID, hasBall, hasWorkshop, string(tagsJSON), isPublished, orgIDArg, shortCode, sourceArg,
 		)
 		if err == nil {
 			break
@@ -380,7 +386,7 @@ func createEventFromRequest(q querier, req EventCreateRequest, locationID int64,
 			return nil, false, fmt.Errorf("end_time: %w", err)
 		}
 
-		id, shortCode, created, err := insertEvent(q, req.Title, entry.description, startTime, endTime, locationID, req.HasBall, req.HasWorkshop, req.Tags, isPublished, req.OrganizationID, req.UID)
+		id, shortCode, created, err := insertEvent(q, req.Title, entry.description, startTime, endTime, locationID, req.HasBall, req.HasWorkshop, req.Tags, isPublished, req.OrganizationID, req.UID, req.Source)
 		if err != nil {
 			return nil, false, err
 		}
