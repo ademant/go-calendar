@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/gorilla/mux"
 )
@@ -33,7 +34,13 @@ func generateAPIKey() (string, error) {
 	return "ak_" + base64.URLEncoding.EncodeToString(b), nil
 }
 
+// validateAPIKey checks an API key and returns the associated user.
+// Results are cached for up to credCacheTTL; the cache is invalidated on deletion.
 func validateAPIKey(key string) (int, string, error) {
+	if userID, role, ok := credentials.get(key); ok {
+		return userID, role, nil
+	}
+
 	var userID int
 	var userRole string
 
@@ -49,6 +56,7 @@ func validateAPIKey(key string) (int, string, error) {
 		return 0, "", err
 	}
 
+	credentials.set(key, userID, userRole, time.Time{}) // no natural expiry; TTL cap applies
 	return userID, userRole, nil
 }
 
@@ -161,7 +169,8 @@ func deleteAPIKey(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var ownerID int
-	err = db.QueryRow("SELECT user_id FROM api_keys WHERE id = ?", keyID).Scan(&ownerID)
+	var keyValue string
+	err = db.QueryRow("SELECT user_id, api_key FROM api_keys WHERE id = ?", keyID).Scan(&ownerID, &keyValue)
 	if err == sql.ErrNoRows {
 		w.WriteHeader(http.StatusNotFound)
 		json.NewEncoder(w).Encode(map[string]string{"error": "API key not found"})
@@ -185,5 +194,6 @@ func deleteAPIKey(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	credentials.invalidate(keyValue)
 	w.WriteHeader(http.StatusNoContent)
 }

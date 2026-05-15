@@ -72,8 +72,13 @@ func createTokenInDB(userID int) (string, time.Time, error) {
 	return token, expiresAt, nil
 }
 
-// validateToken checks if a token is valid and not expired
+// validateToken checks if a token is valid and not expired.
+// Results are cached for up to credCacheTTL to avoid a DB round-trip per request.
 func validateToken(token string) (int, string, error) {
+	if userID, role, ok := credentials.get(token); ok {
+		return userID, role, nil
+	}
+
 	var userID int
 	var userRole string
 	var expiresAt string
@@ -90,7 +95,6 @@ func validateToken(token string) (int, string, error) {
 		return 0, "", err
 	}
 
-	// Check if token is expired
 	expTime, err := parseTokenExpiration(expiresAt)
 	if err != nil {
 		return 0, "", fmt.Errorf("invalid token expiration format")
@@ -100,6 +104,7 @@ func validateToken(token string) (int, string, error) {
 		return 0, "", fmt.Errorf("token expired")
 	}
 
+	credentials.set(token, userID, userRole, expTime)
 	return userID, userRole, nil
 }
 
