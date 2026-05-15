@@ -1,8 +1,6 @@
-# Go Calendar REST API Documentation
+# dansal API
 
-## Overview
-
-The Go Calendar API is a RESTful service for managing calendar events, users, locations, and musicians. It supports role-based authentication and provides both public and protected endpoints.
+RESTful calendar API backed by SQLite. All timestamps are RFC3339. Events use epoch integers internally; responses return local time (Europe/Berlin).
 
 ## Base URL
 ```
@@ -11,568 +9,399 @@ http://localhost:8000
 
 ## Authentication
 
-The API uses Bearer token authentication for protected endpoints. Obtain a token by logging in:
+Protected endpoints require a Bearer token obtained from `/api/v1/login`, or an API key created via `/api/v1/apikeys`.
 
-```bash
-POST /api/v1/login
-Content-Type: application/json
-
-{
-  "username": "admin",
-  "password": "your_password"
-}
+```
+Authorization: Bearer <token-or-api-key>
 ```
 
-Include the token in requests:
-```
-Authorization: Bearer <your_token>
-```
+API keys begin with `ak_` and never expire.
 
 ## Roles
 
-- **admin**: Full access to all resources
-- **user**: Standard user access (can publish events)
-- **viewer**: Read-only access (only published events)
+| Role | Permissions |
+|------|-------------|
+| `admin` | Full access; bypasses all organization checks |
+| `user` | Read + write; must be org member for org-linked resources |
+| `publisher` | Read + create; no update or delete |
+| `viewer` | Read published events only |
 
-## Endpoints
+---
 
-### Authentication
+## Info
 
-#### Login
-```http
-GET|POST /api/v1/login
-```
+### GET /api/v1/info
+Returns server version and build time. Public.
 
-**Request Body (POST):**
 ```json
-{
-  "username": "string",
-  "email": "string", // optional
-  "password": "string"
-}
+{ "version": "1.2.3", "build_time": "2026-05-15T10:00:00Z" }
 ```
 
-**Response (200):**
+---
+
+## Authentication
+
+### POST /api/v1/login
+
+```json
+{ "username": "admin", "password": "secret" }
+```
+
+Response `200`:
 ```json
 {
   "token": "string",
-  "expires_at": "2026-05-15T07:21:56Z",
-  "user": {
-    "id": 1,
-    "username": "string",
-    "email": "string",
-    "role": "admin|user|viewer",
-    "created_at": "2026-05-14T07:21:19Z"
-  }
+  "expires_at": "2026-06-15T10:00:00Z",
+  "user": { "id": 1, "username": "admin", "email": "admin@localhost", "role": "admin", "created_at": "..." }
 }
 ```
 
-### Users
+---
 
-#### Get All Users
-```http
-GET /api/v1/users
-```
+## Users
 
-**Authorization:** Required (admin only)
+All user endpoints require admin role.
 
-**Response (200):**
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/api/v1/users` | List all users |
+| POST | `/api/v1/users` | Create user |
+| GET | `/api/v1/users/{id}` | Get user |
+| PUT | `/api/v1/users/{id}` | Update user |
+| DELETE | `/api/v1/users/{id}` | Delete user |
+
+**Create/Update body:**
 ```json
-[
-  {
-    "id": 1,
-    "username": "string",
-    "email": "string",
-    "role": "admin|user|viewer",
-    "created_at": "2026-05-14T07:21:19Z"
-  }
-]
+{ "username": "string", "email": "string", "password": "string", "role": "user" }
 ```
 
-#### Create User
-```http
-POST /api/v1/users
-```
+Valid roles: `admin`, `user`, `publisher`, `viewer`.
 
-**Authorization:** Required (admin only)
+---
 
-**Request Body:**
+## API Keys
+
+Requires authentication. Users manage their own keys; admins can manage any.
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/api/v1/apikeys` | List own API keys |
+| POST | `/api/v1/apikeys` | Create API key |
+| DELETE | `/api/v1/apikeys/{id}` | Delete API key |
+
+**Create body:**
 ```json
-{
-  "username": "string",
-  "email": "string",
-  "password": "string",
-  "role": "user" // optional, defaults to "user"
-}
+{ "name": "my-script" }
 ```
 
-**Response (201):**
+**Create response `201`** — the `key` field is only returned once:
+```json
+{ "id": 1, "name": "my-script", "key": "ak_...", "created_at": "..." }
+```
+
+---
+
+## Organizations
+
+| Method | Path | Description | Role |
+|--------|------|-------------|------|
+| GET | `/api/v1/organizations` | List | any |
+| POST | `/api/v1/organizations` | Create | admin |
+| GET | `/api/v1/organizations/{id}` | Get | any |
+| PUT | `/api/v1/organizations/{id}` | Update | admin |
+| DELETE | `/api/v1/organizations/{id}` | Delete | admin |
+| GET | `/api/v1/organizations/{id}/members` | List members | any |
+| POST | `/api/v1/organizations/{id}/members` | Add member | admin |
+| DELETE | `/api/v1/organizations/{id}/members/{user_id}` | Remove member | admin |
+
+**Organization object:**
+```json
+{ "id": 1, "name": "string", "description": "string", "created_at": "..." }
+```
+
+**Add member body:** `{ "user_id": 42 }`
+
+---
+
+## Locations
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/api/v1/locations` | List |
+| POST | `/api/v1/locations` | Create |
+| GET | `/api/v1/locations/{id}` | Get |
+| PUT | `/api/v1/locations/{id}` | Update |
+| DELETE | `/api/v1/locations/{id}` | Delete |
+
+**Location object:**
 ```json
 {
   "id": 1,
-  "username": "string",
-  "email": "string",
-  "role": "user",
-  "created_at": "2026-05-14T07:21:19Z"
+  "location": "Kulturzentrum",
+  "address": "Hauptstr. 1",
+  "zipcode": "10115",
+  "town": "Berlin",
+  "latitude": "52.5200",
+  "longitude": "13.4050",
+  "internetsite": "https://example.com",
+  "organization_id": 3,
+  "created_at": "..."
 }
 ```
 
-#### Get User by ID
-```http
-GET /api/v1/users/{id}
-```
-
-**Authorization:** Required (admin only)
-
-**Response (200):** Same as individual user object above
-
-#### Update User
-```http
-PUT /api/v1/users/{id}
-```
-
-**Authorization:** Required (admin only)
-
-**Request Body:**
+**Create body** — `organization_id` required for `user`/`publisher` (must be org member):
 ```json
 {
-  "email": "newemail@example.com",
-  "role": "admin"
+  "location": "string", "address": "string", "zipcode": "string",
+  "town": "string", "latitude": "string", "longitude": "string",
+  "internetsite": "string", "organization_id": 3
 }
 ```
 
-**Response (200):** Updated user object
-
-#### Delete User
-```http
-DELETE /api/v1/users/{id}
-```
-
-**Authorization:** Required (admin only)
-
-**Response (204):** No Content
-
-### Locations
-
-#### Get All Locations
-```http
-GET /api/v1/locations
-```
-
-**Authorization:** Required
-
-**Response (200):**
+**Update body** — all fields optional:
 ```json
-[
-  {
-    "id": 1,
-    "location": "string",
-    "address": "string",
-    "zipcode": "string",
-    "town": "string",
-    "latitude": "string",
-    "longitude": "string",
-    "internetsite": "string",
-    "created_at": "2026-05-14T07:21:19Z"
-  }
-]
+{ "address": "string", "zipcode": "string", "town": "string",
+  "latitude": "string", "longitude": "string", "internetsite": "string" }
 ```
 
-#### Create Location
-```http
-POST /api/v1/locations
-```
+---
 
-**Authorization:** Required
+## Musicians
 
-**Request Body:**
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/api/v1/musicians` | List |
+| POST | `/api/v1/musicians` | Create |
+| GET | `/api/v1/musicians/{id}` | Get |
+| PUT | `/api/v1/musicians/{id}` | Update |
+| DELETE | `/api/v1/musicians/{id}` | Delete |
+
+**Musician object:**
 ```json
-{
-  "location": "string",
-  "address": "string",
-  "zipcode": "string",
-  "town": "string",
-  "latitude": "string",
-  "longitude": "string",
-  "internetsite": "string"
-}
+{ "id": 1, "bandname": "string", "internetsite": "string", "created_at": "..." }
 ```
 
-**Response (201):** Location object
+---
 
-#### Get Location by ID
-```http
-GET /api/v1/locations/{id}
-```
+## Events
 
-**Authorization:** Required
-
-**Response (200):** Location object
-
-#### Update Location
-```http
-PUT /api/v1/locations/{id}
-```
-
-**Authorization:** Required
-
-**Request Body:** Partial location object with fields to update
-
-**Response (200):** Updated location object
-
-#### Delete Location
-```http
-DELETE /api/v1/locations/{id}
-```
-
-**Authorization:** Required
-
-**Response (204):** No Content
-
-### Musicians
-
-#### Get All Musicians
-```http
-GET /api/v1/musicians
-```
-
-**Authorization:** Required
-
-**Response (200):**
-```json
-[
-  {
-    "id": 1,
-    "bandname": "string",
-    "internetsite": "string",
-    "created_at": "2026-05-14T07:21:19Z"
-  }
-]
-```
-
-#### Create Musician
-```http
-POST /api/v1/musicians
-```
-
-**Authorization:** Required
-
-**Request Body:**
-```json
-{
-  "bandname": "string",
-  "internetsite": "string"
-}
-```
-
-**Response (201):** Musician object
-
-#### Get Musician by ID
-```http
-GET /api/v1/musicians/{id}
-```
-
-**Authorization:** Required
-
-**Response (200):** Musician object
-
-#### Update Musician
-```http
-PUT /api/v1/musicians/{id}
-```
-
-**Authorization:** Required
-
-**Request Body:**
-```json
-{
-  "bandname": "string",
-  "internetsite": "string"
-}
-```
-
-**Response (200):** Updated musician object
-
-#### Delete Musician
-```http
-DELETE /api/v1/musicians/{id}
-```
-
-**Authorization:** Required
-
-**Response (204):** No Content
-
-### Events
-
-#### Get All Events (Protected)
-```http
-GET /api/v1/events
-```
-
-**Authorization:** Required
-
-**Query Parameters:**
-- `title`: Filter by title (partial match)
-- `description`: Filter by description (partial match)
-- `start_time_after`: Events starting after this time (RFC3339)
-- `start_time_before`: Events starting before this time (RFC3339)
-- `end_time_after`: Events ending after this time (RFC3339)
-- `end_time_before`: Events ending before this time (RFC3339)
-- `location`: Filter by location name (partial match)
-- `has_ball`: Filter by ball flag (`true`/`false`)
-- `has_workshop`: Filter by workshop flag (`true`/`false`)
-- `tag`: Filter by tag (partial match)
-- `is_published`: Filter by publication status (`true`/`false`) - admin/user only
-- `limit`: Maximum number of results (default: 100, max: 1000)
-- `offset`: Number of results to skip (default: 0)
-
-**Response (200):** Array of event objects
-
-#### Get All Events (Public)
-```http
-GET /events
-```
-
-**Authorization:** None required
-
-**Query Parameters:** Same as protected endpoint, but only published events are returned
-
-**Additional Parameter:**
-- `code`: Short code to retrieve a specific event
-
-**Response (200):** Array of published events or single event if `code` is provided
-
-#### Create Events
-```http
-POST /api/v1/events
-```
-
-**Authorization:** Required
-
-**Content Types Supported:**
-- `application/json`
-- `text/calendar` (iCal format)
-
-**Request Body (JSON - Single Event):**
-```json
-{
-  "title": "string",
-  "description": "string",
-  "start_time": "2026-05-15T10:00:00",
-  "end_time": "2026-05-15T11:00:00",
-  "has_ball": false,
-  "has_workshop": true,
-  "tags": ["tag1", "tag2"],
-  "location": {
-    "location": "string",
-    "address": "string",
-    "zipcode": "string",
-    "town": "string",
-    "latitude": "string",
-    "longitude": "string",
-    "eventsite": "string"
-  }
-}
-```
-
-**Request Body (JSON - Event Series):**
-```json
-{
-  "title": "string",
-  "description": "string",
-  "date": [
-    {
-      "description": "string",
-      "start_time": "2026-05-15T10:00:00",
-      "end_time": "2026-05-15T11:00:00"
-    }
-  ],
-  "has_ball": false,
-  "has_workshop": true,
-  "tags": ["tag1", "tag2"],
-  "location": {
-    "location": "string",
-    "address": "string",
-    "zipcode": "string",
-    "town": "string",
-    "latitude": "string",
-    "longitude": "string",
-    "eventsite": "string"
-  }
-}
-```
-
-**Request Body (JSON - Multiple Events):**
-```json
-[
-  {
-    "title": "Event 1",
-    "start_time": "2026-05-15T10:00:00",
-    "end_time": "2026-05-15T11:00:00",
-    "location": { "location": "Venue A" }
-  },
-  {
-    "title": "Event 2",
-    "start_time": "2026-05-16T14:00:00",
-    "end_time": "2026-05-16T15:00:00",
-    "location": { "location": "Venue B" }
-  }
-]
-```
-
-**Response (201):** Array of created event objects
-
-#### Get Event by ID
-```http
-GET /api/v1/events/{id}
-```
-
-**Authorization:** Required
-
-**Response (200):** Event object
-
-#### Delete Event
-```http
-DELETE /api/v1/events/{id}
-```
-
-**Authorization:** Required
-
-**Response (204):** No Content
-
-### Event Object Structure
+### Event object
 
 ```json
 {
   "id": 1,
-  "title": "string",
+  "uid": "abc123@example.com",
+  "title": "Bal Folk",
   "description": "string",
-  "start_time": "2026-05-15T10:00:00Z",
-  "end_time": "2026-05-15T11:00:00Z",
-  "has_ball": false,
-  "has_workshop": true,
-  "tags": ["tag1", "tag2"],
+  "start_time": "2026-05-15T20:00:00+02:00",
+  "end_time": "2026-05-15T23:00:00+02:00",
+  "has_ball": true,
+  "has_workshop": false,
+  "tags": ["Bal Folk", "Köln"],
   "is_published": true,
   "short_code": "8b911390",
-  "created_at": "2026-05-14T07:37:43Z"
+  "image_url": "/api/v1/images/1",
+  "organization_id": 3,
+  "created_at": "..."
 }
 ```
 
-### Tags
+`uid` is set from the iCal `UID` field when importing; used for deduplication on re-import. When `uid` is present, re-importing the same feed updates the event rather than creating a duplicate. Without `uid`, deduplication falls back to matching by title + location + start time (±3 hours).
 
-#### Get All Tags
-```http
-GET /api/v1/tags
+### Protected endpoints
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/api/v1/events` | List events |
+| POST | `/api/v1/events` | Create event(s) |
+| GET | `/api/v1/events/{id}` | Get event |
+| DELETE | `/api/v1/events/{id}` | Delete event |
+| POST | `/api/v1/events/{id}/publish` | Publish event |
+
+**Write access:** `user`/`publisher` must be members of the event's `organization_id`. `admin` bypasses this.
+
+**Publication:** events created by `user` or `admin` are published immediately; `publisher` and `viewer` create unpublished events.
+
+### GET /api/v1/events
+
+Query parameters:
+
+| Parameter | Description |
+|-----------|-------------|
+| `title` | Partial match |
+| `description` | Partial match |
+| `start_time_after` | RFC3339 |
+| `start_time_before` | RFC3339 |
+| `end_time_after` | RFC3339 |
+| `end_time_before` | RFC3339 |
+| `location` | Partial match |
+| `tag` | Partial match |
+| `has_ball` | `true`/`false` |
+| `has_workshop` | `true`/`false` |
+| `is_published` | `true`/`false` (admin/user only) |
+| `limit` | Default 100, max 1000 |
+| `offset` | Default 0 |
+
+`viewer` role and the public endpoint only return published events.
+
+### POST /api/v1/events — JSON
+
+**Single event:**
+```json
+{
+  "uid": "optional-stable-id",
+  "title": "Bal Folk",
+  "description": "string",
+  "start_time": "2026-05-15T20:00:00",
+  "end_time": "2026-05-15T23:00:00",
+  "has_ball": true,
+  "has_workshop": false,
+  "tags": ["Bal Folk"],
+  "organization_id": 3,
+  "location": {
+    "location": "Kulturzentrum", "address": "Hauptstr. 1",
+    "zipcode": "10115", "town": "Berlin",
+    "latitude": "52.52", "longitude": "13.40",
+    "eventsite": "https://example.com/event/42"
+  }
+}
 ```
 
-**Authorization:** Required
+**Event series** — share title/location, differ by date:
+```json
+{
+  "title": "Weekly Dance",
+  "has_ball": true,
+  "tags": ["Bal Folk"],
+  "location": { "location": "Kulturzentrum" },
+  "date": [
+    { "description": "Week 1", "start_time": "2026-05-15T20:00:00", "end_time": "2026-05-15T23:00:00" },
+    { "description": "Week 2", "start_time": "2026-05-22T20:00:00", "end_time": "2026-05-22T23:00:00" }
+  ]
+}
+```
 
-**Response (200):** Array of unique tag strings
+**Multiple events** — POST a JSON array of event objects.
+
+Response `201`: array of created event objects.
+
+### POST /api/v1/events — iCal
+
+```
+Content-Type: text/calendar
+```
+
+Send a `.ics` file body. Optional query parameter `organization_id` assigns all imported events to an organization. iCal fields mapped:
+
+| iCal field | Event field |
+|------------|-------------|
+| `UID` | `uid` (dedup key) |
+| `SUMMARY` | `title` |
+| `DESCRIPTION` | `description` |
+| `DTSTART` / `DTEND` | `start_time` / `end_time` |
+| `LOCATION` | location name |
+| `CATEGORIES` | `tags` |
+| `ORGANIZER` | organization (find or create by CN or email) |
+| `ATTACH` with `FMTTYPE=image/*` | event image |
+
+### POST /api/v1/events/{id}/publish
+
+Publishes an unpublished event. Requires `user` or `admin` role and org membership.
+
+Response `200`: updated event object.
+
+---
+
+## Images
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/api/v1/images/{event_id}` | Get event image (AVIF) |
+| POST | `/api/v1/images/{event_id}` | Upload event image |
+| DELETE | `/api/v1/images/{event_id}` | Delete event image |
+
+Upload accepts any common image format. The image is resized to fit within configured dimensions and stored as AVIF.
+
+---
+
+## Tags
+
+### GET /api/v1/tags
+
+Returns all distinct tags across all events.
 
 ```json
+["Bal Folk", "Workshop", "Köln"]
+```
+
+---
+
+## Fetch Sources (iCal subscriptions)
+
+Stores iCal URLs and imports events from them on demand.
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/api/v1/fetchurl` | List sources |
+| POST | `/api/v1/fetchurl` | Add source and import |
+| GET | `/api/v1/fetchurl/{id}` | Get source |
+| POST | `/api/v1/fetchurl/{id}/fetch` | Re-import from source |
+| POST | `/api/v1/fetchurl/fetch-all` | Re-import from all sources |
+
+**Fetch source object:**
+```json
+{
+  "id": 1,
+  "url": "https://example.com/calendar.ics",
+  "type": "ical",
+  "tags": ["Bal Folk"],
+  "last_fetched_at": "2026-05-15T10:00:00Z",
+  "created_at": "..."
+}
+```
+
+**Add source body:**
+```json
+{ "url": "https://example.com/calendar.ics", "type": "ical", "tags": ["Bal Folk"] }
+```
+
+Tags listed here are merged with tags parsed from the iCal `CATEGORIES` field. Events are deduplicated by `uid`; re-fetching the same source updates existing events.
+
+**fetch-all response:**
+```json
 [
-  "jazz",
-  "rock",
-  "classical",
-  "workshop",
-  "ball"
+  { "source_id": 1, "url": "...", "events": 12, "all_created": false },
+  { "source_id": 2, "url": "...", "events": 0, "error": "remote returned 404" }
 ]
 ```
 
-## HTTP Status Codes
+---
 
-- `200 OK`: Successful request
-- `201 Created`: Resource created successfully
-- `204 No Content`: Resource deleted successfully
-- `400 Bad Request`: Invalid request data
-- `401 Unauthorized`: Authentication required or invalid token
-- `403 Forbidden`: Insufficient permissions
-- `404 Not Found`: Resource not found
-- `405 Method Not Allowed`: HTTP method not supported
-- `415 Unsupported Media Type`: Content-Type not supported
-- `429 Too Many Requests`: Rate limit exceeded
-- `500 Internal Server Error`: Server error
+## Public endpoints
 
-## CORS Support
+No authentication required.
 
-All endpoints support OPTIONS method for CORS preflight requests with the following headers:
-- `Access-Control-Allow-Origin: *`
-- `Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS`
-- `Access-Control-Allow-Headers: Content-Type, Authorization, X-User-Role, X-User-ID`
-- `Access-Control-Max-Age: 86400`
+| Path | Description |
+|------|-------------|
+| `GET /events` | Published events (JSON); supports same query params as protected endpoint plus `code` for short-code lookup |
+| `GET /events.ics` | All published events as iCal feed |
+| `GET /events/tag/{tag}.ics` | Published events for a tag as iCal feed |
+| `GET /events/town/{town}.ics` | Published events for a town as iCal feed |
 
-## Content Types
+---
 
-- **Request**: `application/json`, `text/calendar` (events only), `application/x-www-form-urlencoded` (login)
-- **Response**: `application/json`, `text/calendar` (events only)
+## Status codes
 
-## Rate Limiting
-
-The API implements rate limiting based on IP address (100 requests per minute).
-
-## Examples
-
-### Create a User
-```bash
-curl -X POST http://localhost:8000/api/v1/users \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer <token>" \
-  -d '{
-    "username": "john_doe",
-    "email": "john@example.com",
-    "password": "secure_password_123",
-    "role": "user"
-  }'
-```
-
-### Create Multiple Events
-```bash
-curl -X POST http://localhost:8000/api/v1/events \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer <token>" \
-  -d '[
-    {
-      "title": "Workshop Session",
-      "description": "Advanced Go programming",
-      "start_time": "2026-05-20T10:00:00",
-      "end_time": "2026-05-20T12:00:00",
-      "has_workshop": true,
-      "tags": ["golang", "workshop"],
-      "location": {
-        "location": "Tech Hub",
-        "town": "Berlin"
-      }
-    },
-    {
-      "title": "Community Meetup",
-      "description": "Monthly networking event",
-      "start_time": "2026-05-25T18:00:00",
-      "end_time": "2026-05-25T20:00:00",
-      "has_ball": true,
-      "tags": ["community", "networking"],
-      "location": {
-        "location": "Club House",
-        "town": "Berlin"
-      }
-    }
-  ]'
-```
-
-### Get Events with Filters
-```bash
-curl "http://localhost:8000/events?title=Workshop&has_workshop=true&limit=10"
-```
-
-### Get Event by Short Code
-```bash
-curl "http://localhost:8000/events?code=8b911390"
-```
-
-## Notes
-
-- All timestamps use RFC3339 format (ISO 8601)
-- Event series creation allows multiple dates in a single request
-- Short codes are automatically generated for shareable event URLs
-- Public `/events` endpoint only shows published events
-- Authentication is required for all write operations and some read operations
-- The API supports both JSON and iCal formats for events
+| Code | Meaning |
+|------|---------|
+| 200 | OK |
+| 201 | Created |
+| 204 | No content (delete) |
+| 400 | Bad request / invalid input |
+| 401 | Missing or invalid credentials |
+| 403 | Forbidden (wrong role or not org member) |
+| 404 | Not found |
+| 415 | Unsupported media type |
+| 429 | Rate limit exceeded |
+| 502 | Bad gateway (upstream fetch failed) |
+| 500 | Internal server error |

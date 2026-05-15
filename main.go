@@ -179,12 +179,21 @@ func init() {
 		log.Fatal(err)
 	}
 
+	migrateDB()
 	ensureAdminUser(db)
 
 	rateLimiter = NewRateLimiter(config.Server.RateLimit, time.Minute)
 	connLimiter = NewConnLimiter(config.Server.MaxConnsPerIP)
 
 	log.Println("Database initialized successfully")
+}
+
+func migrateDB() {
+	// Errors are silently ignored (column already exists).
+	db.Exec("ALTER TABLE events ADD COLUMN organization_id INTEGER")
+	db.Exec("ALTER TABLE locations ADD COLUMN organization_id INTEGER")
+	db.Exec("ALTER TABLE events ADD COLUMN uid TEXT")
+	db.Exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_events_uid ON events(uid) WHERE uid IS NOT NULL")
 }
 
 func createTables() error {
@@ -199,6 +208,7 @@ func createTables() error {
 	);
 	CREATE TABLE IF NOT EXISTS events (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		uid TEXT UNIQUE,
 		title TEXT NOT NULL,
 		description TEXT,
 		start_time INTEGER NOT NULL,
@@ -251,6 +261,20 @@ func createTables() error {
 		name TEXT NOT NULL,
 		api_key TEXT UNIQUE NOT NULL,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+	);
+	CREATE TABLE IF NOT EXISTS organizations (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		name TEXT UNIQUE NOT NULL,
+		description TEXT DEFAULT '',
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+	);
+	CREATE TABLE IF NOT EXISTS organization_members (
+		organization_id INTEGER NOT NULL,
+		user_id INTEGER NOT NULL,
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		PRIMARY KEY (organization_id, user_id),
+		FOREIGN KEY (organization_id) REFERENCES organizations(id) ON DELETE CASCADE,
 		FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 	);
 	CREATE INDEX IF NOT EXISTS idx_events_published_start ON events(is_published, start_time);
@@ -354,6 +378,22 @@ func main() {
 	tagsRoutes.Use(TokenMiddleware)
 	tagsRoutes.HandleFunc("", getTags).Methods("GET")
 	tagsRoutes.HandleFunc("", handleOptions).Methods("OPTIONS")
+
+	// Organization endpoints (protected)
+	orgRoutes := router.PathPrefix("/api/v1/organizations").Subrouter()
+	orgRoutes.Use(TokenMiddleware)
+	orgRoutes.HandleFunc("", getOrganizations).Methods("GET")
+	orgRoutes.HandleFunc("", createOrganization).Methods("POST")
+	orgRoutes.HandleFunc("", handleOptions).Methods("OPTIONS")
+	orgRoutes.HandleFunc("/{id}", getOrganization).Methods("GET")
+	orgRoutes.HandleFunc("/{id}", updateOrganization).Methods("PUT")
+	orgRoutes.HandleFunc("/{id}", deleteOrganization).Methods("DELETE")
+	orgRoutes.HandleFunc("/{id}", handleOptions).Methods("OPTIONS")
+	orgRoutes.HandleFunc("/{id}/members", getOrganizationMembers).Methods("GET")
+	orgRoutes.HandleFunc("/{id}/members", addOrganizationMember).Methods("POST")
+	orgRoutes.HandleFunc("/{id}/members", handleOptions).Methods("OPTIONS")
+	orgRoutes.HandleFunc("/{id}/members/{user_id}", removeOrganizationMember).Methods("DELETE")
+	orgRoutes.HandleFunc("/{id}/members/{user_id}", handleOptions).Methods("OPTIONS")
 
 	// API key endpoints (protected)
 	apiKeyRoutes := router.PathPrefix("/api/v1/apikeys").Subrouter()

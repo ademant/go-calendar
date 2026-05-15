@@ -19,20 +19,22 @@ import (
 )
 
 type Event struct {
-	ID          int      `json:"id"`
-	Title       string   `json:"title"`
-	Description string   `json:"description"`
-	StartTime   string   `json:"start_time"`
-	EndTime     string   `json:"end_time"`
-	HasBall     bool     `json:"has_ball"`
-	HasWorkshop bool     `json:"has_workshop"`
-	Tags        []string `json:"tags"`
-	IsPublished bool     `json:"is_published"`
-	ShortCode   string   `json:"short_code"`
-	CreatedAt   string   `json:"created_at"`
-	ImageURL    string   `json:"image_url,omitempty"`
-	Location    string   `json:"-"`
-	TagsJSON    string   `json:"-"`
+	ID             int      `json:"id"`
+	UID            string   `json:"uid,omitempty"`
+	Title          string   `json:"title"`
+	Description    string   `json:"description"`
+	StartTime      string   `json:"start_time"`
+	EndTime        string   `json:"end_time"`
+	HasBall        bool     `json:"has_ball"`
+	HasWorkshop    bool     `json:"has_workshop"`
+	Tags           []string `json:"tags"`
+	IsPublished    bool     `json:"is_published"`
+	ShortCode      string   `json:"short_code"`
+	CreatedAt      string   `json:"created_at"`
+	ImageURL       string   `json:"image_url,omitempty"`
+	OrganizationID *int     `json:"organization_id,omitempty"`
+	Location       string   `json:"-"`
+	TagsJSON       string   `json:"-"`
 }
 
 type EventDate struct {
@@ -42,16 +44,18 @@ type EventDate struct {
 }
 
 type EventCreateRequest struct {
-	Title       string               `json:"title"`
-	Description string               `json:"description"`
-	StartTime   string               `json:"start_time"`
-	EndTime     string               `json:"end_time"`
-	HasBall     bool                 `json:"has_ball"`
-	HasWorkshop bool                 `json:"has_workshop"`
-	Tags        []string             `json:"tags"`
-	Location    EventLocationRequest `json:"location"`
-	Date        []EventDate          `json:"date"`
-	Musicians   []string             `json:"musicians"`
+	UID            string               `json:"uid,omitempty"`
+	Title          string               `json:"title"`
+	Description    string               `json:"description"`
+	StartTime      string               `json:"start_time"`
+	EndTime        string               `json:"end_time"`
+	HasBall        bool                 `json:"has_ball"`
+	HasWorkshop    bool                 `json:"has_workshop"`
+	Tags           []string             `json:"tags"`
+	Location       EventLocationRequest `json:"location"`
+	Date           []EventDate          `json:"date"`
+	Musicians      []string             `json:"musicians"`
+	OrganizationID *int                 `json:"organization_id,omitempty"`
 }
 
 type EventLocationRequest struct {
@@ -75,7 +79,7 @@ var timeFormats = []string{
 }
 
 // SELECT used by all event list / single-event queries
-const eventListSelect = `SELECT e.id, e.title, e.description, e.start_time, e.end_time, e.has_ball, e.has_workshop, e.tags, e.is_published, e.short_code, e.created_at, COALESCE(l.location, '') FROM events e LEFT JOIN locations l ON e.location_id = l.id`
+const eventListSelect = `SELECT e.id, e.uid, e.title, e.description, e.start_time, e.end_time, e.has_ball, e.has_workshop, e.tags, e.is_published, e.short_code, e.created_at, COALESCE(l.location, ''), e.organization_id FROM events e LEFT JOIN locations l ON e.location_id = l.id`
 
 // ── low-level helpers ──────────────────────────────────────────────────────
 
@@ -114,15 +118,20 @@ type scanner interface {
 	Scan(dest ...any) error
 }
 
-// scanEventRow decodes one row from the eventListSelect query (12 columns including location).
+// scanEventRow decodes one row from the eventListSelect query.
 func scanEventRow(s scanner) (Event, error) {
 	var event Event
 	var hasBallInt, hasWorkshopInt, isPublishedInt int
 	var startEpoch, endEpoch int64
-	if err := s.Scan(&event.ID, &event.Title, &event.Description, &startEpoch, &endEpoch,
+	var orgID sql.NullInt64
+	var uid sql.NullString
+	if err := s.Scan(&event.ID, &uid, &event.Title, &event.Description, &startEpoch, &endEpoch,
 		&hasBallInt, &hasWorkshopInt, &event.TagsJSON, &isPublishedInt,
-		&event.ShortCode, &event.CreatedAt, &event.Location); err != nil {
+		&event.ShortCode, &event.CreatedAt, &event.Location, &orgID); err != nil {
 		return Event{}, err
+	}
+	if uid.Valid {
+		event.UID = uid.String
 	}
 	event.StartTime = epochToLocal(startEpoch)
 	event.EndTime = epochToLocal(endEpoch)
@@ -130,6 +139,10 @@ func scanEventRow(s scanner) (Event, error) {
 	event.HasWorkshop = hasWorkshopInt == 1
 	event.IsPublished = isPublishedInt == 1
 	event.ImageURL = eventImageURL(event.ID)
+	if orgID.Valid {
+		v := int(orgID.Int64)
+		event.OrganizationID = &v
+	}
 	if event.TagsJSON != "" {
 		json.Unmarshal([]byte(event.TagsJSON), &event.Tags)
 	}
@@ -141,11 +154,16 @@ func fetchEventByID(id int) (Event, error) {
 	var event Event
 	var hasBallInt, hasWorkshopInt, isPublishedInt int
 	var startEpoch, endEpoch int64
+	var orgID sql.NullInt64
+	var uid sql.NullString
 	err := db.QueryRow(
-		"SELECT id, title, description, start_time, end_time, has_ball, has_workshop, tags, is_published, short_code, created_at FROM events WHERE id = ?", id,
-	).Scan(&event.ID, &event.Title, &event.Description, &startEpoch, &endEpoch,
+		"SELECT id, uid, title, description, start_time, end_time, has_ball, has_workshop, tags, is_published, short_code, created_at, organization_id FROM events WHERE id = ?", id,
+	).Scan(&event.ID, &uid, &event.Title, &event.Description, &startEpoch, &endEpoch,
 		&hasBallInt, &hasWorkshopInt, &event.TagsJSON, &isPublishedInt,
-		&event.ShortCode, &event.CreatedAt)
+		&event.ShortCode, &event.CreatedAt, &orgID)
+	if uid.Valid {
+		event.UID = uid.String
+	}
 	if err != nil {
 		return Event{}, err
 	}
@@ -155,6 +173,10 @@ func fetchEventByID(id int) (Event, error) {
 	event.HasWorkshop = hasWorkshopInt == 1
 	event.IsPublished = isPublishedInt == 1
 	event.ImageURL = eventImageURL(event.ID)
+	if orgID.Valid {
+		v := int(orgID.Int64)
+		event.OrganizationID = &v
+	}
 	if event.TagsJSON != "" {
 		json.Unmarshal([]byte(event.TagsJSON), &event.Tags)
 	}
@@ -252,23 +274,32 @@ func generateShortCode(eventID int, title string) string {
 
 // insertEvent upserts an event. Returns (id, shortCode, created, error) where
 // created=false means an existing event was updated instead of inserted.
-func insertEvent(title, description string, startTime, endTime int64, locationID int64, hasBall, hasWorkshop bool, tags []string, isPublished bool) (int, string, bool, error) {
-	const threeHours = int64(3 * 60 * 60)
+// When uid is non-empty, deduplication is done by uid; otherwise by title+location+time.
+func insertEvent(title, description string, startTime, endTime int64, locationID int64, hasBall, hasWorkshop bool, tags []string, isPublished bool, organizationID *int, uid string) (int, string, bool, error) {
 	var existingID int
 	var existingShortCode string
-	err := db.QueryRow(
-		"SELECT id, short_code FROM events WHERE title = ? AND location_id = ? AND ABS(start_time - ?) < ?",
-		title, locationID, startTime, threeHours,
-	).Scan(&existingID, &existingShortCode)
-	if err != nil && err != sql.ErrNoRows {
-		return 0, "", false, err
+	var lookupErr error
+
+	if uid != "" {
+		lookupErr = db.QueryRow(
+			"SELECT id, short_code FROM events WHERE uid = ?", uid,
+		).Scan(&existingID, &existingShortCode)
+	} else {
+		const threeHours = int64(3 * 60 * 60)
+		lookupErr = db.QueryRow(
+			"SELECT id, short_code FROM events WHERE title = ? AND location_id = ? AND ABS(start_time - ?) < ?",
+			title, locationID, startTime, threeHours,
+		).Scan(&existingID, &existingShortCode)
+	}
+	if lookupErr != nil && lookupErr != sql.ErrNoRows {
+		return 0, "", false, lookupErr
 	}
 
 	tagsJSON, _ := json.Marshal(tags)
 
-	if err == nil {
+	if lookupErr == nil {
 		// Duplicate — update existing event
-		_, err = db.Exec(
+		_, err := db.Exec(
 			"UPDATE events SET description=?, start_time=?, end_time=?, location_id=?, has_ball=?, has_workshop=?, tags=?, is_published=? WHERE id=?",
 			description, startTime, endTime, locationID, hasBall, hasWorkshop, string(tagsJSON), isPublished, existingID,
 		)
@@ -278,9 +309,17 @@ func insertEvent(title, description string, startTime, endTime int64, locationID
 		return existingID, existingShortCode, false, nil
 	}
 
+	var orgIDArg interface{}
+	if organizationID != nil {
+		orgIDArg = *organizationID
+	}
+	var uidArg interface{}
+	if uid != "" {
+		uidArg = uid
+	}
 	result, err := db.Exec(
-		"INSERT INTO events (title, description, start_time, end_time, location_id, has_ball, has_workshop, tags, is_published) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-		title, description, startTime, endTime, locationID, hasBall, hasWorkshop, string(tagsJSON), isPublished,
+		"INSERT INTO events (uid, title, description, start_time, end_time, location_id, has_ball, has_workshop, tags, is_published, organization_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+		uidArg, title, description, startTime, endTime, locationID, hasBall, hasWorkshop, string(tagsJSON), isPublished, orgIDArg,
 	)
 	if err != nil {
 		return 0, "", false, err
@@ -327,7 +366,7 @@ func createEventFromRequest(req EventCreateRequest, locationID int64, isPublishe
 			return nil, false, fmt.Errorf("end_time: %w", err)
 		}
 
-		id, shortCode, created, err := insertEvent(req.Title, entry.description, startTime, endTime, locationID, req.HasBall, req.HasWorkshop, req.Tags, isPublished)
+		id, shortCode, created, err := insertEvent(req.Title, entry.description, startTime, endTime, locationID, req.HasBall, req.HasWorkshop, req.Tags, isPublished, req.OrganizationID, req.UID)
 		if err != nil {
 			return nil, false, err
 		}
@@ -422,14 +461,13 @@ func getEvents(w http.ResponseWriter, r *http.Request) {
 func createEvent(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
-	isPublished := false
-	if r.Header.Get("Authorization") != "" {
-		role := r.Header.Get("X-User-Role")
-		isPublished = role == RoleUser || role == RoleAdmin
-	}
+	callerRole := r.Header.Get("X-User-Role")
+	callerID, _ := strconv.Atoi(r.Header.Get("X-User-ID"))
+	isPublished := callerRole == RoleUser || callerRole == RoleAdmin
 
 	contentType := r.Header.Get("Content-Type")
 	var requests []EventCreateRequest
+	var vevents []*ics.VEvent
 
 	if contentType == "application/json" {
 		body, err := io.ReadAll(r.Body)
@@ -467,27 +505,41 @@ func createEvent(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "Invalid iCal format", http.StatusBadRequest)
 			return
 		}
+		var icalOrgID *int
+		if s := r.URL.Query().Get("organization_id"); s != "" {
+			if v, err2 := strconv.Atoi(s); err2 == nil {
+				icalOrgID = &v
+			}
+		}
 		for _, event := range cal.Events() {
 			var startTime, endTime string
 			if p := event.GetProperty(ics.ComponentPropertyDtStart); p != nil {
-				if t, err := time.Parse("20060102T150405Z", p.Value); err == nil {
-					startTime = t.UTC().Format(time.RFC3339)
-				}
+				startTime, _ = parseICalTime(p.Value)
 			}
 			if p := event.GetProperty(ics.ComponentPropertyDtEnd); p != nil {
-				if t, err := time.Parse("20060102T150405Z", p.Value); err == nil {
-					endTime = t.UTC().Format(time.RFC3339)
-				}
+				endTime, _ = parseICalTime(p.Value)
+			}
+			var uid string
+			if p := event.GetProperty(ics.ComponentPropertyUniqueId); p != nil {
+				uid = p.Value
+			}
+			orgID := icalOrgID
+			if orgID == nil {
+				orgID = ensureOrgFromOrganizer(event)
 			}
 			requests = append(requests, EventCreateRequest{
-				Title:       event.GetProperty(ics.ComponentPropertySummary).Value,
-				Description: event.GetProperty(ics.ComponentPropertyDescription).Value,
-				StartTime:   startTime,
-				EndTime:     endTime,
+				UID:            uid,
+				Title:          event.GetProperty(ics.ComponentPropertySummary).Value,
+				Description:    event.GetProperty(ics.ComponentPropertyDescription).Value,
+				StartTime:      startTime,
+				EndTime:        endTime,
+				Tags:           parseICalCategories(event),
+				OrganizationID: orgID,
 				Location: EventLocationRequest{
 					Location: event.GetProperty(ics.ComponentPropertyLocation).Value,
 				},
 			})
+			vevents = append(vevents, event)
 		}
 		if len(requests) == 0 {
 			http.Error(w, "No events found in iCal file", http.StatusBadRequest)
@@ -498,9 +550,22 @@ func createEvent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if callerRole != RoleAdmin {
+		for _, req := range requests {
+			if req.OrganizationID == nil {
+				http.Error(w, "organization_id is required", http.StatusBadRequest)
+				return
+			}
+			if !isOrgMember(callerID, *req.OrganizationID) {
+				http.Error(w, "Forbidden: not a member of the specified organization", http.StatusForbidden)
+				return
+			}
+		}
+	}
+
 	var allCreatedEvents []Event
 	allCreated := true
-	for _, req := range requests {
+	for i, req := range requests {
 		locationID, err := ensureLocation(req.Location)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -514,6 +579,11 @@ func createEvent(w http.ResponseWriter, r *http.Request) {
 		}
 		if !created {
 			allCreated = false
+		}
+		if i < len(vevents) {
+			for _, ev := range createdEvents {
+				attachImagesFromICalEvent(ev.ID, vevents[i])
+			}
 		}
 		allCreatedEvents = append(allCreatedEvents, createdEvents...)
 	}
@@ -561,6 +631,17 @@ func publishEvent(w http.ResponseWriter, r *http.Request) {
 	}
 
 	id := mux.Vars(r)["id"]
+
+	if userRole != RoleAdmin {
+		callerID, _ := strconv.Atoi(r.Header.Get("X-User-ID"))
+		var orgID sql.NullInt64
+		db.QueryRow("SELECT organization_id FROM events WHERE id = ?", id).Scan(&orgID)
+		if !orgID.Valid || !isOrgMember(callerID, int(orgID.Int64)) {
+			http.Error(w, "Forbidden: not a member of the event's organization", http.StatusForbidden)
+			return
+		}
+	}
+
 	result, err := db.Exec("UPDATE events SET is_published = 1 WHERE id = ?", id)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -583,6 +664,17 @@ func deleteEvent(w http.ResponseWriter, r *http.Request) {
 	}
 
 	id := mux.Vars(r)["id"]
+
+	if userRole != RoleAdmin {
+		callerID, _ := strconv.Atoi(r.Header.Get("X-User-ID"))
+		var orgID sql.NullInt64
+		db.QueryRow("SELECT organization_id FROM events WHERE id = ?", id).Scan(&orgID)
+		if !orgID.Valid || !isOrgMember(callerID, int(orgID.Int64)) {
+			http.Error(w, "Forbidden: not a member of the event's organization", http.StatusForbidden)
+			return
+		}
+	}
+
 	result, err := db.Exec("DELETE FROM events WHERE id = ?", id)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)

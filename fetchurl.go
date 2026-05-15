@@ -54,6 +54,23 @@ func ensureLocation(loc EventLocationRequest) (int64, error) {
 	return result.LastInsertId()
 }
 
+// parseICalCategories extracts all CATEGORIES values from a vevent,
+// splitting comma-separated entries and deduplicating.
+func parseICalCategories(event *ics.VEvent) []string {
+	seen := make(map[string]bool)
+	var tags []string
+	for _, prop := range event.GetProperties(ics.ComponentPropertyCategories) {
+		for _, cat := range strings.Split(prop.Value, ",") {
+			cat = strings.TrimSpace(cat)
+			if cat != "" && !seen[cat] {
+				seen[cat] = true
+				tags = append(tags, cat)
+			}
+		}
+	}
+	return tags
+}
+
 // parseICalTime handles the common iCal DTSTART/DTEND formats.
 func parseICalTime(value string) (string, error) {
 	formats := []string{
@@ -188,13 +205,26 @@ func importFromSource(src FetchSource) ([]Event, bool, error) {
 			endTime = startTime
 		}
 
+		tags := parseICalCategories(vevent)
+		seen := make(map[string]bool)
+		for _, t := range tags {
+			seen[t] = true
+		}
+		for _, t := range src.Tags {
+			if !seen[t] {
+				tags = append(tags, t)
+			}
+		}
+
 		eventReq := EventCreateRequest{
-			Title:       prop(ics.ComponentPropertySummary),
-			Description: prop(ics.ComponentPropertyDescription),
-			StartTime:   startTime,
-			EndTime:     endTime,
-			Tags:        src.Tags,
-			Location:    EventLocationRequest{Location: prop(ics.ComponentPropertyLocation)},
+			UID:            prop(ics.ComponentPropertyUniqueId),
+			Title:          prop(ics.ComponentPropertySummary),
+			Description:    prop(ics.ComponentPropertyDescription),
+			StartTime:      startTime,
+			EndTime:        endTime,
+			Tags:           tags,
+			OrganizationID: ensureOrgFromOrganizer(vevent),
+			Location:       EventLocationRequest{Location: prop(ics.ComponentPropertyLocation)},
 		}
 
 		if eventReq.Title == "" {
@@ -212,6 +242,9 @@ func importFromSource(src FetchSource) ([]Event, bool, error) {
 		}
 		if !created {
 			allCreated = false
+		}
+		for _, ev := range events {
+			attachImagesFromICalEvent(ev.ID, vevent)
 		}
 		allEvents = append(allEvents, events...)
 	}

@@ -4,30 +4,33 @@ import (
 	"database/sql"
 	"encoding/json"
 	"net/http"
+	"strconv"
 
 	"github.com/gorilla/mux"
 )
 
 type Location struct {
-	ID           int    `json:"id"`
-	Location     string `json:"location"`
-	Address      string `json:"address"`
-	Zipcode      string `json:"zipcode"`
-	Town         string `json:"town"`
-	Latitude     string `json:"latitude"`
-	Longitude    string `json:"longitude"`
-	Internetsite string `json:"internetsite"`
-	CreatedAt    string `json:"created_at"`
+	ID             int    `json:"id"`
+	Location       string `json:"location"`
+	Address        string `json:"address"`
+	Zipcode        string `json:"zipcode"`
+	Town           string `json:"town"`
+	Latitude       string `json:"latitude"`
+	Longitude      string `json:"longitude"`
+	Internetsite   string `json:"internetsite"`
+	CreatedAt      string `json:"created_at"`
+	OrganizationID *int   `json:"organization_id,omitempty"`
 }
 
 type LocationCreateRequest struct {
-	Location     string `json:"location"`
-	Address      string `json:"address"`
-	Zipcode      string `json:"zipcode"`
-	Town         string `json:"town"`
-	Latitude     string `json:"latitude"`
-	Longitude    string `json:"longitude"`
-	Internetsite string `json:"internetsite"`
+	Location       string `json:"location"`
+	Address        string `json:"address"`
+	Zipcode        string `json:"zipcode"`
+	Town           string `json:"town"`
+	Latitude       string `json:"latitude"`
+	Longitude      string `json:"longitude"`
+	Internetsite   string `json:"internetsite"`
+	OrganizationID *int   `json:"organization_id,omitempty"`
 }
 
 type LocationUpdateRequest struct {
@@ -43,7 +46,7 @@ type LocationUpdateRequest struct {
 func getLocations(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
-	rows, err := db.Query("SELECT id, location, address, zipcode, town, latitude, longitude, internetsite, created_at FROM locations")
+	rows, err := db.Query("SELECT id, location, address, zipcode, town, latitude, longitude, internetsite, created_at, organization_id FROM locations")
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -53,9 +56,14 @@ func getLocations(w http.ResponseWriter, r *http.Request) {
 	locations := []Location{}
 	for rows.Next() {
 		var location Location
-		if err := rows.Scan(&location.ID, &location.Location, &location.Address, &location.Zipcode, &location.Town, &location.Latitude, &location.Longitude, &location.Internetsite, &location.CreatedAt); err != nil {
+		var orgID sql.NullInt64
+		if err := rows.Scan(&location.ID, &location.Location, &location.Address, &location.Zipcode, &location.Town, &location.Latitude, &location.Longitude, &location.Internetsite, &location.CreatedAt, &orgID); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
+		}
+		if orgID.Valid {
+			v := int(orgID.Int64)
+			location.OrganizationID = &v
 		}
 		locations = append(locations, location)
 	}
@@ -67,22 +75,42 @@ func getLocations(w http.ResponseWriter, r *http.Request) {
 func createLocation(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
+	requesterRole := r.Header.Get("X-User-Role")
+	callerID, _ := strconv.Atoi(r.Header.Get("X-User-ID"))
+
 	var req LocationCreateRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
 
-	// Validate: location is mandatory
 	if req.Location == "" {
 		http.Error(w, "Location is required", http.StatusBadRequest)
 		return
 	}
 
-	// Insert location
+	if requesterRole != RoleAdmin {
+		if requesterRole != RoleUser && requesterRole != RolePublisher {
+			http.Error(w, "Forbidden", http.StatusForbidden)
+			return
+		}
+		if req.OrganizationID == nil {
+			http.Error(w, "organization_id is required", http.StatusBadRequest)
+			return
+		}
+		if !isOrgMember(callerID, *req.OrganizationID) {
+			http.Error(w, "Forbidden: not a member of the specified organization", http.StatusForbidden)
+			return
+		}
+	}
+
+	var orgIDArg interface{}
+	if req.OrganizationID != nil {
+		orgIDArg = *req.OrganizationID
+	}
 	result, err := db.Exec(
-		"INSERT INTO locations (location, address, zipcode, town, latitude, longitude, internetsite) VALUES (?, ?, ?, ?, ?, ?, ?)",
-		req.Location, req.Address, req.Zipcode, req.Town, req.Latitude, req.Longitude, req.Internetsite,
+		"INSERT INTO locations (location, address, zipcode, town, latitude, longitude, internetsite, organization_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+		req.Location, req.Address, req.Zipcode, req.Town, req.Latitude, req.Longitude, req.Internetsite, orgIDArg,
 	)
 	if err != nil {
 		http.Error(w, "Failed to create location", http.StatusInternalServerError)
@@ -91,14 +119,15 @@ func createLocation(w http.ResponseWriter, r *http.Request) {
 
 	id, _ := result.LastInsertId()
 	location := Location{
-		ID:           int(id),
-		Location:     req.Location,
-		Address:      req.Address,
-		Zipcode:      req.Zipcode,
-		Town:         req.Town,
-		Latitude:     req.Latitude,
-		Longitude:    req.Longitude,
-		Internetsite: req.Internetsite,
+		ID:             int(id),
+		Location:       req.Location,
+		Address:        req.Address,
+		Zipcode:        req.Zipcode,
+		Town:           req.Town,
+		Latitude:       req.Latitude,
+		Longitude:      req.Longitude,
+		Internetsite:   req.Internetsite,
+		OrganizationID: req.OrganizationID,
 	}
 
 	w.WriteHeader(http.StatusCreated)
@@ -113,10 +142,15 @@ func getLocation(w http.ResponseWriter, r *http.Request) {
 	id := vars["id"]
 
 	var location Location
+	var orgID sql.NullInt64
 	err := db.QueryRow(
-		"SELECT id, location, address, zipcode, town, latitude, longitude, internetsite, created_at FROM locations WHERE id = ?",
+		"SELECT id, location, address, zipcode, town, latitude, longitude, internetsite, created_at, organization_id FROM locations WHERE id = ?",
 		id,
-	).Scan(&location.ID, &location.Location, &location.Address, &location.Zipcode, &location.Town, &location.Latitude, &location.Longitude, &location.Internetsite, &location.CreatedAt)
+	).Scan(&location.ID, &location.Location, &location.Address, &location.Zipcode, &location.Town, &location.Latitude, &location.Longitude, &location.Internetsite, &location.CreatedAt, &orgID)
+	if orgID.Valid {
+		v := int(orgID.Int64)
+		location.OrganizationID = &v
+	}
 
 	if err == sql.ErrNoRows {
 		http.Error(w, "Location not found", http.StatusNotFound)
@@ -135,13 +169,30 @@ func updateLocation(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
 	requesterRole := r.Header.Get("X-User-Role")
-	if requesterRole != RoleAdmin {
-		http.Error(w, "Forbidden: only admins may update locations", http.StatusForbidden)
-		return
-	}
-
 	vars := mux.Vars(r)
 	id := vars["id"]
+
+	if requesterRole != RoleAdmin {
+		if requesterRole != RoleUser {
+			http.Error(w, "Forbidden", http.StatusForbidden)
+			return
+		}
+		callerID, _ := strconv.Atoi(r.Header.Get("X-User-ID"))
+		var orgID sql.NullInt64
+		err := db.QueryRow("SELECT organization_id FROM locations WHERE id = ?", id).Scan(&orgID)
+		if err == sql.ErrNoRows {
+			http.Error(w, "Location not found", http.StatusNotFound)
+			return
+		}
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		if !orgID.Valid || !isOrgMember(callerID, int(orgID.Int64)) {
+			http.Error(w, "Forbidden: not a member of the location's organization", http.StatusForbidden)
+			return
+		}
+	}
 
 	var req LocationUpdateRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -200,13 +251,30 @@ func deleteLocation(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
 	requesterRole := r.Header.Get("X-User-Role")
-	if requesterRole != RoleAdmin {
-		http.Error(w, "Forbidden: only admins may delete locations", http.StatusForbidden)
-		return
-	}
-
 	vars := mux.Vars(r)
 	id := vars["id"]
+
+	if requesterRole != RoleAdmin {
+		if requesterRole != RoleUser {
+			http.Error(w, "Forbidden", http.StatusForbidden)
+			return
+		}
+		callerID, _ := strconv.Atoi(r.Header.Get("X-User-ID"))
+		var orgID sql.NullInt64
+		err := db.QueryRow("SELECT organization_id FROM locations WHERE id = ?", id).Scan(&orgID)
+		if err == sql.ErrNoRows {
+			http.Error(w, "Location not found", http.StatusNotFound)
+			return
+		}
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		if !orgID.Valid || !isOrgMember(callerID, int(orgID.Int64)) {
+			http.Error(w, "Forbidden: not a member of the location's organization", http.StatusForbidden)
+			return
+		}
+	}
 
 	// Check if location exists
 	var locationID int
