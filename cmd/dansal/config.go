@@ -1,7 +1,6 @@
 package main
 
 import (
-	"log"
 	"os"
 	"strconv"
 
@@ -22,6 +21,7 @@ type ServerConfig struct {
 	ImageXMax            int      `yaml:"image_x_max"`
 	ImageYMax            int      `yaml:"image_y_max"`
 	AdminSocket          string   `yaml:"admin_socket"`
+	DBPath               string   `yaml:"db_path"`
 }
 
 type Config struct {
@@ -35,13 +35,50 @@ func loadConfig(filename string) (*Config, error) {
 	if err != nil {
 		return nil, err
 	}
-
 	cfg := &Config{}
 	if err := yaml.Unmarshal(data, cfg); err != nil {
 		return nil, err
 	}
-
 	return cfg, nil
+}
+
+func applyDefaults(cfg *Config) {
+	if cfg.Server.Port == 0 {
+		cfg.Server.Port = 8000
+	}
+	if cfg.Server.TokenExpirationHours == 0 {
+		cfg.Server.TokenExpirationHours = 24
+	}
+	if cfg.Server.MaxBodyBytes == 0 {
+		cfg.Server.MaxBodyBytes = 1 << 20
+	}
+	if cfg.Server.ReadTimeoutSecs == 0 {
+		cfg.Server.ReadTimeoutSecs = 10
+	}
+	if cfg.Server.WriteTimeoutSecs == 0 {
+		cfg.Server.WriteTimeoutSecs = 30
+	}
+	if cfg.Server.IdleTimeoutSecs == 0 {
+		cfg.Server.IdleTimeoutSecs = 60
+	}
+	if cfg.Server.MaxConnsPerIP == 0 {
+		cfg.Server.MaxConnsPerIP = 10
+	}
+	if cfg.Server.ImagesDir == "" {
+		cfg.Server.ImagesDir = "./images"
+	}
+	if cfg.Server.ImageXMax == 0 {
+		cfg.Server.ImageXMax = 1024
+	}
+	if cfg.Server.ImageYMax == 0 {
+		cfg.Server.ImageYMax = 1024
+	}
+	if cfg.Server.AdminSocket == "" {
+		cfg.Server.AdminSocket = "./dansal.sock"
+	}
+	if cfg.Server.DBPath == "" {
+		cfg.Server.DBPath = "/var/lib/dansal/calendar.db"
+	}
 }
 
 func getPort() string {
@@ -49,45 +86,4 @@ func getPort() string {
 		return ":8000"
 	}
 	return ":" + strconv.Itoa(config.Server.Port)
-}
-
-func init() {
-	var err error
-	config, err = loadConfig("config.yaml")
-	if err != nil {
-		log.Printf("Warning: Could not load config.yaml, using defaults: %v\n", err)
-		config = &Config{
-			Server: ServerConfig{Port: 8000, TokenExpirationHours: 24},
-		}
-	}
-	if config.Server.TokenExpirationHours == 0 {
-		config.Server.TokenExpirationHours = 24
-	}
-	if config.Server.MaxBodyBytes == 0 {
-		config.Server.MaxBodyBytes = 1 << 20 // 1 MiB
-	}
-	if config.Server.ReadTimeoutSecs == 0 {
-		config.Server.ReadTimeoutSecs = 10
-	}
-	if config.Server.WriteTimeoutSecs == 0 {
-		config.Server.WriteTimeoutSecs = 30
-	}
-	if config.Server.IdleTimeoutSecs == 0 {
-		config.Server.IdleTimeoutSecs = 60
-	}
-	if config.Server.MaxConnsPerIP == 0 {
-		config.Server.MaxConnsPerIP = 10
-	}
-	if config.Server.ImagesDir == "" {
-		config.Server.ImagesDir = "./images"
-	}
-	if config.Server.ImageXMax == 0 {
-		config.Server.ImageXMax = 1024
-	}
-	if config.Server.ImageYMax == 0 {
-		config.Server.ImageYMax = 1024
-	}
-	if config.Server.AdminSocket == "" {
-		config.Server.AdminSocket = "./dansal.sock"
-	}
 }

@@ -1,12 +1,17 @@
 package main
 
 import (
+	"context"
 	"database/sql"
+	"flag"
 	"log"
 	"net"
 	"net/http"
+	"os"
+	"os/signal"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/gorilla/mux"
@@ -154,38 +159,6 @@ func handleOptions(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
-func init() {
-	var err error
-	berlinLoc, err = time.LoadLocation("Europe/Berlin")
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	config, err = loadConfig("config.yaml")
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	db, err = sql.Open("sqlite3", "./calendar.db")
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	if err = db.Ping(); err != nil {
-		log.Fatal(err)
-	}
-
-	if err = createTables(); err != nil {
-		log.Fatal(err)
-	}
-
-	migrateDB()
-
-	rateLimiter = NewRateLimiter(config.Server.RateLimit, time.Minute)
-	connLimiter = NewConnLimiter(config.Server.MaxConnsPerIP)
-
-	log.Println("Database initialized successfully")
-}
 
 func migrateDB() {
 	// Errors are silently ignored (column already exists).
@@ -286,6 +259,39 @@ func createTables() error {
 }
 
 func main() {
+	configPath := flag.String("config", "/etc/dansal/config.yaml", "path to config.yaml")
+	flag.Parse()
+
+	var err error
+
+	berlinLoc, err = time.LoadLocation("Europe/Berlin")
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	config, err = loadConfig(*configPath)
+	if err != nil {
+		log.Printf("Warning: could not load %s, using defaults: %v", *configPath, err)
+		config = &Config{}
+	}
+	applyDefaults(config)
+
+	db, err = sql.Open("sqlite3", config.Server.DBPath)
+	if err != nil {
+		log.Fatal(err)
+	}
+	if err = db.Ping(); err != nil {
+		log.Fatal(err)
+	}
+	if err = createTables(); err != nil {
+		log.Fatal(err)
+	}
+	migrateDB()
+	log.Println("Database initialized successfully")
+
+	rateLimiter = NewRateLimiter(config.Server.RateLimit, time.Minute)
+	connLimiter = NewConnLimiter(config.Server.MaxConnsPerIP)
+
 	router := mux.NewRouter()
 	router.Use(MaxBodyMiddleware)
 	router.Use(ConnLimitMiddleware)
@@ -403,7 +409,7 @@ func main() {
 	apiKeyRoutes.HandleFunc("/{id}", deleteAPIKey).Methods("DELETE")
 	apiKeyRoutes.HandleFunc("/{id}", handleOptions).Methods("OPTIONS")
 
-	startAdminSocket(config.Server.AdminSocket)
+	adminLn := startAdminSocket(config.Server.AdminSocket)
 
 	port := getPort()
 	log.Printf("Server starting on %s\n", port)
@@ -414,7 +420,26 @@ func main() {
 		WriteTimeout: time.Duration(config.Server.WriteTimeoutSecs) * time.Second,
 		IdleTimeout:  time.Duration(config.Server.IdleTimeoutSecs) * time.Second,
 	}
-	if err := srv.ListenAndServe(); err != nil {
-		log.Fatal(err)
+
+	go func() {
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Fatal(err)
+		}
+	}()
+
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGTERM, syscall.SIGINT)
+	<-quit
+	log.Println("Shutting down...")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	if adminLn != nil {
+		adminLn.Close()
 	}
+	if err := srv.Shutdown(ctx); err != nil {
+		log.Printf("Shutdown error: %v", err)
+	}
+	log.Println("Server stopped")
 }

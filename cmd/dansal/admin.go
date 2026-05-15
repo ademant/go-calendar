@@ -22,7 +22,7 @@ type adminResponse struct {
 	Data  interface{} `json:"data,omitempty"`
 }
 
-func startAdminSocket(path string) {
+func startAdminSocket(path string) net.Listener {
 	if path == "" {
 		path = "./dansal.sock"
 	}
@@ -30,16 +30,15 @@ func startAdminSocket(path string) {
 	ln, err := net.Listen("unix", path)
 	if err != nil {
 		log.Printf("Admin socket error: %v", err)
-		return
+		return nil
 	}
 	if err := os.Chmod(path, 0600); err != nil {
 		log.Printf("Admin socket chmod error: %v", err)
 		ln.Close()
-		return
+		return nil
 	}
 	log.Printf("Admin socket listening on %s", path)
 	go func() {
-		defer ln.Close()
 		for {
 			conn, err := ln.Accept()
 			if err != nil {
@@ -48,6 +47,7 @@ func startAdminSocket(path string) {
 			go handleAdminConn(conn)
 		}
 	}()
+	return ln
 }
 
 func handleAdminConn(conn net.Conn) {

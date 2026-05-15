@@ -13,4 +13,6 @@ server:
   images_dir: "./images"
   image_x_max: 1024
   image_y_max: 1024
+  db_path: "/var/lib/dansal/calendar.db"
+  admin_socket: "./dansal.sock"
 

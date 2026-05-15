@@ -1,0 +1,24 @@
+[Unit]
+Description=Dansal Calendar Server
+After=network.target
+
+[Service]
+Type=simple
+User=dansal
+Group=dansal
+ExecStart=/usr/local/bin/dansal --config /etc/dansal/config.yaml
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=35
+
+# systemd creates /run/dansal (socket), /var/lib/dansal (database + images)
+# and /etc/dansal (config) with correct ownership before starting the service
+RuntimeDirectory=dansal
+RuntimeDirectoryMode=0750
+StateDirectory=dansal
+StateDirectoryMode=0750
+ConfigurationDirectory=dansal
+ConfigurationDirectoryMode=0750
+
+[Install]
+WantedBy=multi-user.target
