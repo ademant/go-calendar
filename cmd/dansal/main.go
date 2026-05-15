@@ -251,6 +251,7 @@ func migrateDB() {
 	// Errors are silently ignored (column already exists).
 	db.Exec("ALTER TABLE events ADD COLUMN organization_id INTEGER")
 	db.Exec("ALTER TABLE locations ADD COLUMN organization_id INTEGER")
+	db.Exec("ALTER TABLE locations ADD COLUMN short_name TEXT")
 	db.Exec("ALTER TABLE events ADD COLUMN uid TEXT")
 	db.Exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_events_uid ON events(uid) WHERE uid IS NOT NULL")
 	db.Exec("ALTER TABLE api_keys ADD COLUMN expires_at DATETIME")
@@ -293,6 +294,7 @@ func createTables() error {
 	CREATE TABLE IF NOT EXISTS locations (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		location TEXT NOT NULL,
+		short_name TEXT,
 		address TEXT,
 		zipcode TEXT,
 		town TEXT,
