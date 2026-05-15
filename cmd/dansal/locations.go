@@ -4,7 +4,9 @@ import (
 	"database/sql"
 	"encoding/json"
 	"net/http"
+	"regexp"
 	"strconv"
+	"strings"
 
 	"github.com/gorilla/mux"
 )
@@ -33,6 +35,92 @@ type LocationCreateRequest struct {
 	Longitude      string `json:"longitude"`
 	Internetsite   string `json:"internetsite"`
 	OrganizationID *int   `json:"organization_id,omitempty"`
+}
+
+type LocationCreateResponse struct {
+	Location         Location   `json:"location"`
+	SimilarLocations []Location `json:"similar_locations,omitempty"`
+}
+
+// Address parsing — same patterns as dansal_admin fill-location-fields.
+var (
+	locPatternFull    = regexp.MustCompile(`^[^,]+,\s*(.+?),\s*(\d{5})\s+(.+)$`)
+	locPatternNoZip   = regexp.MustCompile(`^[^,]+,\s*(.+?\s+\d+\w*),\s*([A-ZÄÖÜ].+)$`)
+	locPatternZipOnly = regexp.MustCompile(`^[^,]+,\s*(\d{5})\s+(.+)$`)
+	trailingNr        = regexp.MustCompile(`\s+\d+\w*$`)
+)
+
+type locationParsed struct{ street, town string }
+
+func parseLocationNameServer(name string) (locationParsed, bool) {
+	if m := locPatternFull.FindStringSubmatch(name); m != nil {
+		return locationParsed{street: strings.TrimSpace(m[1]), town: strings.TrimSpace(m[3])}, true
+	}
+	if m := locPatternNoZip.FindStringSubmatch(name); m != nil {
+		return locationParsed{street: strings.TrimSpace(m[1]), town: strings.TrimSpace(m[2])}, true
+	}
+	if m := locPatternZipOnly.FindStringSubmatch(name); m != nil {
+		return locationParsed{town: strings.TrimSpace(m[2])}, true
+	}
+	return locationParsed{}, false
+}
+
+func streetBase(address string) string {
+	return strings.TrimSpace(trailingNr.ReplaceAllString(address, ""))
+}
+
+// similarLocations returns locations on the same street (ignoring house number)
+// in the same town whose name differs from the one being created.
+func similarLocations(name, street, town string) []Location {
+	if town == "" {
+		return nil
+	}
+	base := streetBase(street)
+	var rows *sql.Rows
+	var err error
+	if base != "" {
+		rows, err = db.Query(`
+			SELECT id, location, COALESCE(short_name,''), address, COALESCE(zipcode,''), town,
+			       COALESCE(latitude,''), COALESCE(longitude,''), COALESCE(internetsite,''),
+			       created_at, organization_id
+			FROM locations
+			WHERE town = ?
+			  AND address != ''
+			  AND (address = ? OR address LIKE ?)
+			  AND location != ?`,
+			town, base, base+" %", name,
+		)
+	} else {
+		rows, err = db.Query(`
+			SELECT id, location, COALESCE(short_name,''), address, COALESCE(zipcode,''), town,
+			       COALESCE(latitude,''), COALESCE(longitude,''), COALESCE(internetsite,''),
+			       created_at, organization_id
+			FROM locations
+			WHERE town = ?
+			  AND location != ?`,
+			town, name,
+		)
+	}
+	if err != nil {
+		return nil
+	}
+	defer rows.Close()
+	var result []Location
+	for rows.Next() {
+		var loc Location
+		var orgID sql.NullInt64
+		if err := rows.Scan(&loc.ID, &loc.Location, &loc.ShortName, &loc.Address,
+			&loc.Zipcode, &loc.Town, &loc.Latitude, &loc.Longitude,
+			&loc.Internetsite, &loc.CreatedAt, &orgID); err != nil {
+			continue
+		}
+		if orgID.Valid {
+			v := int(orgID.Int64)
+			loc.OrganizationID = &v
+		}
+		result = append(result, loc)
+	}
+	return result
 }
 
 type LocationUpdateRequest struct {
@@ -107,6 +195,21 @@ func createLocation(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Derive street and town for the duplicate-street check.
+	// Prefer explicit request fields; fall back to parsing the location name.
+	street, town := req.Address, req.Town
+	if street == "" || town == "" {
+		if parsed, ok := parseLocationNameServer(req.Location); ok {
+			if street == "" {
+				street = parsed.street
+			}
+			if town == "" {
+				town = parsed.town
+			}
+		}
+	}
+	similar := similarLocations(req.Location, street, town)
+
 	var orgIDArg interface{}
 	if req.OrganizationID != nil {
 		orgIDArg = *req.OrganizationID
@@ -135,7 +238,7 @@ func createLocation(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(location)
+	json.NewEncoder(w).Encode(LocationCreateResponse{Location: location, SimilarLocations: similar})
 }
 
 // GET /api/v1/locations/{id} - Get a specific location
