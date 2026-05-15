@@ -22,6 +22,9 @@ type ServerConfig struct {
 	ImageYMax            int      `yaml:"image_y_max"`
 	AdminSocket          string   `yaml:"admin_socket"`
 	DBPath               string   `yaml:"db_path"`
+	LoginRateLimit       int      `yaml:"login_rate_limit"`
+	LoginTarpitSecs      int      `yaml:"login_tarpit_secs"`
+	ReservedUsernames    []string `yaml:"reserved_usernames"`
 }
 
 type Config struct {
@@ -78,6 +81,17 @@ func applyDefaults(cfg *Config) {
 	}
 	if cfg.Server.DBPath == "" {
 		cfg.Server.DBPath = "/var/lib/dansal/calendar.db"
+	}
+	if cfg.Server.LoginRateLimit == 0 {
+		cfg.Server.LoginRateLimit = 5
+	}
+	if cfg.Server.LoginTarpitSecs == 0 {
+		cfg.Server.LoginTarpitSecs = 10
+	}
+	if len(cfg.Server.ReservedUsernames) == 0 {
+		cfg.Server.ReservedUsernames = []string{
+			"admin", "administrator", "root", "superuser", "sysadmin", "system", "su",
+		}
 	}
 }
 

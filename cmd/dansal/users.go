@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/gorilla/mux"
 )
@@ -36,6 +37,16 @@ type UserCreateRequest struct {
 type UserUpdateRequest struct {
 	Email string `json:"email"`
 	Role  string `json:"role"`
+}
+
+func isReservedUsername(username string) bool {
+	lower := strings.ToLower(username)
+	for _, r := range config.Server.ReservedUsernames {
+		if strings.ToLower(r) == lower {
+			return true
+		}
+	}
+	return false
 }
 
 // hashPassword creates a SHA256 hash of the password
@@ -103,6 +114,11 @@ func createUser(w http.ResponseWriter, r *http.Request) {
 	// Validate input
 	if req.Username == "" || req.Email == "" || req.Password == "" {
 		http.Error(w, "Username, email, and password are required", http.StatusBadRequest)
+		return
+	}
+
+	if isReservedUsername(req.Username) {
+		http.Error(w, "Username is reserved", http.StatusBadRequest)
 		return
 	}
 

@@ -55,6 +55,15 @@ install: build
 	install -m 644 dansal.service $(SYSTEMDDIR)/dansal.service
 	systemctl daemon-reload
 	systemctl enable --now $(SERVICE)
+	# fail2ban
+	@if [ -d /etc/fail2ban ]; then \
+		install -m 644 deploy/fail2ban/filter.d/dansal.conf /etc/fail2ban/filter.d/dansal.conf; \
+		install -m 644 deploy/fail2ban/jail.d/dansal.conf   /etc/fail2ban/jail.d/dansal.conf; \
+		systemctl reload fail2ban 2>/dev/null || true; \
+		echo "Installed fail2ban filter and jail"; \
+	else \
+		echo "fail2ban not found — skipping (templates in deploy/fail2ban/)"; \
+	fi
 
 update: build
 	install -m 755 dansal        $(BINDIR)/dansal

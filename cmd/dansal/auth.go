@@ -202,6 +202,22 @@ func login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	clientIP := getClientIP(r)
+
+	if !loginRateLimiter.Allow(clientIP) {
+		log.Printf("auth failed from %s: login rate limit exceeded", clientIP)
+		http.Error(w, "Too many login attempts", http.StatusTooManyRequests)
+		return
+	}
+
+	if isReservedUsername(req.Username) {
+		log.Printf("auth failed from %s: reserved username %q", clientIP, req.Username)
+		time.Sleep(time.Duration(config.Server.LoginTarpitSecs) * time.Second)
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(TokenError{Error: "Invalid username or password"})
+		return
+	}
+
 	// Verify user credentials
 	var user User
 	var passwordHash string
@@ -212,6 +228,7 @@ func login(w http.ResponseWriter, r *http.Request) {
 	).Scan(&user.ID, &user.Username, &user.Email, &user.Role, &user.CreatedAt, &passwordHash)
 
 	if err == sql.ErrNoRows {
+		log.Printf("auth failed from %s: invalid credentials", clientIP)
 		w.WriteHeader(http.StatusUnauthorized)
 		json.NewEncoder(w).Encode(TokenError{Error: "Invalid username or password"})
 		return
@@ -224,13 +241,14 @@ func login(w http.ResponseWriter, r *http.Request) {
 
 	// Verify password
 	if hashPassword(req.Password) != passwordHash {
+		log.Printf("auth failed from %s: invalid credentials", clientIP)
 		w.WriteHeader(http.StatusUnauthorized)
 		json.NewEncoder(w).Encode(TokenError{Error: "Invalid username or password"})
 		return
 	}
 
-	clientIP := getClientIP(r)
 	if user.Role == RoleAdmin && !adminLoginAllowed(clientIP) {
+		log.Printf("auth failed from %s: admin login not allowed", clientIP)
 		w.WriteHeader(http.StatusForbidden)
 		json.NewEncoder(w).Encode(TokenError{Error: "Admin login not allowed from this IP address"})
 		return

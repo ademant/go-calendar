@@ -20,6 +20,7 @@ import (
 
 var db *sql.DB
 var rateLimiter *RateLimiter
+var loginRateLimiter *RateLimiter
 var connLimiter *ConnLimiter
 
 type ConnLimiter struct {
@@ -258,6 +259,27 @@ func createTables() error {
 	return err
 }
 
+func reloadConfig(path string) {
+	newCfg, err := loadConfig(path)
+	if err != nil {
+		log.Printf("Config reload failed: %v", err)
+		return
+	}
+	applyDefaults(newCfg)
+
+	if newCfg.Server.Port != config.Server.Port ||
+		newCfg.Server.DBPath != config.Server.DBPath ||
+		newCfg.Server.AdminSocket != config.Server.AdminSocket {
+		log.Printf("Warning: port, db_path and admin_socket changes require a restart to take effect")
+	}
+
+	config = newCfg
+	rateLimiter = NewRateLimiter(config.Server.RateLimit, time.Minute)
+	loginRateLimiter = NewRateLimiter(config.Server.LoginRateLimit, time.Minute)
+	connLimiter = NewConnLimiter(config.Server.MaxConnsPerIP)
+	log.Printf("Config reloaded from %s", path)
+}
+
 func main() {
 	configPath := flag.String("config", "/etc/dansal/config.yaml", "path to config.yaml")
 	flag.Parse()
@@ -290,6 +312,7 @@ func main() {
 	log.Println("Database initialized successfully")
 
 	rateLimiter = NewRateLimiter(config.Server.RateLimit, time.Minute)
+	loginRateLimiter = NewRateLimiter(config.Server.LoginRateLimit, time.Minute)
 	connLimiter = NewConnLimiter(config.Server.MaxConnsPerIP)
 
 	router := mux.NewRouter()
@@ -427,9 +450,15 @@ func main() {
 		}
 	}()
 
-	quit := make(chan os.Signal, 1)
-	signal.Notify(quit, syscall.SIGTERM, syscall.SIGINT)
-	<-quit
+	sigs := make(chan os.Signal, 1)
+	signal.Notify(sigs, syscall.SIGTERM, syscall.SIGINT, syscall.SIGHUP)
+	for sig := range sigs {
+		if sig == syscall.SIGHUP {
+			reloadConfig(*configPath)
+			continue
+		}
+		break
+	}
 	log.Println("Shutting down...")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
