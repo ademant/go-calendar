@@ -244,12 +244,16 @@ func login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Verify password
-	if hashPassword(req.Password) != passwordHash {
+	// Verify password; migrate legacy SHA-256 hashes to bcrypt on first successful login.
+	ok, migrate := checkPassword(req.Password, passwordHash)
+	if !ok {
 		log.Printf("auth failed from %s: invalid credentials", clientIP)
 		w.WriteHeader(http.StatusUnauthorized)
 		json.NewEncoder(w).Encode(TokenError{Error: "Invalid username or password"})
 		return
+	}
+	if migrate {
+		db.Exec("UPDATE users SET password_hash = ? WHERE id = ?", hashPassword(req.Password), user.ID)
 	}
 
 	if user.Role == RoleAdmin && !adminLoginAllowed(clientIP) {

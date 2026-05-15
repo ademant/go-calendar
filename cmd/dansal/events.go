@@ -553,12 +553,19 @@ func createEvent(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if callerRole != RoleAdmin {
+		checked := make(map[int]bool)
 		for _, req := range requests {
 			if req.OrganizationID == nil {
 				http.Error(w, "organization_id is required", http.StatusBadRequest)
 				return
 			}
-			if !isOrgMember(callerID, *req.OrganizationID) {
+			orgID := *req.OrganizationID
+			member, seen := checked[orgID]
+			if !seen {
+				member = isOrgMember(callerID, orgID)
+				checked[orgID] = member
+			}
+			if !member {
 				http.Error(w, "Forbidden: not a member of the specified organization", http.StatusForbidden)
 				return
 			}
@@ -747,14 +754,32 @@ func publicGetEvents(w http.ResponseWriter, r *http.Request) {
 
 // GET /events.ics — public iCal feed of future published events, filterable by tag and location
 func publicGetEventsICS(w http.ResponseWriter, r *http.Request) {
-	query := eventListSelect + " WHERE e.is_published = 1 AND e.start_time >= ?"
-	args := []interface{}{time.Now().Unix()}
+	now := time.Now().Unix()
+	tag := r.URL.Query().Get("tag")
+	loc := r.URL.Query().Get("location")
 
-	if tag := r.URL.Query().Get("tag"); tag != "" {
+	cntQ := "SELECT COUNT(*), MAX(e.created_at) FROM events e LEFT JOIN locations l ON e.location_id = l.id WHERE e.is_published = 1 AND e.start_time >= ?"
+	cntArgs := []interface{}{now}
+	if tag != "" {
+		cntQ += " AND e.tags LIKE ?"
+		cntArgs = append(cntArgs, "%"+tag+"%")
+	}
+	if loc != "" {
+		cntQ += " AND l.location LIKE ?"
+		cntArgs = append(cntArgs, "%"+loc+"%")
+	}
+	if checkPublicCacheHeaders(w, r, cntQ, cntArgs...) {
+		return
+	}
+
+	query := eventListSelect + " WHERE e.is_published = 1 AND e.start_time >= ?"
+	args := []interface{}{now}
+
+	if tag != "" {
 		query += " AND e.tags LIKE ?"
 		args = append(args, "%"+tag+"%")
 	}
-	if loc := r.URL.Query().Get("location"); loc != "" {
+	if loc != "" {
 		query += " AND l.location LIKE ?"
 		args = append(args, "%"+loc+"%")
 	}
@@ -787,8 +812,14 @@ func publicGetEventsICS(w http.ResponseWriter, r *http.Request) {
 // GET /events/tag/{tag}.ics — public iCal feed of future published events for a specific tag
 func publicGetEventsByTagICS(w http.ResponseWriter, r *http.Request) {
 	tag := mux.Vars(r)["tag"]
+	now := time.Now().Unix()
+	if checkPublicCacheHeaders(w, r,
+		"SELECT COUNT(*), MAX(created_at) FROM events WHERE is_published = 1 AND start_time >= ? AND tags LIKE ?",
+		now, "%"+tag+"%") {
+		return
+	}
 	query := eventListSelect + " WHERE e.is_published = 1 AND e.start_time >= ? AND e.tags LIKE ? ORDER BY e.start_time ASC"
-	rows, err := db.Query(query, time.Now().Unix(), "%"+tag+"%")
+	rows, err := db.Query(query, now, "%"+tag+"%")
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -814,8 +845,14 @@ func publicGetEventsByTagICS(w http.ResponseWriter, r *http.Request) {
 // GET /events/town/{town}.ics — public iCal feed of future published events for a specific town
 func publicGetEventsByTownICS(w http.ResponseWriter, r *http.Request) {
 	town := mux.Vars(r)["town"]
+	now := time.Now().Unix()
+	if checkPublicCacheHeaders(w, r,
+		"SELECT COUNT(*), MAX(e.created_at) FROM events e LEFT JOIN locations l ON e.location_id = l.id WHERE e.is_published = 1 AND e.start_time >= ? AND l.town LIKE ?",
+		now, "%"+town+"%") {
+		return
+	}
 	query := eventListSelect + " WHERE e.is_published = 1 AND e.start_time >= ? AND l.town LIKE ? ORDER BY e.start_time ASC"
-	rows, err := db.Query(query, time.Now().Unix(), "%"+town+"%")
+	rows, err := db.Query(query, now, "%"+town+"%")
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -838,6 +875,41 @@ func publicGetEventsByTownICS(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte(cal.Serialize()))
 }
 
+// checkPublicCacheHeaders runs cntQuery (must SELECT COUNT(*), MAX(created_at))
+// and emits ETag/Last-Modified/Cache-Control headers. Returns true and writes
+// 304 when the client's cached copy is still fresh; caller must return immediately.
+func checkPublicCacheHeaders(w http.ResponseWriter, r *http.Request, cntQuery string, args ...interface{}) bool {
+	var n int
+	var modStr sql.NullString
+	if err := db.QueryRow(cntQuery, args...).Scan(&n, &modStr); err != nil {
+		return false
+	}
+	var lastMod time.Time
+	if modStr.Valid && modStr.String != "" {
+		for _, layout := range []string{time.RFC3339Nano, time.RFC3339, "2006-01-02 15:04:05"} {
+			if t, err := time.Parse(layout, modStr.String); err == nil {
+				lastMod = t
+				break
+			}
+		}
+	}
+	etag := fmt.Sprintf(`"%d-%d"`, n, lastMod.Unix())
+	w.Header().Set("ETag", etag)
+	w.Header().Set("Last-Modified", lastMod.UTC().Format(http.TimeFormat))
+	w.Header().Set("Cache-Control", "public, max-age=60")
+	if r.Header.Get("If-None-Match") == etag {
+		w.WriteHeader(http.StatusNotModified)
+		return true
+	}
+	if ims := r.Header.Get("If-Modified-Since"); ims != "" {
+		if t, err := http.ParseTime(ims); err == nil && !lastMod.After(t) {
+			w.WriteHeader(http.StatusNotModified)
+			return true
+		}
+	}
+	return false
+}
+
 // GET /api/v1/tags
 func getTags(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
@@ -845,11 +917,12 @@ func getTags(w http.ResponseWriter, r *http.Request) {
 	userRole := r.Header.Get("X-User-Role")
 	isAuthorizedAdmin := userRole == RoleUser || userRole == RoleAdmin || userRole == RolePublisher
 
-	query := "SELECT tags FROM events WHERE 1=1"
+	query := "SELECT DISTINCT j.value FROM events, json_each(events.tags) AS j WHERE 1=1"
 	var args []interface{}
 	if !isAuthorizedAdmin {
 		query += " AND is_published = 1"
 	}
+	query += " ORDER BY j.value"
 
 	rows, err := db.Query(query, args...)
 	if err != nil {
@@ -858,24 +931,13 @@ func getTags(w http.ResponseWriter, r *http.Request) {
 	}
 	defer rows.Close()
 
-	tagSet := make(map[string]bool)
+	var tags []string
 	for rows.Next() {
-		var tagsJSON string
-		if err := rows.Scan(&tagsJSON); err != nil {
+		var tag string
+		if err := rows.Scan(&tag); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		if tagsJSON != "" {
-			var tags []string
-			json.Unmarshal([]byte(tagsJSON), &tags)
-			for _, tag := range tags {
-				tagSet[tag] = true
-			}
-		}
-	}
-
-	var tags []string
-	for tag := range tagSet {
 		tags = append(tags, tag)
 	}
 	json.NewEncoder(w).Encode(tags)

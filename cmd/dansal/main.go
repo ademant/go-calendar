@@ -192,6 +192,21 @@ func handleOptions(w http.ResponseWriter, r *http.Request) {
 }
 
 
+func startTokenCleanup() {
+	go func() {
+		ticker := time.NewTicker(time.Hour)
+		defer ticker.Stop()
+		for range ticker.C {
+			res, err := db.Exec("DELETE FROM tokens WHERE expires_at < ?", time.Now().UTC().Format(time.RFC3339))
+			if err != nil {
+				log.Printf("token cleanup: %v", err)
+			} else if n, _ := res.RowsAffected(); n > 0 {
+				log.Printf("token cleanup: removed %d expired token(s)", n)
+			}
+		}
+	}()
+}
+
 func migrateDB() {
 	// Errors are silently ignored (column already exists).
 	db.Exec("ALTER TABLE events ADD COLUMN organization_id INTEGER")
@@ -347,6 +362,7 @@ func main() {
 	}
 	migrateDB()
 	initImageCache(config.Server.ImagesDir)
+	startTokenCleanup()
 	log.Println("Database initialized successfully")
 
 	rateLimiter = NewRateLimiter(config.Server.RateLimit, time.Minute)

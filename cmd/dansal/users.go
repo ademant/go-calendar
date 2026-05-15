@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/gorilla/mux"
+	"golang.org/x/crypto/bcrypt"
 )
 
 const (
@@ -49,10 +50,29 @@ func isReservedUsername(username string) bool {
 	return false
 }
 
-// hashPassword creates a SHA256 hash of the password
+// hashPassword hashes password with bcrypt (DefaultCost).
 func hashPassword(password string) string {
-	hash := sha256.Sum256([]byte(password))
-	return fmt.Sprintf("%x", hash)
+	h, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	if err != nil {
+		// fallback: should never happen for a valid string
+		sum := sha256.Sum256([]byte(password))
+		return fmt.Sprintf("%x", sum)
+	}
+	return string(h)
+}
+
+// checkPassword verifies password against stored hash, accepting both bcrypt
+// ("$2…") and legacy SHA-256 hashes. migrate=true means the stored hash is
+// legacy and the caller should replace it with a fresh bcrypt hash.
+func checkPassword(password, stored string) (ok, migrate bool) {
+	if strings.HasPrefix(stored, "$2") {
+		return bcrypt.CompareHashAndPassword([]byte(stored), []byte(password)) == nil, false
+	}
+	sum := sha256.Sum256([]byte(password))
+	if fmt.Sprintf("%x", sum) == stored {
+		return true, true
+	}
+	return false, false
 }
 
 // validateRole checks if the role is valid
