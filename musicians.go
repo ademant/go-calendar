@@ -113,6 +113,12 @@ func createMusician(w http.ResponseWriter, r *http.Request) {
 func updateMusician(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
+	requesterRole := r.Header.Get("X-User-Role")
+	if requesterRole != RoleAdmin && requesterRole != RoleUser {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
+
 	vars := mux.Vars(r)
 	id := vars["id"]
 
@@ -152,6 +158,12 @@ func updateMusician(w http.ResponseWriter, r *http.Request) {
 
 // DELETE /api/v1/musicians/{id} - Delete musician
 func deleteMusician(w http.ResponseWriter, r *http.Request) {
+	requesterRole := r.Header.Get("X-User-Role")
+	if requesterRole != RoleAdmin && requesterRole != RoleUser {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
+
 	vars := mux.Vars(r)
 	id := vars["id"]
 

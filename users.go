@@ -15,9 +15,10 @@ import (
 )
 
 const (
-	RoleAdmin  = "admin"
-	RoleUser   = "user"
-	RoleViewer = "viewer"
+	RoleAdmin     = "admin"
+	RoleUser      = "user"
+	RolePublisher = "publisher"
+	RoleViewer    = "viewer"
 )
 
 type User struct {
@@ -48,7 +49,7 @@ func hashPassword(password string) string {
 
 // validateRole checks if the role is valid
 func validateRole(role string) bool {
-	return role == RoleAdmin || role == RoleUser || role == RoleViewer
+	return role == RoleAdmin || role == RoleUser || role == RolePublisher || role == RoleViewer
 }
 
 // generateRandomPassword generates a random password of specified length
@@ -163,7 +164,7 @@ func createUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if !validateRole(req.Role) {
-		http.Error(w, "Invalid role. Allowed values: admin, user, viewer", http.StatusBadRequest)
+		http.Error(w, "Invalid role. Allowed values: admin, user, publisher, viewer", http.StatusBadRequest)
 		return
 	}
 
@@ -245,7 +246,7 @@ func updateUser(w http.ResponseWriter, r *http.Request) {
 
 	// Validate role if provided
 	if req.Role != "" && !validateRole(req.Role) {
-		http.Error(w, "Invalid role. Allowed values: admin, user, viewer", http.StatusBadRequest)
+		http.Error(w, "Invalid role. Allowed values: admin, user, publisher, viewer", http.StatusBadRequest)
 		return
 	}
 

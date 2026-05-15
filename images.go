@@ -67,7 +67,7 @@ func fitImage(img image.Image, maxW, maxH int) image.Image {
 // DELETE /api/v1/images/{event_id}
 func deleteEventImage(w http.ResponseWriter, r *http.Request) {
 	userRole := r.Header.Get("X-User-Role")
-	if userRole != "admin" && userRole != "user" {
+	if userRole != RoleAdmin && userRole != RoleUser {
 		http.Error(w, "Forbidden", http.StatusForbidden)
 		return
 	}
@@ -96,7 +96,7 @@ func deleteEventImage(w http.ResponseWriter, r *http.Request) {
 // POST /api/v1/images/{event_id}
 func uploadEventImage(w http.ResponseWriter, r *http.Request) {
 	userRole := r.Header.Get("X-User-Role")
-	if userRole != "admin" && userRole != "user" {
+	if userRole != RoleAdmin && userRole != RoleUser && userRole != RolePublisher {
 		http.Error(w, "Forbidden", http.StatusForbidden)
 		return
 	}

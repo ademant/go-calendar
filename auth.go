@@ -282,13 +282,16 @@ func TokenMiddleware(next http.Handler) http.Handler {
 
 		token := parts[1]
 
-		// Validate token
+		// Validate token, fall back to API key
 		userID, userRole, err := validateToken(token)
 		if err != nil {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusUnauthorized)
-			json.NewEncoder(w).Encode(TokenError{Error: fmt.Sprintf("Invalid token: %v", err)})
-			return
+			userID, userRole, err = validateAPIKey(token)
+			if err != nil {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusUnauthorized)
+				json.NewEncoder(w).Encode(TokenError{Error: "Invalid or expired credentials"})
+				return
+			}
 		}
 
 		// Store userID and role in request header for later use

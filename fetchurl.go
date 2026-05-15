@@ -222,7 +222,7 @@ func importFromSource(src FetchSource) ([]Event, bool, error) {
 // POST /api/v1/fetchurl
 func fetchURL(w http.ResponseWriter, r *http.Request) {
 	userRole := r.Header.Get("X-User-Role")
-	if userRole != "admin" && userRole != "user" {
+	if userRole != RoleAdmin && userRole != RoleUser && userRole != RolePublisher {
 		http.Error(w, "Forbidden", http.StatusForbidden)
 		return
 	}
@@ -270,7 +270,7 @@ func fetchURL(w http.ResponseWriter, r *http.Request) {
 // POST /api/v1/fetchurl/fetch-all
 func fetchAllURLs(w http.ResponseWriter, r *http.Request) {
 	userRole := r.Header.Get("X-User-Role")
-	if userRole != "admin" && userRole != "user" {
+	if userRole != RoleAdmin && userRole != RoleUser && userRole != RolePublisher {
 		http.Error(w, "Forbidden", http.StatusForbidden)
 		return
 	}
@@ -321,7 +321,7 @@ func fetchAllURLs(w http.ResponseWriter, r *http.Request) {
 // POST /api/v1/fetchurl/{id}/fetch
 func fetchURLByID(w http.ResponseWriter, r *http.Request) {
 	userRole := r.Header.Get("X-User-Role")
-	if userRole != "admin" && userRole != "user" {
+	if userRole != RoleAdmin && userRole != RoleUser && userRole != RolePublisher {
 		http.Error(w, "Forbidden", http.StatusForbidden)
 		return
 	}

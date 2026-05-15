@@ -352,7 +352,7 @@ func createEventFromRequest(req EventCreateRequest, locationID int64, isPublishe
 func getEvents(w http.ResponseWriter, r *http.Request) {
 	accept := r.Header.Get("Accept")
 	userRole := r.Header.Get("X-User-Role")
-	isAuthorizedAdmin := userRole == "user" || userRole == "admin"
+	isAuthorizedAdmin := userRole == RoleUser || userRole == RoleAdmin || userRole == RolePublisher
 
 	query := eventListSelect + " WHERE 1=1"
 	args := []interface{}{}
@@ -425,7 +425,7 @@ func createEvent(w http.ResponseWriter, r *http.Request) {
 	isPublished := false
 	if r.Header.Get("Authorization") != "" {
 		role := r.Header.Get("X-User-Role")
-		isPublished = role == "user" || role == "admin"
+		isPublished = role == RoleUser || role == RoleAdmin
 	}
 
 	contentType := r.Header.Get("Content-Type")
@@ -555,7 +555,7 @@ func getEvent(w http.ResponseWriter, r *http.Request) {
 // POST /api/v1/events/{id}/publish
 func publishEvent(w http.ResponseWriter, r *http.Request) {
 	userRole := r.Header.Get("X-User-Role")
-	if userRole != "admin" && userRole != "user" {
+	if userRole != RoleAdmin && userRole != RoleUser {
 		http.Error(w, "Forbidden", http.StatusForbidden)
 		return
 	}
@@ -576,6 +576,12 @@ func publishEvent(w http.ResponseWriter, r *http.Request) {
 
 // DELETE /api/v1/events/{id}
 func deleteEvent(w http.ResponseWriter, r *http.Request) {
+	userRole := r.Header.Get("X-User-Role")
+	if userRole != RoleAdmin && userRole != RoleUser {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
+
 	id := mux.Vars(r)["id"]
 	result, err := db.Exec("DELETE FROM events WHERE id = ?", id)
 	if err != nil {
@@ -731,7 +737,7 @@ func getTags(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
 	userRole := r.Header.Get("X-User-Role")
-	isAuthorizedAdmin := userRole == "user" || userRole == "admin"
+	isAuthorizedAdmin := userRole == RoleUser || userRole == RoleAdmin || userRole == RolePublisher
 
 	query := "SELECT tags FROM events WHERE 1=1"
 	var args []interface{}

@@ -194,7 +194,7 @@ func createTables() error {
 		username TEXT UNIQUE NOT NULL,
 		email TEXT UNIQUE NOT NULL,
 		password_hash TEXT NOT NULL,
-		role TEXT DEFAULT 'user' CHECK(role IN ('admin', 'user', 'viewer')),
+		role TEXT DEFAULT 'user' CHECK(role IN ('admin', 'user', 'publisher', 'viewer')),
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 	);
 	CREATE TABLE IF NOT EXISTS events (
@@ -244,6 +244,14 @@ func createTables() error {
 		tags TEXT,
 		last_fetched_at DATETIME,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+	);
+	CREATE TABLE IF NOT EXISTS api_keys (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		user_id INTEGER NOT NULL,
+		name TEXT NOT NULL,
+		api_key TEXT UNIQUE NOT NULL,
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 	);
 	CREATE INDEX IF NOT EXISTS idx_events_published_start ON events(is_published, start_time);
 	CREATE INDEX IF NOT EXISTS idx_events_title_location  ON events(title, location_id);
@@ -346,6 +354,15 @@ func main() {
 	tagsRoutes.Use(TokenMiddleware)
 	tagsRoutes.HandleFunc("", getTags).Methods("GET")
 	tagsRoutes.HandleFunc("", handleOptions).Methods("OPTIONS")
+
+	// API key endpoints (protected)
+	apiKeyRoutes := router.PathPrefix("/api/v1/apikeys").Subrouter()
+	apiKeyRoutes.Use(TokenMiddleware)
+	apiKeyRoutes.HandleFunc("", listAPIKeys).Methods("GET")
+	apiKeyRoutes.HandleFunc("", createAPIKey).Methods("POST")
+	apiKeyRoutes.HandleFunc("", handleOptions).Methods("OPTIONS")
+	apiKeyRoutes.HandleFunc("/{id}", deleteAPIKey).Methods("DELETE")
+	apiKeyRoutes.HandleFunc("/{id}", handleOptions).Methods("OPTIONS")
 
 	port := getPort()
 	log.Printf("Server starting on %s\n", port)
