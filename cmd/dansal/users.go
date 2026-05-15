@@ -1,13 +1,10 @@
 package main
 
 import (
-	"crypto/rand"
 	"crypto/sha256"
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"log"
-	"math/big"
 	"net/http"
 	"strconv"
 
@@ -52,55 +49,6 @@ func validateRole(role string) bool {
 	return role == RoleAdmin || role == RoleUser || role == RolePublisher || role == RoleViewer
 }
 
-// generateRandomPassword generates a random password of specified length
-func generateRandomPassword(length int) string {
-	const charset = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*"
-	password := make([]byte, length)
-	for i := range password {
-		num, _ := rand.Int(rand.Reader, big.NewInt(int64(len(charset))))
-		password[i] = charset[num.Int64()]
-	}
-	return string(password)
-}
-
-// adminUserExists checks if an admin user already exists
-func adminUserExists(db *sql.DB) bool {
-	var count int
-	err := db.QueryRow("SELECT COUNT(*) FROM users WHERE role = ?", RoleAdmin).Scan(&count)
-	return err == nil && count > 0
-}
-
-// ensureAdminUser creates an admin user if none exists
-func ensureAdminUser(db *sql.DB) {
-	if adminUserExists(db) {
-		log.Println("Admin user already exists")
-		return
-	}
-
-	// Generate random password
-	password := generateRandomPassword(16)
-	passwordHash := hashPassword(password)
-
-	// Create admin user
-	_, err := db.Exec(
-		"INSERT INTO users (username, email, password_hash, role) VALUES (?, ?, ?, ?)",
-		"admin", "admin@localhost", passwordHash, RoleAdmin,
-	)
-	if err != nil {
-		log.Printf("Warning: Could not create initial admin user: %v\n", err)
-		return
-	}
-
-	log.Println("========================================")
-	log.Println("INITIAL ADMIN USER CREATED")
-	log.Println("========================================")
-	log.Printf("Username: admin\n")
-	log.Printf("Email: admin@localhost\n")
-	log.Printf("Password: %s\n", password)
-	log.Println("========================================")
-	log.Println("Please save this password in a secure location.")
-	log.Println("========================================")
-}
 
 // GET /api/v1/users - List all users
 func getUsers(w http.ResponseWriter, r *http.Request) {

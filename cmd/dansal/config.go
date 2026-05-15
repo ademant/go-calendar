@@ -21,6 +21,7 @@ type ServerConfig struct {
 	ImagesDir            string   `yaml:"images_dir"`
 	ImageXMax            int      `yaml:"image_x_max"`
 	ImageYMax            int      `yaml:"image_y_max"`
+	AdminSocket          string   `yaml:"admin_socket"`
 }
 
 type Config struct {
@@ -85,5 +86,8 @@ func init() {
 	}
 	if config.Server.ImageYMax == 0 {
 		config.Server.ImageYMax = 1024
+	}
+	if config.Server.AdminSocket == "" {
+		config.Server.AdminSocket = "./dansal.sock"
 	}
 }

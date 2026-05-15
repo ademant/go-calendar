@@ -180,7 +180,6 @@ func init() {
 	}
 
 	migrateDB()
-	ensureAdminUser(db)
 
 	rateLimiter = NewRateLimiter(config.Server.RateLimit, time.Minute)
 	connLimiter = NewConnLimiter(config.Server.MaxConnsPerIP)
@@ -403,6 +402,8 @@ func main() {
 	apiKeyRoutes.HandleFunc("", handleOptions).Methods("OPTIONS")
 	apiKeyRoutes.HandleFunc("/{id}", deleteAPIKey).Methods("DELETE")
 	apiKeyRoutes.HandleFunc("/{id}", handleOptions).Methods("OPTIONS")
+
+	startAdminSocket(config.Server.AdminSocket)
 
 	port := getPort()
 	log.Printf("Server starting on %s\n", port)
