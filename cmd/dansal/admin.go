@@ -14,6 +14,8 @@ type adminRequest struct {
 	Password string `json:"password,omitempty"`
 	Role     string `json:"role,omitempty"`
 	OrgID    int    `json:"org_id,omitempty"`
+	Path     string `json:"path,omitempty"`
+	Since    string `json:"since,omitempty"`
 }
 
 type adminResponse struct {
@@ -80,6 +82,14 @@ func dispatchAdminCmd(req adminRequest) adminResponse {
 		return adminAddMember(req)
 	case "remove-member":
 		return adminRemoveMember(req)
+	case "vacuum":
+		return adminVacuum()
+	case "backup":
+		return adminBackup(req)
+	case "incremental-backup":
+		return adminIncrementalBackup(req)
+	case "restore":
+		return adminRestore(req)
 	default:
 		return adminResponse{OK: false, Error: "unknown command: " + req.Cmd}
 	}
@@ -226,6 +236,13 @@ func adminAddMember(req adminRequest) adminResponse {
 		"INSERT OR IGNORE INTO organization_members (organization_id, user_id) VALUES (?, ?)",
 		req.OrgID, userID,
 	); err != nil {
+		return adminResponse{OK: false, Error: err.Error()}
+	}
+	return adminResponse{OK: true}
+}
+
+func adminVacuum() adminResponse {
+	if _, err := db.Exec("VACUUM"); err != nil {
 		return adminResponse{OK: false, Error: err.Error()}
 	}
 	return adminResponse{OK: true}

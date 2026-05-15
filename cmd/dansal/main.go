@@ -22,6 +22,7 @@ var db *sql.DB
 var rateLimiter *RateLimiter
 var loginRateLimiter *RateLimiter
 var connLimiter *ConnLimiter
+var configFilePath string
 
 type ConnLimiter struct {
 	mu     sync.Mutex
@@ -291,6 +292,7 @@ func main() {
 		log.Fatal(err)
 	}
 
+	configFilePath = *configPath
 	config, err = loadConfig(*configPath)
 	if err != nil {
 		log.Printf("Warning: could not load %s, using defaults: %v", *configPath, err)

@@ -18,6 +18,8 @@ type request struct {
 	Password string `json:"password,omitempty"`
 	Role     string `json:"role,omitempty"`
 	OrgID    int    `json:"org_id,omitempty"`
+	Path     string `json:"path,omitempty"`
+	Since    string `json:"since,omitempty"`
 }
 
 type response struct {
@@ -107,6 +109,14 @@ func main() {
 		cmdAddMember(rest)
 	case "remove-member":
 		cmdRemoveMember(rest)
+	case "vacuum":
+		cmdVacuum()
+	case "backup":
+		cmdBackup(rest)
+	case "incremental-backup":
+		cmdIncrementalBackup(rest)
+	case "restore":
+		cmdRestore(rest)
 	default:
 		fmt.Fprintf(os.Stderr, "unknown command: %s\n\n", sub)
 		usage()
@@ -130,6 +140,12 @@ Organization management:
   list-members --org-id INT                          List members of an org
   add-member   --org-id INT --username STR           Add user to an org
   remove-member --org-id INT --username STR          Remove user from an org
+
+Maintenance:
+  vacuum                                             Reclaim unused database space
+  backup             [--output PATH]                 Full backup (config + db + images)
+  incremental-backup --since RFC3339 [--output PATH] Backup only files changed since time
+  restore            --input PATH                    Restore from a backup archive
 
 Roles: admin, user, publisher, viewer
 
@@ -192,6 +208,43 @@ Add a user to an organization. Has no effect if the user is already a member.
 Flags:
   --org-id    Organization ID (required)
   --username  Username to add (required)`,
+
+	"vacuum": `Usage: dansal_admin vacuum
+
+Rebuild the database file to reclaim space freed by deleted rows.
+Equivalent to running VACUUM in SQLite. May take a moment on large databases.`,
+
+	"backup": `Usage: dansal_admin backup [--output PATH]
+
+Create a full backup as a .tar.gz archive containing:
+  config.yaml   — server configuration
+  calendar.db   — consistent SQLite snapshot (via VACUUM INTO)
+  images/       — all uploaded images
+
+Flags:
+  --output  Destination file (default: ./dansal-backup-<timestamp>.tar.gz)`,
+
+	"restore": `Usage: dansal_admin restore --input PATH
+
+Restore from a .tar.gz archive created by backup or incremental-backup.
+
+  config.yaml  — written to the server's config path; config reloaded live
+  calendar.db  — restored via SQLite online backup API (no restart needed)
+  images/      — files extracted into the images directory (overlay, no delete)
+
+Flags:
+  --input  Path to the .tar.gz backup archive (required)`,
+
+	"incremental-backup": `Usage: dansal_admin incremental-backup --since RFC3339 [--output PATH]
+
+Create an incremental backup containing:
+  config.yaml   — always included (small, defines runtime)
+  calendar.db   — always included (full snapshot)
+  images/       — only files modified after --since
+
+Flags:
+  --since   Include files changed after this time, e.g. 2026-05-01T00:00:00Z (required)
+  --output  Destination file (default: ./dansal-incremental-<timestamp>.tar.gz)`,
 
 	"remove-member": `Usage: dansal_admin remove-member --org-id INT --username STR
 
@@ -349,6 +402,87 @@ func cmdAddMember(args []string) {
 		die("%s", resp.Error)
 	}
 	fmt.Printf("added %s to organization %d\n", *username, *orgID)
+}
+
+func formatSize(b int64) string {
+	switch {
+	case b >= 1<<20:
+		return fmt.Sprintf("%.1f MiB", float64(b)/(1<<20))
+	case b >= 1<<10:
+		return fmt.Sprintf("%.1f KiB", float64(b)/(1<<10))
+	default:
+		return fmt.Sprintf("%d B", b)
+	}
+}
+
+func cmdVacuum() {
+	resp := send(socketPath, request{Cmd: "vacuum"})
+	if !resp.OK {
+		die("%s", resp.Error)
+	}
+	fmt.Println("database vacuumed")
+}
+
+func cmdBackup(args []string) {
+	fs := flag.NewFlagSet("backup", flag.ExitOnError)
+	fs.Usage = func() { fmt.Println(commandHelp["backup"]) }
+	output := fs.String("output", "", "destination file path")
+	fs.Parse(args)
+
+	resp := send(socketPath, request{Cmd: "backup", Path: *output})
+	if !resp.OK {
+		die("%s", resp.Error)
+	}
+	var result struct {
+		Path string `json:"path"`
+		Size int64  `json:"size"`
+	}
+	json.Unmarshal(resp.Data, &result)
+	fmt.Printf("backup written to %s (%s)\n", result.Path, formatSize(result.Size))
+}
+
+func cmdIncrementalBackup(args []string) {
+	fs := flag.NewFlagSet("incremental-backup", flag.ExitOnError)
+	fs.Usage = func() { fmt.Println(commandHelp["incremental-backup"]) }
+	output := fs.String("output", "", "destination file path")
+	since := fs.String("since", "", "include files changed after this time (RFC3339)")
+	fs.Parse(args)
+
+	if *since == "" {
+		die("--since is required (e.g. --since 2026-05-01T00:00:00Z)")
+	}
+	resp := send(socketPath, request{Cmd: "incremental-backup", Path: *output, Since: *since})
+	if !resp.OK {
+		die("%s", resp.Error)
+	}
+	var result struct {
+		Path string `json:"path"`
+		Size int64  `json:"size"`
+	}
+	json.Unmarshal(resp.Data, &result)
+	fmt.Printf("incremental backup written to %s (%s)\n", result.Path, formatSize(result.Size))
+}
+
+func cmdRestore(args []string) {
+	fs := flag.NewFlagSet("restore", flag.ExitOnError)
+	fs.Usage = func() { fmt.Println(commandHelp["restore"]) }
+	input := fs.String("input", "", "path to backup archive")
+	fs.Parse(args)
+
+	if *input == "" {
+		die("--input is required")
+	}
+	resp := send(socketPath, request{Cmd: "restore", Path: *input})
+	if !resp.OK {
+		die("%s", resp.Error)
+	}
+	var result struct {
+		Config bool `json:"config"`
+		DB     bool `json:"db"`
+		Images int  `json:"images"`
+	}
+	json.Unmarshal(resp.Data, &result)
+	fmt.Printf("restored: config=%v db=%v images=%d\n", result.Config, result.DB, result.Images)
 }
 
 func cmdRemoveMember(args []string) {
