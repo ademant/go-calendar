@@ -182,13 +182,52 @@ func getIP(r *http.Request) string {
 	return ip
 }
 
-// OPTIONS handler for CORS preflight requests
-func handleOptions(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Access-Control-Allow-Origin", "*")
-	w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
-	w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-User-Role, X-User-ID")
-	w.Header().Set("Access-Control-Max-Age", "86400")
-	w.WriteHeader(http.StatusOK)
+// corsOrigin returns the allowed CORS origin for the request.
+// With no AllowedOrigins configured, "*" is returned (open API mode).
+func corsOrigin(r *http.Request) string {
+	if len(config.Server.AllowedOrigins) == 0 {
+		return "*"
+	}
+	origin := r.Header.Get("Origin")
+	for _, o := range config.Server.AllowedOrigins {
+		if o == "*" || o == origin {
+			return origin
+		}
+	}
+	return ""
+}
+
+// CORSMiddleware adds Access-Control-Allow-Origin to every response and
+// handles OPTIONS preflight requests inline so each route need not register
+// a separate OPTIONS handler.
+func CORSMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if o := corsOrigin(r); o != "" {
+			w.Header().Set("Access-Control-Allow-Origin", o)
+			if o != "*" {
+				w.Header().Add("Vary", "Origin")
+			}
+		}
+		if r.Method == http.MethodOptions {
+			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-User-Role, X-User-ID")
+			w.Header().Set("Access-Control-Max-Age", "86400")
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+// SecurityHeadersMiddleware adds defensive HTTP headers to every response.
+func SecurityHeadersMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		w.Header().Set("X-Frame-Options", "DENY")
+		w.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")
+		w.Header().Set("Content-Security-Policy", "default-src 'none'")
+		next.ServeHTTP(w, r)
+	})
 }
 
 
@@ -213,6 +252,7 @@ func migrateDB() {
 	db.Exec("ALTER TABLE locations ADD COLUMN organization_id INTEGER")
 	db.Exec("ALTER TABLE events ADD COLUMN uid TEXT")
 	db.Exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_events_uid ON events(uid) WHERE uid IS NOT NULL")
+	db.Exec("ALTER TABLE api_keys ADD COLUMN expires_at DATETIME")
 }
 
 func createTables() error {
@@ -300,6 +340,7 @@ func createTables() error {
 	CREATE INDEX IF NOT EXISTS idx_events_title_location  ON events(title, location_id);
 	CREATE INDEX IF NOT EXISTS idx_events_location_id     ON events(location_id);
 	CREATE INDEX IF NOT EXISTS idx_locations_location     ON locations(location);
+	CREATE INDEX IF NOT EXISTS idx_tokens_expires_at      ON tokens(expires_at);
 	`
 	_, err := db.Exec(schema)
 	return err
@@ -370,6 +411,8 @@ func main() {
 	connLimiter = NewConnLimiter(config.Server.MaxConnsPerIP)
 
 	router := mux.NewRouter()
+	router.Use(CORSMiddleware)
+	router.Use(SecurityHeadersMiddleware)
 	router.Use(GzipMiddleware)
 	router.Use(MaxBodyMiddleware)
 	router.Use(ConnLimitMiddleware)
@@ -377,63 +420,52 @@ func main() {
 
 	// Public endpoints (no authentication required)
 	router.HandleFunc("/events", publicGetEvents).Methods("GET")
-	router.HandleFunc("/events", handleOptions).Methods("OPTIONS")
 	router.HandleFunc("/events.ics", publicGetEventsICS).Methods("GET")
 	router.HandleFunc("/events/tag/{tag}.ics", publicGetEventsByTagICS).Methods("GET")
 	router.HandleFunc("/events/town/{town}.ics", publicGetEventsByTownICS).Methods("GET")
 
 	// Info endpoint (public)
 	router.HandleFunc("/api/v1/info", getInfo).Methods("GET")
-	router.HandleFunc("/api/v1/info", handleOptions).Methods("OPTIONS")
 
-	// Authentication endpoint (no token required)
+	// Authentication endpoints (no token required)
 	router.HandleFunc("/api/v1/login", login).Methods("GET", "POST")
-	router.HandleFunc("/api/v1/login", handleOptions).Methods("OPTIONS")
+	router.HandleFunc("/api/v1/login", logout).Methods("DELETE")
 
 	// User endpoints (protected)
 	userRoutes := router.PathPrefix("/api/v1/users").Subrouter()
 	userRoutes.Use(TokenMiddleware)
 	userRoutes.HandleFunc("", getUsers).Methods("GET")
 	userRoutes.HandleFunc("", createUser).Methods("POST")
-	userRoutes.HandleFunc("", handleOptions).Methods("OPTIONS")
 	userRoutes.HandleFunc("/{id}", getUser).Methods("GET")
 	userRoutes.HandleFunc("/{id}", updateUser).Methods("PUT")
 	userRoutes.HandleFunc("/{id}", deleteUser).Methods("DELETE")
-	userRoutes.HandleFunc("/{id}", handleOptions).Methods("OPTIONS")
 
 	// Location endpoints (protected)
 	locationRoutes := router.PathPrefix("/api/v1/locations").Subrouter()
 	locationRoutes.Use(TokenMiddleware)
 	locationRoutes.HandleFunc("", getLocations).Methods("GET")
 	locationRoutes.HandleFunc("", createLocation).Methods("POST")
-	locationRoutes.HandleFunc("", handleOptions).Methods("OPTIONS")
 	locationRoutes.HandleFunc("/{id}", getLocation).Methods("GET")
 	locationRoutes.HandleFunc("/{id}", updateLocation).Methods("PUT")
 	locationRoutes.HandleFunc("/{id}", deleteLocation).Methods("DELETE")
-	locationRoutes.HandleFunc("/{id}", handleOptions).Methods("OPTIONS")
 
 	// Musician endpoints (protected)
 	musicianRoutes := router.PathPrefix("/api/v1/musicians").Subrouter()
 	musicianRoutes.Use(TokenMiddleware)
 	musicianRoutes.HandleFunc("", getMusicians).Methods("GET")
 	musicianRoutes.HandleFunc("", createMusician).Methods("POST")
-	musicianRoutes.HandleFunc("", handleOptions).Methods("OPTIONS")
 	musicianRoutes.HandleFunc("/{id}", getMusician).Methods("GET")
 	musicianRoutes.HandleFunc("/{id}", updateMusician).Methods("PUT")
 	musicianRoutes.HandleFunc("/{id}", deleteMusician).Methods("DELETE")
-	musicianRoutes.HandleFunc("/{id}", handleOptions).Methods("OPTIONS")
 
 	// Event endpoints (protected)
 	eventRoutes := router.PathPrefix("/api/v1/events").Subrouter()
 	eventRoutes.Use(TokenMiddleware)
 	eventRoutes.HandleFunc("", getEvents).Methods("GET")
 	eventRoutes.HandleFunc("", createEvent).Methods("POST")
-	eventRoutes.HandleFunc("", handleOptions).Methods("OPTIONS")
 	eventRoutes.HandleFunc("/{id}", getEvent).Methods("GET")
 	eventRoutes.HandleFunc("/{id}", deleteEvent).Methods("DELETE")
-	eventRoutes.HandleFunc("/{id}", handleOptions).Methods("OPTIONS")
 	eventRoutes.HandleFunc("/{id}/publish", publishEvent).Methods("POST")
-	eventRoutes.HandleFunc("/{id}/publish", handleOptions).Methods("OPTIONS")
 
 	// Image upload (protected)
 	imageRoutes := router.PathPrefix("/api/v1/images").Subrouter()
@@ -441,51 +473,39 @@ func main() {
 	imageRoutes.HandleFunc("/{event_id}", getEventImage).Methods("GET")
 	imageRoutes.HandleFunc("/{event_id}", uploadEventImage).Methods("POST")
 	imageRoutes.HandleFunc("/{event_id}", deleteEventImage).Methods("DELETE")
-	imageRoutes.HandleFunc("/{event_id}", handleOptions).Methods("OPTIONS")
 
 	// Fetch URL endpoints (protected)
 	fetchRoutes := router.PathPrefix("/api/v1/fetchurl").Subrouter()
 	fetchRoutes.Use(TokenMiddleware)
 	fetchRoutes.HandleFunc("", getFetchSources).Methods("GET")
 	fetchRoutes.HandleFunc("", fetchURL).Methods("POST")
-	fetchRoutes.HandleFunc("", handleOptions).Methods("OPTIONS")
 	fetchRoutes.HandleFunc("/fetch-all", fetchAllURLs).Methods("POST")
-	fetchRoutes.HandleFunc("/fetch-all", handleOptions).Methods("OPTIONS")
 	fetchRoutes.HandleFunc("/{id}", getFetchSource).Methods("GET")
 	fetchRoutes.HandleFunc("/{id}/fetch", fetchURLByID).Methods("POST")
-	fetchRoutes.HandleFunc("/{id}/fetch", handleOptions).Methods("OPTIONS")
-	fetchRoutes.HandleFunc("/{id}", handleOptions).Methods("OPTIONS")
 
 	// Tags endpoint (protected)
 	tagsRoutes := router.PathPrefix("/api/v1/tags").Subrouter()
 	tagsRoutes.Use(TokenMiddleware)
 	tagsRoutes.HandleFunc("", getTags).Methods("GET")
-	tagsRoutes.HandleFunc("", handleOptions).Methods("OPTIONS")
 
 	// Organization endpoints (protected)
 	orgRoutes := router.PathPrefix("/api/v1/organizations").Subrouter()
 	orgRoutes.Use(TokenMiddleware)
 	orgRoutes.HandleFunc("", getOrganizations).Methods("GET")
 	orgRoutes.HandleFunc("", createOrganization).Methods("POST")
-	orgRoutes.HandleFunc("", handleOptions).Methods("OPTIONS")
 	orgRoutes.HandleFunc("/{id}", getOrganization).Methods("GET")
 	orgRoutes.HandleFunc("/{id}", updateOrganization).Methods("PUT")
 	orgRoutes.HandleFunc("/{id}", deleteOrganization).Methods("DELETE")
-	orgRoutes.HandleFunc("/{id}", handleOptions).Methods("OPTIONS")
 	orgRoutes.HandleFunc("/{id}/members", getOrganizationMembers).Methods("GET")
 	orgRoutes.HandleFunc("/{id}/members", addOrganizationMember).Methods("POST")
-	orgRoutes.HandleFunc("/{id}/members", handleOptions).Methods("OPTIONS")
 	orgRoutes.HandleFunc("/{id}/members/{user_id}", removeOrganizationMember).Methods("DELETE")
-	orgRoutes.HandleFunc("/{id}/members/{user_id}", handleOptions).Methods("OPTIONS")
 
 	// API key endpoints (protected)
 	apiKeyRoutes := router.PathPrefix("/api/v1/apikeys").Subrouter()
 	apiKeyRoutes.Use(TokenMiddleware)
 	apiKeyRoutes.HandleFunc("", listAPIKeys).Methods("GET")
 	apiKeyRoutes.HandleFunc("", createAPIKey).Methods("POST")
-	apiKeyRoutes.HandleFunc("", handleOptions).Methods("OPTIONS")
 	apiKeyRoutes.HandleFunc("/{id}", deleteAPIKey).Methods("DELETE")
-	apiKeyRoutes.HandleFunc("/{id}", handleOptions).Methods("OPTIONS")
 
 	adminLn := startAdminSocket(config.Server.AdminSocket)
 

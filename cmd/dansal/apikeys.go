@@ -18,12 +18,14 @@ type APIKey struct {
 	UserID    int    `json:"user_id"`
 	Name      string `json:"name"`
 	Key       string `json:"key,omitempty"`
+	ExpiresAt string `json:"expires_at,omitempty"`
 	CreatedAt string `json:"created_at"`
 }
 
 type CreateAPIKeyRequest struct {
-	Name   string `json:"name"`
-	UserID *int   `json:"user_id,omitempty"`
+	Name      string `json:"name"`
+	UserID    *int   `json:"user_id,omitempty"`
+	ExpiresAt string `json:"expires_at,omitempty"` // RFC3339, optional
 }
 
 func generateAPIKey() (string, error) {
@@ -43,11 +45,12 @@ func validateAPIKey(key string) (int, string, error) {
 
 	var userID int
 	var userRole string
+	var expiresAt sql.NullString
 
 	err := db.QueryRow(
-		"SELECT users.id, users.role FROM api_keys JOIN users ON api_keys.user_id = users.id WHERE api_keys.api_key = ?",
+		"SELECT users.id, users.role, api_keys.expires_at FROM api_keys JOIN users ON api_keys.user_id = users.id WHERE api_keys.api_key = ?",
 		key,
-	).Scan(&userID, &userRole)
+	).Scan(&userID, &userRole, &expiresAt)
 
 	if err == sql.ErrNoRows {
 		return 0, "", fmt.Errorf("invalid api key")
@@ -56,7 +59,15 @@ func validateAPIKey(key string) (int, string, error) {
 		return 0, "", err
 	}
 
-	credentials.set(key, userID, userRole, time.Time{}) // no natural expiry; TTL cap applies
+	var expTime time.Time
+	if expiresAt.Valid && expiresAt.String != "" {
+		expTime, err = parseTokenExpiration(expiresAt.String)
+		if err != nil || time.Now().After(expTime) {
+			return 0, "", fmt.Errorf("api key expired")
+		}
+	}
+
+	credentials.set(key, userID, userRole, expTime) // expTime zero → TTL cap only
 	return userID, userRole, nil
 }
 
@@ -71,9 +82,9 @@ func listAPIKeys(w http.ResponseWriter, r *http.Request) {
 	var err error
 
 	if callerRole == RoleAdmin {
-		rows, err = db.Query("SELECT id, user_id, name, created_at FROM api_keys ORDER BY id")
+		rows, err = db.Query("SELECT id, user_id, name, expires_at, created_at FROM api_keys ORDER BY id")
 	} else {
-		rows, err = db.Query("SELECT id, user_id, name, created_at FROM api_keys WHERE user_id = ? ORDER BY id", callerID)
+		rows, err = db.Query("SELECT id, user_id, name, expires_at, created_at FROM api_keys WHERE user_id = ? ORDER BY id", callerID)
 	}
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
@@ -85,8 +96,12 @@ func listAPIKeys(w http.ResponseWriter, r *http.Request) {
 	keys := []APIKey{}
 	for rows.Next() {
 		var k APIKey
-		if err := rows.Scan(&k.ID, &k.UserID, &k.Name, &k.CreatedAt); err != nil {
+		var exp sql.NullString
+		if err := rows.Scan(&k.ID, &k.UserID, &k.Name, &exp, &k.CreatedAt); err != nil {
 			continue
+		}
+		if exp.Valid {
+			k.ExpiresAt = exp.String
 		}
 		keys = append(keys, k)
 	}
@@ -114,6 +129,16 @@ func createAPIKey(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	var expiresAt *string
+	if req.ExpiresAt != "" {
+		if _, err := time.Parse(time.RFC3339, req.ExpiresAt); err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			json.NewEncoder(w).Encode(map[string]string{"error": "expires_at must be RFC3339"})
+			return
+		}
+		expiresAt = &req.ExpiresAt
+	}
+
 	targetUserID := callerID
 	if req.UserID != nil {
 		if callerRole != RoleAdmin && *req.UserID != callerID {
@@ -134,8 +159,8 @@ func createAPIKey(w http.ResponseWriter, r *http.Request) {
 	var id int
 	var createdAt string
 	err = db.QueryRow(
-		"INSERT INTO api_keys (user_id, name, api_key) VALUES (?, ?, ?) RETURNING id, created_at",
-		targetUserID, req.Name, key,
+		"INSERT INTO api_keys (user_id, name, api_key, expires_at) VALUES (?, ?, ?, ?) RETURNING id, created_at",
+		targetUserID, req.Name, key, expiresAt,
 	).Scan(&id, &createdAt)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
@@ -143,14 +168,18 @@ func createAPIKey(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(APIKey{
+	resp := APIKey{
 		ID:        id,
 		UserID:    targetUserID,
 		Name:      req.Name,
 		Key:       key,
 		CreatedAt: createdAt,
-	})
+	}
+	if req.ExpiresAt != "" {
+		resp.ExpiresAt = req.ExpiresAt
+	}
+	w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode(resp)
 }
 
 func deleteAPIKey(w http.ResponseWriter, r *http.Request) {

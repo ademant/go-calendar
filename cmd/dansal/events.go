@@ -246,8 +246,8 @@ func applyEventFilters(r *http.Request, query *string, args *[]interface{}) {
 		*args = append(*args, boolParam(v))
 	}
 	if tag := q.Get("tag"); tag != "" {
-		*query += " AND e.tags LIKE ?"
-		*args = append(*args, "%"+tag+"%")
+		*query += " AND EXISTS (SELECT 1 FROM json_each(e.tags) WHERE value = ?)"
+		*args = append(*args, tag)
 	}
 }
 
@@ -323,11 +323,23 @@ func insertEvent(q querier, title, description string, startTime, endTime int64,
 		uidArg = uid
 	}
 	// short_code is pre-computed so the INSERT is a single round-trip (no follow-up UPDATE).
-	shortCode := generateShortCode()
-	result, err := q.Exec(
-		"INSERT INTO events (uid, title, description, start_time, end_time, location_id, has_ball, has_workshop, tags, is_published, organization_id, short_code) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-		uidArg, title, description, startTime, endTime, locationID, hasBall, hasWorkshop, string(tagsJSON), isPublished, orgIDArg, shortCode,
-	)
+	// Retry up to 5 times on the rare collision of the 4-byte random short code.
+	var result sql.Result
+	var err error
+	var shortCode string
+	for range 5 {
+		shortCode = generateShortCode()
+		result, err = q.Exec(
+			"INSERT INTO events (uid, title, description, start_time, end_time, location_id, has_ball, has_workshop, tags, is_published, organization_id, short_code) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+			uidArg, title, description, startTime, endTime, locationID, hasBall, hasWorkshop, string(tagsJSON), isPublished, orgIDArg, shortCode,
+		)
+		if err == nil {
+			break
+		}
+		if !strings.Contains(err.Error(), "short_code") {
+			return 0, "", false, err
+		}
+	}
 	if err != nil {
 		return 0, "", false, err
 	}
@@ -714,6 +726,7 @@ func publicGetEvents(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
 	if shortCode := r.URL.Query().Get("code"); shortCode != "" {
+		// short-code lookup — no cache headers, events can be updated
 		event, err := scanEventRow(db.QueryRow(
 			eventListSelect+" WHERE e.short_code = ? AND e.is_published = 1", shortCode,
 		))
@@ -725,6 +738,13 @@ func publicGetEvents(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		json.NewEncoder(w).Encode(event)
+		return
+	}
+
+	// Cache fingerprint: total published event count + latest insertion time.
+	// Filters are not reflected in the ETag, so clients may over-fetch — never under-fetch.
+	if checkPublicCacheHeaders(w, r,
+		"SELECT COUNT(*), MAX(created_at) FROM events WHERE is_published = 1") {
 		return
 	}
 
@@ -761,8 +781,8 @@ func publicGetEventsICS(w http.ResponseWriter, r *http.Request) {
 	cntQ := "SELECT COUNT(*), MAX(e.created_at) FROM events e LEFT JOIN locations l ON e.location_id = l.id WHERE e.is_published = 1 AND e.start_time >= ?"
 	cntArgs := []interface{}{now}
 	if tag != "" {
-		cntQ += " AND e.tags LIKE ?"
-		cntArgs = append(cntArgs, "%"+tag+"%")
+		cntQ += " AND EXISTS (SELECT 1 FROM json_each(e.tags) WHERE value = ?)"
+		cntArgs = append(cntArgs, tag)
 	}
 	if loc != "" {
 		cntQ += " AND l.location LIKE ?"
@@ -776,8 +796,8 @@ func publicGetEventsICS(w http.ResponseWriter, r *http.Request) {
 	args := []interface{}{now}
 
 	if tag != "" {
-		query += " AND e.tags LIKE ?"
-		args = append(args, "%"+tag+"%")
+		query += " AND EXISTS (SELECT 1 FROM json_each(e.tags) WHERE value = ?)"
+		args = append(args, tag)
 	}
 	if loc != "" {
 		query += " AND l.location LIKE ?"
@@ -814,12 +834,12 @@ func publicGetEventsByTagICS(w http.ResponseWriter, r *http.Request) {
 	tag := mux.Vars(r)["tag"]
 	now := time.Now().Unix()
 	if checkPublicCacheHeaders(w, r,
-		"SELECT COUNT(*), MAX(created_at) FROM events WHERE is_published = 1 AND start_time >= ? AND tags LIKE ?",
-		now, "%"+tag+"%") {
+		"SELECT COUNT(*), MAX(created_at) FROM events WHERE is_published = 1 AND start_time >= ? AND EXISTS (SELECT 1 FROM json_each(tags) WHERE value = ?)",
+		now, tag) {
 		return
 	}
-	query := eventListSelect + " WHERE e.is_published = 1 AND e.start_time >= ? AND e.tags LIKE ? ORDER BY e.start_time ASC"
-	rows, err := db.Query(query, now, "%"+tag+"%")
+	query := eventListSelect + " WHERE e.is_published = 1 AND e.start_time >= ? AND EXISTS (SELECT 1 FROM json_each(e.tags) WHERE value = ?) ORDER BY e.start_time ASC"
+	rows, err := db.Query(query, now, tag)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return

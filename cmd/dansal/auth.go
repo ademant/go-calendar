@@ -281,6 +281,17 @@ func login(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// DELETE /api/v1/login — revoke the current session token
+func logout(w http.ResponseWriter, r *http.Request) {
+	parts := strings.SplitN(r.Header.Get("Authorization"), " ", 2)
+	if len(parts) == 2 && parts[0] == "Bearer" {
+		token := parts[1]
+		db.Exec("DELETE FROM tokens WHERE token = ?", token)
+		credentials.invalidate(token)
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 // TokenMiddleware validates the token in the Authorization header
 func TokenMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

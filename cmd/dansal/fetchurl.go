@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 
 	ics "github.com/arran4/golang-ical"
@@ -342,19 +343,27 @@ func fetchAllURLs(w http.ResponseWriter, r *http.Request) {
 		Error      string `json:"error,omitempty"`
 	}
 
-	var results []sourceResult
-	for _, src := range sources {
-		if src.Type != "ical" {
-			results = append(results, sourceResult{SourceID: src.ID, URL: src.URL, Error: "unsupported type: " + src.Type})
-			continue
-		}
-		events, allCreated, err := importFromSource(src)
-		if err != nil {
-			results = append(results, sourceResult{SourceID: src.ID, URL: src.URL, Error: err.Error()})
-			continue
-		}
-		results = append(results, sourceResult{SourceID: src.ID, URL: src.URL, Events: len(events), AllCreated: allCreated})
+	// Fan out: fetch all sources in parallel. Each goroutine writes to its own
+	// index so no mutex is needed for the slice itself.
+	results := make([]sourceResult, len(sources))
+	var wg sync.WaitGroup
+	for i, src := range sources {
+		wg.Add(1)
+		go func(i int, src FetchSource) {
+			defer wg.Done()
+			if src.Type != "ical" {
+				results[i] = sourceResult{SourceID: src.ID, URL: src.URL, Error: "unsupported type: " + src.Type}
+				return
+			}
+			events, allCreated, err := importFromSource(src)
+			if err != nil {
+				results[i] = sourceResult{SourceID: src.ID, URL: src.URL, Error: err.Error()}
+				return
+			}
+			results[i] = sourceResult{SourceID: src.ID, URL: src.URL, Events: len(events), AllCreated: allCreated}
+		}(i, src)
 	}
+	wg.Wait()
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(results)

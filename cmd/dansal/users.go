@@ -50,24 +50,39 @@ func isReservedUsername(username string) bool {
 	return false
 }
 
-// hashPassword hashes password with bcrypt (DefaultCost).
+// passwordBytes returns the bcrypt input for password.
+// SHA-256 collapses the input to 32 bytes, preventing bcrypt's silent 72-byte truncation.
+func passwordBytes(password string) []byte {
+	h := sha256.Sum256([]byte(password))
+	return h[:]
+}
+
+// hashPassword hashes password with bcrypt (DefaultCost) over a SHA-256 digest.
 func hashPassword(password string) string {
-	h, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	h, err := bcrypt.GenerateFromPassword(passwordBytes(password), bcrypt.DefaultCost)
 	if err != nil {
-		// fallback: should never happen for a valid string
 		sum := sha256.Sum256([]byte(password))
 		return fmt.Sprintf("%x", sum)
 	}
 	return string(h)
 }
 
-// checkPassword verifies password against stored hash, accepting both bcrypt
-// ("$2…") and legacy SHA-256 hashes. migrate=true means the stored hash is
-// legacy and the caller should replace it with a fresh bcrypt hash.
+// checkPassword verifies password against stored hash. Three cases are handled:
+//   - bcrypt with SHA-256 pre-hash (current format, migrate=false)
+//   - bcrypt with raw password (previous format, migrate=true so caller re-hashes)
+//   - legacy hex SHA-256 (migrate=true)
 func checkPassword(password, stored string) (ok, migrate bool) {
 	if strings.HasPrefix(stored, "$2") {
-		return bcrypt.CompareHashAndPassword([]byte(stored), []byte(password)) == nil, false
+		if bcrypt.CompareHashAndPassword([]byte(stored), passwordBytes(password)) == nil {
+			return true, false
+		}
+		// Older bcrypt hash created before SHA-256 pre-hashing was introduced.
+		if bcrypt.CompareHashAndPassword([]byte(stored), []byte(password)) == nil {
+			return true, true
+		}
+		return false, false
 	}
+	// Legacy hex SHA-256 hash.
 	sum := sha256.Sum256([]byte(password))
 	if fmt.Sprintf("%x", sum) == stored {
 		return true, true

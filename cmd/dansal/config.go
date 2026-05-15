@@ -26,6 +26,7 @@ type ServerConfig struct {
 	LoginRateLimit       int      `yaml:"login_rate_limit"`
 	LoginTarpitSecs      int      `yaml:"login_tarpit_secs"`
 	ReservedUsernames    []string `yaml:"reserved_usernames"`
+	AllowedOrigins       []string `yaml:"allowed_origins"`
 }
 
 type Config struct {
