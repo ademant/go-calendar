@@ -7,6 +7,7 @@ import (
 	"net"
 	"os"
 	"text/tabwriter"
+	"time"
 )
 
 const defaultSocket = "./dansal.sock"
@@ -117,6 +118,10 @@ func main() {
 		cmdIncrementalBackup(rest)
 	case "restore":
 		cmdRestore(rest)
+	case "password-backup":
+		cmdPasswordBackup(rest)
+	case "password-restore":
+		cmdPasswordRestore(rest)
 	default:
 		fmt.Fprintf(os.Stderr, "unknown command: %s\n\n", sub)
 		usage()
@@ -146,6 +151,8 @@ Maintenance:
   backup             [--output PATH]                 Full backup (config + db + images)
   incremental-backup --since RFC3339 [--output PATH] Backup only files changed since time
   restore            --input PATH                    Restore from a backup archive
+  password-backup    [--output PATH] [--password P]  Encrypted backup (AES-256-GCM)
+  password-restore   --input PATH   [--password P]   Decrypt and restore an encrypted backup
 
 Roles: admin, user, publisher, viewer
 
@@ -253,6 +260,31 @@ Remove a user from an organization.
 Flags:
   --org-id    Organization ID (required)
   --username  Username to remove (required)`,
+
+	"password-backup": `Usage: dansal_admin password-backup [--output PATH] [--password STR]
+
+Create a full backup and encrypt it with AES-256-GCM.
+Key derivation uses scrypt (N=65536, r=8, p=1).
+Password hashes are not included in the backup archive.
+
+If --password is omitted the password is prompted from the terminal
+(no echo, confirmed twice). Passing the password as a flag exposes
+it in the process list — prefer the prompt in production.
+
+Flags:
+  --output    Destination file (default: ./dansal-encrypted-<timestamp>.tar.gz.enc)
+  --password  Encryption password (prompted if omitted)`,
+
+	"password-restore": `Usage: dansal_admin password-restore --input PATH [--password STR]
+
+Decrypt a backup created by password-backup and restore it.
+  config.yaml  — written to the server's config path; config reloaded live
+  calendar.db  — restored via SQLite online backup API (no restart needed)
+  images/      — files extracted into the images directory (overlay, no delete)
+
+Flags:
+  --input     Path to the encrypted backup file (required)
+  --password  Decryption password (prompted if omitted)`,
 }
 
 func cmdHelp(args []string) {
@@ -473,6 +505,118 @@ func cmdRestore(args []string) {
 		die("--input is required")
 	}
 	resp := send(socketPath, request{Cmd: "restore", Path: *input})
+	if !resp.OK {
+		die("%s", resp.Error)
+	}
+	var result struct {
+		Config bool `json:"config"`
+		DB     bool `json:"db"`
+		Images int  `json:"images"`
+	}
+	json.Unmarshal(resp.Data, &result)
+	fmt.Printf("restored: config=%v db=%v images=%d\n", result.Config, result.DB, result.Images)
+}
+
+func cmdPasswordBackup(args []string) {
+	fs := flag.NewFlagSet("password-backup", flag.ExitOnError)
+	fs.Usage = func() { fmt.Println(commandHelp["password-backup"]) }
+	output := fs.String("output", "", "destination file path")
+	password := fs.String("password", "", "encryption password (prompted if omitted)")
+	fs.Parse(args)
+
+	var pw []byte
+	if *password != "" {
+		pw = []byte(*password)
+	} else {
+		var err error
+		pw, err = promptPassword("Encryption password: ")
+		if err != nil {
+			die("password prompt: %v", err)
+		}
+		pw2, err := promptPassword("Confirm password: ")
+		if err != nil {
+			die("password prompt: %v", err)
+		}
+		if string(pw) != string(pw2) {
+			die("passwords do not match")
+		}
+	}
+
+	// Server writes the backup to a temp path; we encrypt it locally.
+	tmp, err := os.CreateTemp("", "dansal-pbkup-*.tar.gz")
+	if err != nil {
+		die("temp file: %v", err)
+	}
+	tmpPath := tmp.Name()
+	tmp.Close()
+	os.Remove(tmpPath)
+
+	resp := send(socketPath, request{Cmd: "backup", Path: tmpPath})
+	if !resp.OK {
+		die("%s", resp.Error)
+	}
+	defer os.Remove(tmpPath)
+
+	outPath := *output
+	if outPath == "" {
+		outPath = fmt.Sprintf("./dansal-encrypted-%s.tar.gz.enc", time.Now().Format("20060102-150405"))
+	}
+
+	fmt.Fprintln(os.Stderr, "Deriving key (this takes a moment)...")
+	if err := encryptFile(tmpPath, outPath, pw); err != nil {
+		die("encrypt: %v", err)
+	}
+
+	info, _ := os.Stat(outPath)
+	var size int64
+	if info != nil {
+		size = info.Size()
+	}
+	fmt.Printf("encrypted backup written to %s (%s)\n", outPath, formatSize(size))
+}
+
+func cmdPasswordRestore(args []string) {
+	fs := flag.NewFlagSet("password-restore", flag.ExitOnError)
+	fs.Usage = func() { fmt.Println(commandHelp["password-restore"]) }
+	input := fs.String("input", "", "path to encrypted backup")
+	password := fs.String("password", "", "decryption password (prompted if omitted)")
+	fs.Parse(args)
+
+	if *input == "" {
+		die("--input is required")
+	}
+
+	var pw []byte
+	if *password != "" {
+		pw = []byte(*password)
+	} else {
+		var err error
+		pw, err = promptPassword("Decryption password: ")
+		if err != nil {
+			die("password prompt: %v", err)
+		}
+	}
+
+	fmt.Fprintln(os.Stderr, "Deriving key (this takes a moment)...")
+	data, err := decryptFile(*input, pw)
+	if err != nil {
+		die("%v", err)
+	}
+
+	tmp, err := os.CreateTemp("", "dansal-prestore-*.tar.gz")
+	if err != nil {
+		die("temp file: %v", err)
+	}
+	tmpPath := tmp.Name()
+	if _, err := tmp.Write(data); err != nil {
+		tmp.Close()
+		os.Remove(tmpPath)
+		die("write temp: %v", err)
+	}
+	tmp.Close()
+	defer os.Remove(tmpPath)
+
+	resp := send(socketPath, request{Cmd: "restore", Path: tmpPath})
 	if !resp.OK {
 		die("%s", resp.Error)
 	}

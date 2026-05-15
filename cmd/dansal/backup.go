@@ -59,6 +59,13 @@ func createBackup(outputPath string, since time.Time) adminResponse {
 		return adminResponse{OK: false, Error: "db snapshot: " + err.Error()}
 	}
 
+	// Remove password hashes from the snapshot so plaintext backups never
+	// contain credential data. Use a separate connection to the temp file.
+	if snapDB, err := sql.Open("sqlite3", tmpDB.Name()); err == nil {
+		snapDB.Exec("UPDATE users SET password_hash = ''")
+		snapDB.Close()
+	}
+
 	f, err := os.Create(outputPath)
 	if err != nil {
 		return adminResponse{OK: false, Error: "create archive: " + err.Error()}
