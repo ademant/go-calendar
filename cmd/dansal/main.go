@@ -263,6 +263,7 @@ func startTokenCleanup() {
 			} else if n, _ := res.RowsAffected(); n > 0 {
 				log.Printf("token cleanup: removed %d expired token(s)", n)
 			}
+			db.Exec("DELETE FROM verification_tokens WHERE expires_at < ?", time.Now().UTC().Format(time.RFC3339))
 			// Sweep lastSeenCache: remove entries older than the maximum token lifetime.
 			expirationHours := 24
 			if config != nil && config.Server.TokenExpirationHours > 0 {
@@ -302,6 +303,16 @@ func migrateDB() {
 	db.Exec("ALTER TABLE tokens ADD COLUMN ip TEXT")
 	db.Exec("ALTER TABLE tokens ADD COLUMN fingerprint TEXT")
 	db.Exec("ALTER TABLE tokens ADD COLUMN last_seen_at DATETIME")
+	db.Exec(`CREATE TABLE IF NOT EXISTS verification_tokens (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		token TEXT UNIQUE NOT NULL,
+		user_id INTEGER NOT NULL,
+		channel TEXT NOT NULL,
+		expires_at DATETIME NOT NULL,
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+	)`)
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_verification_tokens_token ON verification_tokens(token)")
 }
 
 func createTables() error {
@@ -413,6 +424,16 @@ func createTables() error {
 		FOREIGN KEY (org_id) REFERENCES organizations(id) ON DELETE SET NULL
 	);
 	CREATE INDEX IF NOT EXISTS idx_invite_links_token ON invite_links(token);
+	CREATE TABLE IF NOT EXISTS verification_tokens (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		token TEXT UNIQUE NOT NULL,
+		user_id INTEGER NOT NULL,
+		channel TEXT NOT NULL CHECK(channel IN ('email','telegram','matrix')),
+		expires_at DATETIME NOT NULL,
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+	);
+	CREATE INDEX IF NOT EXISTS idx_verification_tokens_token ON verification_tokens(token);
 	CREATE INDEX IF NOT EXISTS idx_events_published_start ON events(is_published, start_time);
 	CREATE INDEX IF NOT EXISTS idx_events_title_location  ON events(title, location_id);
 	CREATE INDEX IF NOT EXISTS idx_events_location_id     ON events(location_id);
@@ -585,6 +606,12 @@ func main() {
 	apiKeyRoutes.HandleFunc("", listAPIKeys).Methods("GET")
 	apiKeyRoutes.HandleFunc("", createAPIKey).Methods("POST")
 	apiKeyRoutes.HandleFunc("/{id}", deleteAPIKey).Methods("DELETE")
+
+	// Verification endpoints
+	router.HandleFunc("/api/v1/verify/{token}", consumeVerification).Methods("GET") // public
+	verifyRoutes := router.PathPrefix("/api/v1/users").Subrouter()
+	verifyRoutes.Use(TokenMiddleware)
+	verifyRoutes.HandleFunc("/{id}/verify", sendVerification).Methods("POST")
 
 	// Invite endpoints
 	router.HandleFunc("/api/v1/invites/{token}", useInvite).Methods("POST") // public

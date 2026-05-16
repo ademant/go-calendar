@@ -28,7 +28,12 @@ type ServerConfig struct {
 	LoginTarpitSecs         int      `yaml:"login_tarpit_secs"`
 	LoginMaxFailures        int      `yaml:"login_max_failures"`
 	LoginFailureWindowSecs  int      `yaml:"login_failure_window_secs"`
-	InviteExpiryHours       int      `yaml:"invite_expiry_hours"`
+	InviteExpiryHours          int    `yaml:"invite_expiry_hours"`
+	VerificationExpiryHours    int    `yaml:"verification_expiry_hours"`
+	BaseURL                    string `yaml:"base_url"`
+	TelegramBotToken           string `yaml:"telegram_bot_token"`
+	MatrixHomeserver           string `yaml:"matrix_homeserver"`
+	MatrixAccessToken          string `yaml:"matrix_access_token"`
 	ReservedUsernames    []string `yaml:"reserved_usernames"`
 	AllowedOrigins       []string `yaml:"allowed_origins"`
 	MetricsPort          int      `yaml:"metrics_port"`
@@ -120,6 +125,9 @@ func applyDefaults(cfg *Config) {
 	}
 	if cfg.Server.InviteExpiryHours == 0 {
 		cfg.Server.InviteExpiryHours = 48
+	}
+	if cfg.Server.VerificationExpiryHours == 0 {
+		cfg.Server.VerificationExpiryHours = 24
 	}
 	if len(cfg.Server.ReservedUsernames) == 0 {
 		cfg.Server.ReservedUsernames = []string{
