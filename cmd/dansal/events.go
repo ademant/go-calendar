@@ -281,7 +281,10 @@ func generateShortCode() string {
 
 // insertEvent upserts an event. Returns (id, shortCode, created, error) where
 // created=false means an existing event was updated instead of inserted.
-// When uid is non-empty, deduplication is done by uid; otherwise by title+location+time.
+// Deduplication order: UID exact match → title+location+time fuzzy match (±3 h).
+// The fuzzy fallback runs for both UID-less events and events whose UID is not yet
+// known to the DB, so that two feeds publishing the same event with different UIDs
+// converge to a single row.
 func insertEvent(q querier, title, description string, startTime, endTime int64, locationID int64, hasBall, hasWorkshop bool, tags []string, isPublished bool, organizationID *int, uid, source string) (int, string, bool, error) {
 	var existingID int
 	var existingShortCode string
@@ -291,13 +294,20 @@ func insertEvent(q querier, title, description string, startTime, endTime int64,
 		lookupErr = q.QueryRow(
 			"SELECT id, short_code FROM events WHERE uid = ?", uid,
 		).Scan(&existingID, &existingShortCode)
-	} else {
+		if lookupErr != nil && lookupErr != sql.ErrNoRows {
+			return 0, "", false, lookupErr
+		}
+	}
+
+	// Fuzzy fallback: fires when uid is absent OR when the uid was not found.
+	if uid == "" || lookupErr == sql.ErrNoRows {
 		const threeHours = int64(3 * 60 * 60)
 		lookupErr = q.QueryRow(
 			"SELECT id, short_code FROM events WHERE title = ? AND location_id = ? AND ABS(start_time - ?) < ?",
 			title, locationID, startTime, threeHours,
 		).Scan(&existingID, &existingShortCode)
 	}
+
 	if lookupErr != nil && lookupErr != sql.ErrNoRows {
 		return 0, "", false, lookupErr
 	}
