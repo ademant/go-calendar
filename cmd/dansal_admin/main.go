@@ -42,6 +42,8 @@ type request struct {
 	Since        string `json:"since,omitempty"`
 	SessionID       int    `json:"session_id,omitempty"`
 	InviteToken     string `json:"invite_token,omitempty"`
+	Telegram        string `json:"telegram,omitempty"`
+	Matrix          string `json:"matrix,omitempty"`
 	SMTPHost        string `json:"smtp_host,omitempty"`
 	SMTPPort        int    `json:"smtp_port,omitempty"`
 	SMTPUsername    string `json:"smtp_username,omitempty"`
@@ -198,6 +200,7 @@ User management:
   list-users                                         List all users
   create-user  --username STR --email STR            Create a new user
                --password STR [--role STR]
+               [--telegram STR] [--matrix STR]
   delete-user  --username STR                        Delete a user
   set-password --username STR --password STR         Change a user's password
   set-role     --username STR --role STR             Change a user's role
@@ -244,7 +247,7 @@ var commandHelp = map[string]string{
 
 List all users with their ID, username, email, role and creation date.`,
 
-	"create-user": `Usage: dansal_admin create-user --username STR --email STR --password STR [--role STR]
+	"create-user": `Usage: dansal_admin create-user --username STR --email STR --password STR [--role STR] [--telegram STR] [--matrix STR]
 
 Create a new user account.
 
@@ -252,7 +255,9 @@ Flags:
   --username  Username (required)
   --email     Email address (required)
   --password  Password (required)
-  --role      Role: admin, user, publisher, viewer (default: user)`,
+  --role      Role: admin, user, publisher, viewer (default: user)
+  --telegram  Telegram handle (optional)
+  --matrix    Matrix ID (optional)`,
 
 	"delete-user": `Usage: dansal_admin delete-user --username STR
 
@@ -493,11 +498,21 @@ func cmdCreateUser(args []string) {
 	email := fs.String("email", "", "email address")
 	password := fs.String("password", "", "password")
 	role := fs.String("role", "user", "role (admin|user|publisher|viewer)")
+	telegram := fs.String("telegram", "", "Telegram handle")
+	matrix := fs.String("matrix", "", "Matrix ID")
 	fs.Parse(args)
 	if *username == "" || *email == "" || *password == "" {
 		die("--username, --email and --password are required")
 	}
-	resp := send(socketPath, request{Cmd: "create-user", Username: *username, Email: *email, Password: *password, Role: *role})
+	resp := send(socketPath, request{
+		Cmd:      "create-user",
+		Username: *username,
+		Email:    *email,
+		Password: *password,
+		Role:     *role,
+		Telegram: *telegram,
+		Matrix:   *matrix,
+	})
 	if !resp.OK {
 		die("%s", resp.Error)
 	}

@@ -19,6 +19,8 @@ type adminRequest struct {
 	Since        string `json:"since,omitempty"`
 	SessionID       int    `json:"session_id,omitempty"`
 	InviteToken     string `json:"invite_token,omitempty"`
+	Telegram        string `json:"telegram,omitempty"`
+	Matrix          string `json:"matrix,omitempty"`
 	SMTPHost        string `json:"smtp_host,omitempty"`
 	SMTPPort        int    `json:"smtp_port,omitempty"`
 	SMTPUsername    string `json:"smtp_username,omitempty"`
@@ -292,14 +294,14 @@ func adminCreateUser(req adminRequest) adminResponse {
 		return adminResponse{OK: false, Error: "invalid role: use admin, user, publisher or viewer"}
 	}
 	result, err := db.Exec(
-		"INSERT INTO users (username, email, password_hash, role) VALUES (?, ?, ?, ?)",
-		req.Username, req.Email, hashPassword(req.Password), role,
+		"INSERT INTO users (username, email, password_hash, role, telegram, matrix) VALUES (?, ?, ?, ?, ?, ?)",
+		req.Username, req.Email, hashPassword(req.Password), role, req.Telegram, req.Matrix,
 	)
 	if err != nil {
 		return adminResponse{OK: false, Error: "username or email already exists"}
 	}
 	id, _ := result.LastInsertId()
-	return adminResponse{OK: true, Data: User{ID: int(id), Username: req.Username, Email: req.Email, Role: role}}
+	return adminResponse{OK: true, Data: User{ID: int(id), Username: req.Username, Email: req.Email, Role: role, Telegram: req.Telegram, Matrix: req.Matrix}}
 }
 
 func adminDeleteUser(req adminRequest) adminResponse {

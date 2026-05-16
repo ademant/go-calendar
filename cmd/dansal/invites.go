@@ -47,6 +47,8 @@ type UseInviteRequest struct {
 	Username string `json:"username"`
 	Email    string `json:"email"`
 	Password string `json:"password"`
+	Telegram string `json:"telegram,omitempty"`
+	Matrix   string `json:"matrix,omitempty"`
 }
 
 func generateInviteToken() (string, error) {
@@ -270,8 +272,8 @@ func useInvite(w http.ResponseWriter, r *http.Request) {
 	defer tx.Rollback()
 
 	result, err := tx.Exec(
-		"INSERT INTO users (username, email, password_hash, role) VALUES (?, ?, ?, ?)",
-		req.Username, req.Email, hashPassword(req.Password), invite.Role,
+		"INSERT INTO users (username, email, password_hash, role, telegram, matrix) VALUES (?, ?, ?, ?, ?, ?)",
+		req.Username, req.Email, hashPassword(req.Password), invite.Role, req.Telegram, req.Matrix,
 	)
 	if err != nil {
 		http.Error(w, "Username or email already exists", http.StatusConflict)
@@ -301,5 +303,7 @@ func useInvite(w http.ResponseWriter, r *http.Request) {
 		Username: req.Username,
 		Email:    req.Email,
 		Role:     invite.Role,
+		Telegram: req.Telegram,
+		Matrix:   req.Matrix,
 	})
 }

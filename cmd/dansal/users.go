@@ -157,6 +157,8 @@ func createUser(w http.ResponseWriter, r *http.Request) {
 		req.Email = r.FormValue("email")
 		req.Password = r.FormValue("password")
 		req.Role = r.FormValue("role")
+		req.Telegram = r.FormValue("telegram")
+		req.Matrix = r.FormValue("matrix")
 	} else {
 		// Default to JSON parsing
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
