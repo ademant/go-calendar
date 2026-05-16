@@ -98,6 +98,10 @@ func dispatchAdminCmd(req adminRequest) adminResponse {
 		return adminIncrementalBackup(req)
 	case "restore":
 		return adminRestore(req)
+	case "enable-user":
+		return adminEnableUser(req)
+	case "disable-user":
+		return adminDisableUser(req)
 	case "smtp-get":
 		return adminSMTPGet()
 	case "smtp-set":
@@ -112,7 +116,7 @@ func dispatchAdminCmd(req adminRequest) adminResponse {
 }
 
 func adminListUsers() adminResponse {
-	rows, err := db.Query("SELECT id, username, email, role, created_at FROM users ORDER BY id")
+	rows, err := db.Query("SELECT id, username, email, role, COALESCE(disabled,0), created_at FROM users ORDER BY id")
 	if err != nil {
 		return adminResponse{OK: false, Error: err.Error()}
 	}
@@ -120,12 +124,49 @@ func adminListUsers() adminResponse {
 	users := []User{}
 	for rows.Next() {
 		var u User
-		if err := rows.Scan(&u.ID, &u.Username, &u.Email, &u.Role, &u.CreatedAt); err != nil {
+		var disabled int
+		if err := rows.Scan(&u.ID, &u.Username, &u.Email, &u.Role, &disabled, &u.CreatedAt); err != nil {
 			return adminResponse{OK: false, Error: err.Error()}
 		}
+		u.Disabled = disabled == 1
 		users = append(users, u)
 	}
 	return adminResponse{OK: true, Data: users}
+}
+
+func adminEnableUser(req adminRequest) adminResponse {
+	if req.Username == "" {
+		return adminResponse{OK: false, Error: "username is required"}
+	}
+	result, err := db.Exec(
+		"UPDATE users SET disabled=0, failed_login_count=0, failed_login_since=NULL WHERE username=?",
+		req.Username,
+	)
+	if err != nil {
+		return adminResponse{OK: false, Error: err.Error()}
+	}
+	if n, _ := result.RowsAffected(); n == 0 {
+		return adminResponse{OK: false, Error: "user not found"}
+	}
+	return adminResponse{OK: true}
+}
+
+func adminDisableUser(req adminRequest) adminResponse {
+	if req.Username == "" {
+		return adminResponse{OK: false, Error: "username is required"}
+	}
+	var userID int
+	var role string
+	if err := db.QueryRow("SELECT id, role FROM users WHERE username=?", req.Username).Scan(&userID, &role); err != nil {
+		return adminResponse{OK: false, Error: "user not found"}
+	}
+	if role == RoleAdmin {
+		return adminResponse{OK: false, Error: "cannot disable admin users"}
+	}
+	db.Exec("UPDATE users SET disabled=1 WHERE id=?", userID)
+	credentials.pruneByUserID(userID)
+	db.Exec("DELETE FROM tokens WHERE user_id=?", userID)
+	return adminResponse{OK: true}
 }
 
 func adminCreateUser(req adminRequest) adminResponse {

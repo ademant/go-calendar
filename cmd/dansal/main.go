@@ -262,6 +262,9 @@ func migrateDB() {
 	db.Exec("ALTER TABLE events ADD COLUMN uid TEXT")
 	db.Exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_events_uid ON events(uid) WHERE uid IS NOT NULL")
 	db.Exec("ALTER TABLE api_keys ADD COLUMN expires_at DATETIME")
+	db.Exec("ALTER TABLE users ADD COLUMN disabled INTEGER DEFAULT 0")
+	db.Exec("ALTER TABLE users ADD COLUMN failed_login_count INTEGER DEFAULT 0")
+	db.Exec("ALTER TABLE users ADD COLUMN failed_login_since DATETIME")
 }
 
 func createTables() error {
@@ -277,6 +280,9 @@ func createTables() error {
 		email_verified INTEGER DEFAULT 0,
 		telegram_verified INTEGER DEFAULT 0,
 		matrix_verified INTEGER DEFAULT 0,
+		disabled INTEGER DEFAULT 0,
+		failed_login_count INTEGER DEFAULT 0,
+		failed_login_since DATETIME,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 	);
 	CREATE TABLE IF NOT EXISTS events (

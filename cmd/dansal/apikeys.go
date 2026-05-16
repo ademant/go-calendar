@@ -48,7 +48,7 @@ func validateAPIKey(key string) (int, string, error) {
 	var expiresAt sql.NullString
 
 	err := db.QueryRow(
-		"SELECT users.id, users.role, api_keys.expires_at FROM api_keys JOIN users ON api_keys.user_id = users.id WHERE api_keys.api_key = ?",
+		"SELECT users.id, users.role, api_keys.expires_at FROM api_keys JOIN users ON api_keys.user_id = users.id WHERE api_keys.api_key = ? AND users.disabled = 0",
 		key,
 	).Scan(&userID, &userRole, &expiresAt)
 

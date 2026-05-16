@@ -59,6 +59,17 @@ func (c *credCache) invalidate(key string) {
 	c.mu.Unlock()
 }
 
+// pruneByUserID removes all cached entries for a user (e.g. when the account is disabled).
+func (c *credCache) pruneByUserID(userID int) {
+	c.mu.Lock()
+	for k, e := range c.entries {
+		if e.userID == userID {
+			delete(c.entries, k)
+		}
+	}
+	c.mu.Unlock()
+}
+
 func (c *credCache) sweepLoop() {
 	ticker := time.NewTicker(credCacheTTL)
 	defer ticker.Stop()

@@ -61,6 +61,7 @@ type user struct {
 	Username  string `json:"username"`
 	Email     string `json:"email"`
 	Role      string `json:"role"`
+	Disabled  bool   `json:"disabled"`
 	CreatedAt string `json:"created_at"`
 }
 
@@ -129,6 +130,10 @@ func main() {
 		cmdSetPassword(rest)
 	case "set-role":
 		cmdSetRole(rest)
+	case "enable-user":
+		cmdEnableUser(rest)
+	case "disable-user":
+		cmdDisableUser(rest)
 	case "list-orgs":
 		cmdListOrgs(rest)
 	case "list-members":
@@ -176,6 +181,8 @@ User management:
   delete-user  --username STR                        Delete a user
   set-password --username STR --password STR         Change a user's password
   set-role     --username STR --role STR             Change a user's role
+  enable-user  --username STR                        Re-enable a disabled user
+  disable-user --username STR                        Disable a user account
 
 Organization management:
   list-orgs                                          List all organizations
@@ -241,6 +248,21 @@ Change the role of a user account.
 Flags:
   --username  Username of the target account (required)
   --role      New role: admin, user, publisher, viewer (required)`,
+
+	"enable-user": `Usage: dansal_admin enable-user --username STR
+
+Re-enable a disabled user account and reset its failed-login counter.
+
+Flags:
+  --username  Username of the account to enable (required)`,
+
+	"disable-user": `Usage: dansal_admin disable-user --username STR
+
+Disable a user account. Active sessions are revoked immediately.
+Admin accounts cannot be disabled.
+
+Flags:
+  --username  Username of the account to disable (required)`,
 
 	"list-orgs": `Usage: dansal_admin list-orgs
 
@@ -401,9 +423,9 @@ func cmdListUsers(args []string) {
 	var users []user
 	json.Unmarshal(resp.Data, &users)
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(w, "ID\tUSERNAME\tEMAIL\tROLE\tCREATED")
+	fmt.Fprintln(w, "ID\tUSERNAME\tEMAIL\tROLE\tDISABLED\tCREATED")
 	for _, u := range users {
-		fmt.Fprintf(w, "%d\t%s\t%s\t%s\t%s\n", u.ID, u.Username, u.Email, u.Role, u.CreatedAt)
+		fmt.Fprintf(w, "%d\t%s\t%s\t%s\t%v\t%s\n", u.ID, u.Username, u.Email, u.Role, u.Disabled, u.CreatedAt)
 	}
 	w.Flush()
 }
@@ -719,6 +741,36 @@ func cmdPasswordRestore(args []string) {
 	}
 	json.Unmarshal(resp.Data, &result)
 	fmt.Printf("restored: config=%v db=%v images=%d\n", result.Config, result.DB, result.Images)
+}
+
+func cmdEnableUser(args []string) {
+	fs := flag.NewFlagSet("enable-user", flag.ExitOnError)
+	fs.Usage = func() { fmt.Println(commandHelp["enable-user"]) }
+	username := fs.String("username", "", "username")
+	fs.Parse(args)
+	if *username == "" {
+		die("--username is required")
+	}
+	resp := send(socketPath, request{Cmd: "enable-user", Username: *username})
+	if !resp.OK {
+		die("%s", resp.Error)
+	}
+	fmt.Printf("user %s enabled\n", *username)
+}
+
+func cmdDisableUser(args []string) {
+	fs := flag.NewFlagSet("disable-user", flag.ExitOnError)
+	fs.Usage = func() { fmt.Println(commandHelp["disable-user"]) }
+	username := fs.String("username", "", "username")
+	fs.Parse(args)
+	if *username == "" {
+		die("--username is required")
+	}
+	resp := send(socketPath, request{Cmd: "disable-user", Username: *username})
+	if !resp.OK {
+		die("%s", resp.Error)
+	}
+	fmt.Printf("user %s disabled\n", *username)
 }
 
 func cmdRemoveMember(args []string) {

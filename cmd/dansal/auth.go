@@ -37,6 +37,45 @@ type TokenError struct {
 	Error string `json:"error"`
 }
 
+// recordFailedLogin increments the per-user failure counter and disables the
+// account when the configured threshold is reached within the window.
+func recordFailedLogin(userID int, username, clientIP string, storedCount int, failedSince string) {
+	maxFailures := config.Server.LoginMaxFailures
+	windowSecs := config.Server.LoginFailureWindowSecs
+
+	now := time.Now().UTC()
+	window := time.Duration(windowSecs) * time.Second
+
+	var newCount int
+	var newSince string
+	if failedSince != "" {
+		if since, err := parseTokenExpiration(failedSince); err == nil && now.Sub(since) < window {
+			newCount = storedCount + 1
+		} else {
+			newCount = 1
+			newSince = now.Format(time.RFC3339)
+		}
+	} else {
+		newCount = 1
+		newSince = now.Format(time.RFC3339)
+	}
+
+	if newCount >= maxFailures {
+		if newSince != "" {
+			db.Exec("UPDATE users SET disabled=1, failed_login_count=?, failed_login_since=? WHERE id=?", newCount, newSince, userID)
+		} else {
+			db.Exec("UPDATE users SET disabled=1, failed_login_count=? WHERE id=?", newCount, userID)
+		}
+		log.Printf("auth: user %q disabled after %d failed logins within window (last from %s)", username, newCount, clientIP)
+		credentials.pruneByUserID(userID)
+		db.Exec("DELETE FROM tokens WHERE user_id=?", userID)
+	} else if newSince != "" {
+		db.Exec("UPDATE users SET failed_login_count=1, failed_login_since=? WHERE id=?", newSince, userID)
+	} else {
+		db.Exec("UPDATE users SET failed_login_count=? WHERE id=?", newCount, userID)
+	}
+}
+
 // generateToken creates a secure random token
 func generateToken() (string, error) {
 	b := make([]byte, 32)
@@ -84,7 +123,7 @@ func validateToken(token string) (int, string, error) {
 	var expiresAt string
 
 	err := db.QueryRow(
-		"SELECT users.id, users.role, tokens.expires_at FROM tokens JOIN users ON tokens.user_id = users.id WHERE tokens.token = ?",
+		"SELECT users.id, users.role, tokens.expires_at FROM tokens JOIN users ON tokens.user_id = users.id WHERE tokens.token = ? AND users.disabled = 0",
 		token,
 	).Scan(&userID, &userRole, &expiresAt)
 
@@ -226,11 +265,13 @@ func login(w http.ResponseWriter, r *http.Request) {
 	// Verify user credentials
 	var user User
 	var passwordHash string
+	var userDisabled, failedCount int
+	var failedSince string
 
 	err := db.QueryRow(
-		"SELECT id, username, email, role, created_at, password_hash FROM users WHERE username = ?",
+		"SELECT id, username, email, role, created_at, password_hash, COALESCE(disabled,0), COALESCE(failed_login_count,0), COALESCE(failed_login_since,'') FROM users WHERE username = ?",
 		req.Username,
-	).Scan(&user.ID, &user.Username, &user.Email, &user.Role, &user.CreatedAt, &passwordHash)
+	).Scan(&user.ID, &user.Username, &user.Email, &user.Role, &user.CreatedAt, &passwordHash, &userDisabled, &failedCount, &failedSince)
 
 	if err == sql.ErrNoRows {
 		log.Printf("auth failed from %s: invalid credentials", clientIP)
@@ -244,10 +285,18 @@ func login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if userDisabled != 0 {
+		log.Printf("auth failed from %s: user %q is disabled", clientIP, req.Username)
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(TokenError{Error: "Invalid username or password"})
+		return
+	}
+
 	// Verify password; migrate legacy SHA-256 hashes to bcrypt on first successful login.
 	ok, migrate := checkPassword(req.Password, passwordHash)
 	if !ok {
 		log.Printf("auth failed from %s: invalid credentials", clientIP)
+		recordFailedLogin(user.ID, req.Username, clientIP, failedCount, failedSince)
 		w.WriteHeader(http.StatusUnauthorized)
 		json.NewEncoder(w).Encode(TokenError{Error: "Invalid username or password"})
 		return
@@ -255,6 +304,7 @@ func login(w http.ResponseWriter, r *http.Request) {
 	if migrate {
 		db.Exec("UPDATE users SET password_hash = ? WHERE id = ?", hashPassword(req.Password), user.ID)
 	}
+	db.Exec("UPDATE users SET failed_login_count=0, failed_login_since=NULL WHERE id=?", user.ID)
 
 	if user.Role == RoleAdmin && !adminLoginAllowed(clientIP) {
 		log.Printf("auth failed from %s: admin login not allowed", clientIP)

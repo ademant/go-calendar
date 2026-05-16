@@ -24,8 +24,10 @@ type ServerConfig struct {
 	AdminSocket          string   `yaml:"admin_socket"`
 	DBPath               string   `yaml:"db_path"`
 	DBMaxConns           int      `yaml:"db_max_conns"`
-	LoginRateLimit       int      `yaml:"login_rate_limit"`
-	LoginTarpitSecs      int      `yaml:"login_tarpit_secs"`
+	LoginRateLimit          int      `yaml:"login_rate_limit"`
+	LoginTarpitSecs         int      `yaml:"login_tarpit_secs"`
+	LoginMaxFailures        int      `yaml:"login_max_failures"`
+	LoginFailureWindowSecs  int      `yaml:"login_failure_window_secs"`
 	ReservedUsernames    []string `yaml:"reserved_usernames"`
 	AllowedOrigins       []string `yaml:"allowed_origins"`
 	MetricsPort          int      `yaml:"metrics_port"`
@@ -108,6 +110,12 @@ func applyDefaults(cfg *Config) {
 	}
 	if cfg.Server.LoginTarpitSecs == 0 {
 		cfg.Server.LoginTarpitSecs = 10
+	}
+	if cfg.Server.LoginMaxFailures == 0 {
+		cfg.Server.LoginMaxFailures = 10
+	}
+	if cfg.Server.LoginFailureWindowSecs == 0 {
+		cfg.Server.LoginFailureWindowSecs = 600
 	}
 	if len(cfg.Server.ReservedUsernames) == 0 {
 		cfg.Server.ReservedUsernames = []string{
