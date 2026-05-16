@@ -264,6 +264,7 @@ func startTokenCleanup() {
 				log.Printf("token cleanup: removed %d expired token(s)", n)
 			}
 			db.Exec("DELETE FROM verification_tokens WHERE expires_at < ?", time.Now().UTC().Format(time.RFC3339))
+			db.Exec("DELETE FROM magic_login_tokens WHERE expires_at < ?", time.Now().UTC().Format(time.RFC3339))
 			// Sweep lastSeenCache: remove entries older than the maximum token lifetime.
 			expirationHours := 24
 			if config != nil && config.Server.TokenExpirationHours > 0 {
@@ -303,6 +304,16 @@ func migrateDB() {
 	db.Exec("ALTER TABLE tokens ADD COLUMN ip TEXT")
 	db.Exec("ALTER TABLE tokens ADD COLUMN fingerprint TEXT")
 	db.Exec("ALTER TABLE tokens ADD COLUMN last_seen_at DATETIME")
+	db.Exec("ALTER TABLE users ADD COLUMN last_magic_sent_at DATETIME")
+	db.Exec(`CREATE TABLE IF NOT EXISTS magic_login_tokens (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		token TEXT UNIQUE NOT NULL,
+		user_id INTEGER NOT NULL,
+		expires_at DATETIME NOT NULL,
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+	)`)
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_magic_login_tokens_token ON magic_login_tokens(token)")
 	db.Exec(`CREATE TABLE IF NOT EXISTS verification_tokens (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		token TEXT UNIQUE NOT NULL,
@@ -434,6 +445,15 @@ func createTables() error {
 		FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 	);
 	CREATE INDEX IF NOT EXISTS idx_verification_tokens_token ON verification_tokens(token);
+	CREATE TABLE IF NOT EXISTS magic_login_tokens (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		token TEXT UNIQUE NOT NULL,
+		user_id INTEGER NOT NULL,
+		expires_at DATETIME NOT NULL,
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+	);
+	CREATE INDEX IF NOT EXISTS idx_magic_login_tokens_token ON magic_login_tokens(token);
 	CREATE INDEX IF NOT EXISTS idx_events_published_start ON events(is_published, start_time);
 	CREATE INDEX IF NOT EXISTS idx_events_title_location  ON events(title, location_id);
 	CREATE INDEX IF NOT EXISTS idx_events_location_id     ON events(location_id);
@@ -530,6 +550,8 @@ func main() {
 	// Authentication endpoints (no token required)
 	router.HandleFunc("/api/v1/login", login).Methods("GET", "POST")
 	router.HandleFunc("/api/v1/login", logout).Methods("DELETE")
+	router.HandleFunc("/api/v1/login/magic", requestMagicLogin).Methods("POST")
+	router.HandleFunc("/api/v1/login/magic/{token}", useMagicLogin).Methods("GET")
 
 	// User endpoints (protected)
 	userRoutes := router.PathPrefix("/api/v1/users").Subrouter()
