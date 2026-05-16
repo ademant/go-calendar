@@ -67,6 +67,24 @@ func ensureOrgFromOrganizer(vevent *ics.VEvent) *int {
 	return &id
 }
 
+// ensureOrgByName finds or creates an organization by name.
+// Returns nil when name is empty or on any DB error.
+func ensureOrgByName(name string) *int {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return nil
+	}
+	var id int
+	err := db.QueryRow("SELECT id FROM organizations WHERE name = ?", name).Scan(&id)
+	if err == sql.ErrNoRows {
+		err = db.QueryRow("INSERT INTO organizations (name) VALUES (?) RETURNING id", name).Scan(&id)
+	}
+	if err != nil {
+		return nil
+	}
+	return &id
+}
+
 // isOrgMember returns true if userID is a member of orgID.
 func isOrgMember(userID, orgID int) bool {
 	var n int

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -40,6 +41,10 @@ func ensureLocation(q querier, loc EventLocationRequest) (int64, error) {
 	var id int64
 	err := q.QueryRow("SELECT id FROM locations WHERE location = ?", loc.Location).Scan(&id)
 	if err == nil {
+		if loc.Latitude != "" || loc.Longitude != "" {
+			q.Exec("UPDATE locations SET latitude=?, longitude=? WHERE id=? AND latitude IS NULL AND longitude IS NULL",
+				loc.Latitude, loc.Longitude, id)
+		}
 		return id, nil
 	}
 	if err != sql.ErrNoRows {
@@ -53,6 +58,69 @@ func ensureLocation(q querier, loc EventLocationRequest) (int64, error) {
 		return 0, err
 	}
 	return result.LastInsertId()
+}
+
+// parseICalGeo splits a GEO property value ("lat;lon") into its components.
+func parseICalGeo(s string) (lat, lon string) {
+	if i := strings.IndexByte(s, ';'); i >= 0 {
+		return strings.TrimSpace(s[:i]), strings.TrimSpace(s[i+1:])
+	}
+	return "", ""
+}
+
+// parseICalDuration parses an RFC 5545 DURATION value (e.g. "PT1H30M", "P1D")
+// into a time.Duration.
+func parseICalDuration(s string) (time.Duration, error) {
+	orig := s
+	neg := false
+	s = strings.TrimPrefix(s, "+")
+	if strings.HasPrefix(s, "-") {
+		neg = true
+		s = s[1:]
+	}
+	if !strings.HasPrefix(s, "P") {
+		return 0, fmt.Errorf("invalid DURATION %q", orig)
+	}
+	s = s[1:]
+
+	var total time.Duration
+	for len(s) > 0 {
+		if s[0] == 'T' {
+			s = s[1:]
+			continue
+		}
+		i := 0
+		for i < len(s) && s[i] >= '0' && s[i] <= '9' {
+			i++
+		}
+		if i == 0 || i >= len(s) {
+			return 0, fmt.Errorf("invalid DURATION %q", orig)
+		}
+		n, err := strconv.Atoi(s[:i])
+		if err != nil {
+			return 0, err
+		}
+		unit := s[i]
+		s = s[i+1:]
+		switch unit {
+		case 'W':
+			total += time.Duration(n) * 7 * 24 * time.Hour
+		case 'D':
+			total += time.Duration(n) * 24 * time.Hour
+		case 'H':
+			total += time.Duration(n) * time.Hour
+		case 'M':
+			total += time.Duration(n) * time.Minute
+		case 'S':
+			total += time.Duration(n) * time.Second
+		default:
+			return 0, fmt.Errorf("unknown DURATION unit %q in %q", string(unit), orig)
+		}
+	}
+	if neg {
+		total = -total
+	}
+	return total, nil
 }
 
 // parseICalCategories extracts all CATEGORIES values from a vevent,
@@ -72,20 +140,6 @@ func parseICalCategories(event *ics.VEvent) []string {
 	return tags
 }
 
-// parseICalTime handles the common iCal DTSTART/DTEND formats.
-func parseICalTime(value string) (string, error) {
-	formats := []string{
-		"20060102T150405Z",
-		"20060102T150405",
-		"20060102",
-	}
-	for _, f := range formats {
-		if t, err := time.Parse(f, value); err == nil {
-			return t.UTC().Format(time.RFC3339), nil
-		}
-	}
-	return "", fmt.Errorf("unrecognised iCal time: %q", value)
-}
 
 func scanFetchSource(s scanner) (FetchSource, error) {
 	var src FetchSource
@@ -166,9 +220,16 @@ func getFetchSource(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(src)
 }
 
-// importFromSource fetches the URL of src and imports events into the DB.
-// Returns (events, allCreated, error).
+// importFromSource dispatches to the correct importer based on src.Type.
 func importFromSource(src FetchSource) ([]Event, bool, error) {
+	if src.Type == "folkdance-json" {
+		return importFromFolkdanceJSON(src)
+	}
+	return importFromICalSource(src)
+}
+
+// importFromICalSource fetches an iCal URL and imports its events into the DB.
+func importFromICalSource(src FetchSource) ([]Event, bool, error) {
 	resp, err := fetchClient.Get(src.URL)
 	if err != nil {
 		return nil, false, fmt.Errorf("fetch: %w", err)
@@ -203,13 +264,22 @@ func importFromSource(src FetchSource) ([]Event, bool, error) {
 			return ""
 		}
 
-		startTime, err := parseICalTime(prop(ics.ComponentPropertyDtStart))
+		startT, err := vevent.GetStartAt()
 		if err != nil {
 			continue
 		}
-		endTime, _ := parseICalTime(prop(ics.ComponentPropertyDtEnd))
-		if endTime == "" {
-			endTime = startTime
+		endT := startT
+		if et, err := vevent.GetEndAt(); err == nil {
+			endT = et
+		} else if durStr := prop(ics.ComponentPropertyDuration); durStr != "" {
+			if d, err := parseICalDuration(durStr); err == nil {
+				endT = startT.Add(d)
+			}
+		}
+
+		title := prop(ics.ComponentPropertySummary)
+		if title == "" {
+			continue
 		}
 
 		tags := parseICalCategories(vevent)
@@ -223,39 +293,62 @@ func importFromSource(src FetchSource) ([]Event, bool, error) {
 			}
 		}
 
-		eventReq := EventCreateRequest{
-			UID:            prop(ics.ComponentPropertyUniqueId),
-			Title:          prop(ics.ComponentPropertySummary),
-			Description:    prop(ics.ComponentPropertyDescription),
-			StartTime:      startTime,
-			EndTime:        endTime,
-			Tags:           tags,
-			URL:            attachURL(vevent),
-			Source:         src.URL,
-			OrganizationID: ensureOrgFromOrganizer(vevent),
-			Location:       EventLocationRequest{Location: prop(ics.ComponentPropertyLocation)},
+		baseUID := prop(ics.ComponentPropertyUniqueId)
+		sourceLastModified := icalLastModified(vevent)
+
+		// Expand RRULE if present; fall back to the single base occurrence.
+		occs, _ := expandRRuleOccurrences(vevent, startT, endT)
+		if occs == nil {
+			occs = [][2]time.Time{{startT, endT}}
 		}
 
-		if eventReq.Title == "" {
-			continue
-		}
+		for _, occ := range occs {
+			// Recurring occurrences after the base get a timestamp-qualified UID
+			// so each instance deduplicates independently across re-imports.
+			uid := baseUID
+			if len(occs) > 1 && !occ[0].Equal(startT) {
+				uid = fmt.Sprintf("%s_%d", baseUID, occ[0].UTC().Unix())
+			}
 
-		locationID, err := ensureLocation(tx, eventReq.Location)
-		if err != nil {
-			return nil, false, err
-		}
+			eventReq := EventCreateRequest{
+				UID:                uid,
+				Title:              title,
+				Description:        prop(ics.ComponentPropertyDescription),
+				StartTime:          occ[0].UTC().Format(time.RFC3339),
+				EndTime:            occ[1].UTC().Format(time.RFC3339),
+				IsCancelled:        prop(ics.ComponentPropertyStatus) == "CANCELLED",
+				Tags:               tags,
+				URL:                attachURL(vevent),
+				Source:             src.URL,
+				OrganizationID:     ensureOrgFromOrganizer(vevent),
+				Location: func() EventLocationRequest {
+				lat, lon := parseICalGeo(prop(ics.ComponentPropertyGeo))
+				return EventLocationRequest{
+					Location:  prop(ics.ComponentPropertyLocation),
+					Latitude:  lat,
+					Longitude: lon,
+				}
+			}(),
+				SourceLastModified: sourceLastModified,
+			}
 
-		events, created, err := createEventFromRequest(tx, eventReq, locationID, true)
-		if err != nil {
-			return nil, false, err
+			locationID, err := ensureLocation(tx, eventReq.Location)
+			if err != nil {
+				return nil, false, err
+			}
+
+			events, created, err := createEventFromRequest(tx, eventReq, locationID, true)
+			if err != nil {
+				return nil, false, err
+			}
+			if !created {
+				allCreated = false
+			}
+			for _, ev := range events {
+				attachImagesFromICalEvent(ev.ID, vevent)
+			}
+			allEvents = append(allEvents, events...)
 		}
-		if !created {
-			allCreated = false
-		}
-		for _, ev := range events {
-			attachImagesFromICalEvent(ev.ID, vevent)
-		}
-		allEvents = append(allEvents, events...)
 	}
 
 	if err := tx.Commit(); err != nil {
@@ -278,17 +371,20 @@ func fetchURL(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if req.Type != "ical" {
-		http.Error(w, "Unsupported type, only 'ical' is supported", http.StatusBadRequest)
-		return
-	}
-
 	if !strings.Contains(req.URL, "://") {
 		req.URL = "https://" + req.URL
 	}
 	parsed, err := url.Parse(req.URL)
 	if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") {
 		http.Error(w, "URL must use http or https scheme", http.StatusBadRequest)
+		return
+	}
+
+	if req.Type == "" {
+		req.Type = detectFetchType(req.URL)
+	}
+	if !validFetchType(req.Type) {
+		http.Error(w, "Unsupported type; use 'ical' or 'folkdance-json'", http.StatusBadRequest)
 		return
 	}
 
@@ -353,10 +449,6 @@ func fetchAllURLs(w http.ResponseWriter, r *http.Request) {
 		wg.Add(1)
 		go func(i int, src FetchSource) {
 			defer wg.Done()
-			if src.Type != "ical" {
-				results[i] = sourceResult{SourceID: src.ID, URL: src.URL, Error: "unsupported type: " + src.Type}
-				return
-			}
 			events, allCreated, err := importFromSource(src)
 			if err != nil {
 				results[i] = sourceResult{SourceID: src.ID, URL: src.URL, Error: err.Error()}
@@ -391,8 +483,8 @@ func fetchURLByID(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if src.Type != "ical" {
-		http.Error(w, "Unsupported type, only 'ical' is supported", http.StatusBadRequest)
+	if !validFetchType(src.Type) {
+		http.Error(w, "Unsupported type; use 'ical' or 'folkdance-json'", http.StatusBadRequest)
 		return
 	}
 

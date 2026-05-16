@@ -306,6 +306,8 @@ func migrateDB() {
 	db.Exec("ALTER TABLE tokens ADD COLUMN last_seen_at DATETIME")
 	db.Exec("ALTER TABLE events ADD COLUMN url TEXT")
 	db.Exec("CREATE INDEX IF NOT EXISTS idx_events_url ON events(url) WHERE url IS NOT NULL")
+	db.Exec("ALTER TABLE events ADD COLUMN source_last_modified INTEGER")
+	db.Exec("ALTER TABLE events ADD COLUMN is_cancelled INTEGER DEFAULT 0")
 	db.Exec("ALTER TABLE users ADD COLUMN last_magic_sent_at DATETIME")
 	db.Exec(`CREATE TABLE IF NOT EXISTS magic_login_tokens (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
