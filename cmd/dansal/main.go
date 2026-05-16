@@ -400,6 +400,19 @@ func createTables() error {
 		FOREIGN KEY (organization_id) REFERENCES organizations(id) ON DELETE CASCADE,
 		FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 	);
+	CREATE TABLE IF NOT EXISTS invite_links (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		token TEXT UNIQUE NOT NULL,
+		created_by INTEGER NOT NULL,
+		role TEXT NOT NULL DEFAULT 'user',
+		org_id INTEGER,
+		expires_at DATETIME NOT NULL,
+		used_at DATETIME,
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE CASCADE,
+		FOREIGN KEY (org_id) REFERENCES organizations(id) ON DELETE SET NULL
+	);
+	CREATE INDEX IF NOT EXISTS idx_invite_links_token ON invite_links(token);
 	CREATE INDEX IF NOT EXISTS idx_events_published_start ON events(is_published, start_time);
 	CREATE INDEX IF NOT EXISTS idx_events_title_location  ON events(title, location_id);
 	CREATE INDEX IF NOT EXISTS idx_events_location_id     ON events(location_id);
@@ -572,6 +585,14 @@ func main() {
 	apiKeyRoutes.HandleFunc("", listAPIKeys).Methods("GET")
 	apiKeyRoutes.HandleFunc("", createAPIKey).Methods("POST")
 	apiKeyRoutes.HandleFunc("/{id}", deleteAPIKey).Methods("DELETE")
+
+	// Invite endpoints
+	router.HandleFunc("/api/v1/invites/{token}", useInvite).Methods("POST") // public
+	inviteRoutes := router.PathPrefix("/api/v1/invites").Subrouter()
+	inviteRoutes.Use(TokenMiddleware)
+	inviteRoutes.HandleFunc("", listInvites).Methods("GET")
+	inviteRoutes.HandleFunc("", createInvite).Methods("POST")
+	inviteRoutes.HandleFunc("/{token}", revokeInvite).Methods("DELETE")
 
 	// Session endpoints (protected)
 	sessionRoutes := router.PathPrefix("/api/v1/sessions").Subrouter()

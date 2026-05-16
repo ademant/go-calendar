@@ -41,6 +41,7 @@ type request struct {
 	Path         string `json:"path,omitempty"`
 	Since        string `json:"since,omitempty"`
 	SessionID       int    `json:"session_id,omitempty"`
+	InviteToken     string `json:"invite_token,omitempty"`
 	SMTPHost        string `json:"smtp_host,omitempty"`
 	SMTPPort        int    `json:"smtp_port,omitempty"`
 	SMTPUsername    string `json:"smtp_username,omitempty"`
@@ -141,6 +142,10 @@ func main() {
 		cmdSetPassword(rest)
 	case "set-role":
 		cmdSetRole(rest)
+	case "list-invites":
+		cmdListInvites(rest)
+	case "revoke-invite":
+		cmdRevokeInvite(rest)
 	case "list-sessions":
 		cmdListSessions(rest)
 	case "revoke-session":
@@ -198,6 +203,10 @@ User management:
   set-role     --username STR --role STR             Change a user's role
   enable-user  --username STR                        Re-enable a disabled user
   disable-user --username STR                        Disable a user account
+
+Invite links:
+  list-invites   [--username STR]                    List invite links (all, or by creator)
+  revoke-invite  --token STR                         Revoke an unused invite link
 
 Session management:
   list-sessions  --username STR                      List active sessions for a user
@@ -267,6 +276,20 @@ Change the role of a user account.
 Flags:
   --username  Username of the target account (required)
   --role      New role: admin, user, publisher, viewer (required)`,
+
+	"list-invites": `Usage: dansal_admin list-invites [--username STR]
+
+List invite links. Without --username all links are shown.
+
+Flags:
+  --username  Filter by creator username (optional)`,
+
+	"revoke-invite": `Usage: dansal_admin revoke-invite --token STR
+
+Revoke an unused invite link.
+
+Flags:
+  --token  Invite token (required)`,
 
 	"list-sessions": `Usage: dansal_admin list-sessions --username STR
 
@@ -774,6 +797,63 @@ func cmdPasswordRestore(args []string) {
 	}
 	json.Unmarshal(resp.Data, &result)
 	fmt.Printf("restored: config=%v db=%v images=%d\n", result.Config, result.DB, result.Images)
+}
+
+type invite struct {
+	ID        int    `json:"id"`
+	Token     string `json:"token"`
+	Role      string `json:"role"`
+	OrgID     *int   `json:"org_id"`
+	ExpiresAt string `json:"expires_at"`
+	UsedAt    string `json:"used_at"`
+	CreatedAt string `json:"created_at"`
+}
+
+func cmdListInvites(args []string) {
+	fs := flag.NewFlagSet("list-invites", flag.ExitOnError)
+	fs.Usage = func() { fmt.Println(commandHelp["list-invites"]) }
+	username := fs.String("username", "", "filter by creator username")
+	fs.Parse(args)
+
+	resp := send(socketPath, request{Cmd: "list-invites", Username: *username})
+	if !resp.OK {
+		die("%s", resp.Error)
+	}
+	var links []invite
+	json.Unmarshal(resp.Data, &links)
+	if len(links) == 0 {
+		fmt.Println("no invite links found")
+		return
+	}
+	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+	fmt.Fprintln(w, "ID\tROLE\tORG_ID\tEXPIRES\tUSED\tTOKEN")
+	for _, l := range links {
+		orgID := "-"
+		if l.OrgID != nil {
+			orgID = fmt.Sprintf("%d", *l.OrgID)
+		}
+		used := "-"
+		if l.UsedAt != "" {
+			used = l.UsedAt
+		}
+		fmt.Fprintf(w, "%d\t%s\t%s\t%s\t%s\t%s\n", l.ID, l.Role, orgID, l.ExpiresAt, used, l.Token)
+	}
+	w.Flush()
+}
+
+func cmdRevokeInvite(args []string) {
+	fs := flag.NewFlagSet("revoke-invite", flag.ExitOnError)
+	fs.Usage = func() { fmt.Println(commandHelp["revoke-invite"]) }
+	token := fs.String("token", "", "invite token")
+	fs.Parse(args)
+	if *token == "" {
+		die("--token is required")
+	}
+	resp := send(socketPath, request{Cmd: "revoke-invite", InviteToken: *token})
+	if !resp.OK {
+		die("%s", resp.Error)
+	}
+	fmt.Println("invite link revoked")
 }
 
 func cmdListSessions(args []string) {

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"database/sql"
 	"encoding/json"
 	"log"
 	"net"
@@ -17,6 +18,7 @@ type adminRequest struct {
 	Path         string `json:"path,omitempty"`
 	Since        string `json:"since,omitempty"`
 	SessionID       int    `json:"session_id,omitempty"`
+	InviteToken     string `json:"invite_token,omitempty"`
 	SMTPHost        string `json:"smtp_host,omitempty"`
 	SMTPPort        int    `json:"smtp_port,omitempty"`
 	SMTPUsername    string `json:"smtp_username,omitempty"`
@@ -99,6 +101,10 @@ func dispatchAdminCmd(req adminRequest) adminResponse {
 		return adminIncrementalBackup(req)
 	case "restore":
 		return adminRestore(req)
+	case "list-invites":
+		return adminListInvites(req)
+	case "revoke-invite":
+		return adminRevokeInvite(req)
 	case "list-sessions":
 		return adminListSessions(req)
 	case "revoke-session":
@@ -137,6 +143,58 @@ func adminListUsers() adminResponse {
 		users = append(users, u)
 	}
 	return adminResponse{OK: true, Data: users}
+}
+
+func adminListInvites(req adminRequest) adminResponse {
+	var rows *sql.Rows
+	var err error
+	if req.Username == "" {
+		rows, err = db.Query(
+			"SELECT id, token, role, org_id, expires_at, COALESCE(used_at,''), created_at FROM invite_links ORDER BY created_at DESC",
+		)
+	} else {
+		var userID int
+		if err := db.QueryRow("SELECT id FROM users WHERE username=?", req.Username).Scan(&userID); err != nil {
+			return adminResponse{OK: false, Error: "user not found"}
+		}
+		rows, err = db.Query(
+			"SELECT id, token, role, org_id, expires_at, COALESCE(used_at,''), created_at FROM invite_links WHERE created_by=? ORDER BY created_at DESC",
+			userID,
+		)
+	}
+	if err != nil {
+		return adminResponse{OK: false, Error: err.Error()}
+	}
+	defer rows.Close()
+	links := []InviteLink{}
+	for rows.Next() {
+		var l InviteLink
+		var orgID sql.NullInt64
+		if err := rows.Scan(&l.ID, &l.Token, &l.Role, &orgID, &l.ExpiresAt, &l.UsedAt, &l.CreatedAt); err != nil {
+			return adminResponse{OK: false, Error: err.Error()}
+		}
+		if orgID.Valid {
+			id := int(orgID.Int64)
+			l.OrgID = &id
+		}
+		links = append(links, l)
+	}
+	return adminResponse{OK: true, Data: links}
+}
+
+func adminRevokeInvite(req adminRequest) adminResponse {
+	if req.InviteToken == "" {
+		return adminResponse{OK: false, Error: "invite_token is required"}
+	}
+	var usedAt string
+	if err := db.QueryRow("SELECT COALESCE(used_at,'') FROM invite_links WHERE token=?", req.InviteToken).Scan(&usedAt); err != nil {
+		return adminResponse{OK: false, Error: "invite link not found"}
+	}
+	if usedAt != "" {
+		return adminResponse{OK: false, Error: "invite link has already been used"}
+	}
+	db.Exec("DELETE FROM invite_links WHERE token=?", req.InviteToken)
+	return adminResponse{OK: true}
 }
 
 func adminListSessions(req adminRequest) adminResponse {

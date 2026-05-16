@@ -28,6 +28,7 @@ type ServerConfig struct {
 	LoginTarpitSecs         int      `yaml:"login_tarpit_secs"`
 	LoginMaxFailures        int      `yaml:"login_max_failures"`
 	LoginFailureWindowSecs  int      `yaml:"login_failure_window_secs"`
+	InviteExpiryHours       int      `yaml:"invite_expiry_hours"`
 	ReservedUsernames    []string `yaml:"reserved_usernames"`
 	AllowedOrigins       []string `yaml:"allowed_origins"`
 	MetricsPort          int      `yaml:"metrics_port"`
@@ -116,6 +117,9 @@ func applyDefaults(cfg *Config) {
 	}
 	if cfg.Server.LoginFailureWindowSecs == 0 {
 		cfg.Server.LoginFailureWindowSecs = 600
+	}
+	if cfg.Server.InviteExpiryHours == 0 {
+		cfg.Server.InviteExpiryHours = 48
 	}
 	if len(cfg.Server.ReservedUsernames) == 0 {
 		cfg.Server.ReservedUsernames = []string{
