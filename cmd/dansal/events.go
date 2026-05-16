@@ -193,9 +193,15 @@ func fetchEventByID(q querier, id int) (Event, error) {
 
 // ── iCal helpers ───────────────────────────────────────────────────────────
 
-// attachURL returns the first ATTACH value that looks like an http(s) URL,
-// or an empty string when no such attachment is present.
+// attachURL returns the canonical event URL from a vevent.
+// The iCal URL: property is preferred; ATTACH http(s) values are the fallback.
 func attachURL(event *ics.VEvent) string {
+	if p := event.GetProperty(ics.ComponentPropertyUrl); p != nil {
+		v := strings.TrimSpace(p.Value)
+		if strings.HasPrefix(v, "http://") || strings.HasPrefix(v, "https://") {
+			return v
+		}
+	}
 	for _, prop := range event.GetProperties(ics.ComponentPropertyAttach) {
 		if strings.HasPrefix(prop.Value, "http://") || strings.HasPrefix(prop.Value, "https://") {
 			return prop.Value
@@ -302,14 +308,13 @@ func urlVal(s string) interface{} {
 
 // insertEvent upserts an event. Returns (id, shortCode, created, error) where
 // created=false means an existing event was updated instead of inserted.
-// Deduplication order: UID exact match → title+location+time fuzzy match (±3 h).
-// The fuzzy fallback runs for both UID-less events and events whose UID is not yet
-// known to the DB, so that two feeds publishing the same event with different UIDs
-// converge to a single row.
+// Deduplication order: UID exact match → URL exact match → title+location+time fuzzy match (±3 h).
+// The URL and fuzzy tiers run whenever the previous tier misses, so two feeds that
+// publish the same event with different UIDs (or none) converge to a single row.
 func insertEvent(q querier, title, description string, startTime, endTime int64, locationID int64, hasBall, hasWorkshop bool, tags []string, isPublished bool, organizationID *int, uid, url, source string) (int, string, bool, error) {
 	var existingID int
 	var existingShortCode string
-	var lookupErr error
+	var lookupErr error = sql.ErrNoRows
 
 	if uid != "" {
 		lookupErr = q.QueryRow(
@@ -320,8 +325,18 @@ func insertEvent(q querier, title, description string, startTime, endTime int64,
 		}
 	}
 
-	// Fuzzy fallback: fires when uid is absent OR when the uid was not found.
-	if uid == "" || lookupErr == sql.ErrNoRows {
+	// URL tier: fires when uid is absent or not found.
+	if lookupErr == sql.ErrNoRows && url != "" {
+		lookupErr = q.QueryRow(
+			"SELECT id, short_code FROM events WHERE url = ?", url,
+		).Scan(&existingID, &existingShortCode)
+		if lookupErr != nil && lookupErr != sql.ErrNoRows {
+			return 0, "", false, lookupErr
+		}
+	}
+
+	// Fuzzy fallback: fires when both uid and url lookups missed.
+	if lookupErr == sql.ErrNoRows {
 		const threeHours = int64(3 * 60 * 60)
 		lookupErr = q.QueryRow(
 			"SELECT id, short_code FROM events WHERE title = ? AND location_id = ? AND ABS(start_time - ?) < ?",

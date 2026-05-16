@@ -305,6 +305,7 @@ func migrateDB() {
 	db.Exec("ALTER TABLE tokens ADD COLUMN fingerprint TEXT")
 	db.Exec("ALTER TABLE tokens ADD COLUMN last_seen_at DATETIME")
 	db.Exec("ALTER TABLE events ADD COLUMN url TEXT")
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_events_url ON events(url) WHERE url IS NOT NULL")
 	db.Exec("ALTER TABLE users ADD COLUMN last_magic_sent_at DATETIME")
 	db.Exec(`CREATE TABLE IF NOT EXISTS magic_login_tokens (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -456,6 +457,7 @@ func createTables() error {
 		FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 	);
 	CREATE INDEX IF NOT EXISTS idx_magic_login_tokens_token ON magic_login_tokens(token);
+	CREATE INDEX IF NOT EXISTS idx_events_url            ON events(url) WHERE url IS NOT NULL;
 	CREATE INDEX IF NOT EXISTS idx_events_published_start ON events(is_published, start_time);
 	CREATE INDEX IF NOT EXISTS idx_events_title_location  ON events(title, location_id);
 	CREATE INDEX IF NOT EXISTS idx_events_location_id     ON events(location_id);
