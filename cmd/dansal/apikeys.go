@@ -39,7 +39,7 @@ func generateAPIKey() (string, error) {
 // validateAPIKey checks an API key and returns the associated user.
 // Results are cached for up to credCacheTTL; the cache is invalidated on deletion.
 func validateAPIKey(key string) (int, string, error) {
-	if userID, role, ok := credentials.get(key); ok {
+	if userID, role, _, ok := credentials.get(key); ok {
 		return userID, role, nil
 	}
 
@@ -67,7 +67,7 @@ func validateAPIKey(key string) (int, string, error) {
 		}
 	}
 
-	credentials.set(key, userID, userRole, expTime) // expTime zero → TTL cap only
+	credentials.set(key, userID, userRole, 0, expTime) // tokenID 0 = API key, expTime zero → TTL cap only
 	return userID, userRole, nil
 }
 

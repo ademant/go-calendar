@@ -26,6 +26,26 @@ var loginRateLimiter *RateLimiter
 var connLimiter *ConnLimiter
 var configFilePath string
 
+var lastSeenMu sync.Mutex
+var lastSeenCache = make(map[string]time.Time)
+
+const lastSeenUpdateInterval = 60 * time.Second
+
+// updateLastSeen records the current time as last_seen_at for the token.
+// Writes are debounced to at most once per lastSeenUpdateInterval to keep
+// write pressure low on busy deployments.
+func updateLastSeen(token string) {
+	now := time.Now().UTC()
+	lastSeenMu.Lock()
+	if last, ok := lastSeenCache[token]; ok && now.Sub(last) < lastSeenUpdateInterval {
+		lastSeenMu.Unlock()
+		return
+	}
+	lastSeenCache[token] = now
+	lastSeenMu.Unlock()
+	go db.Exec("UPDATE tokens SET last_seen_at=? WHERE token=?", now.Format(time.RFC3339), token)
+}
+
 type ConnLimiter struct {
 	mu     sync.Mutex
 	active map[string]int
@@ -243,6 +263,19 @@ func startTokenCleanup() {
 			} else if n, _ := res.RowsAffected(); n > 0 {
 				log.Printf("token cleanup: removed %d expired token(s)", n)
 			}
+			// Sweep lastSeenCache: remove entries older than the maximum token lifetime.
+			expirationHours := 24
+			if config != nil && config.Server.TokenExpirationHours > 0 {
+				expirationHours = config.Server.TokenExpirationHours
+			}
+			cutoff := time.Now().Add(-time.Duration(expirationHours+1) * time.Hour)
+			lastSeenMu.Lock()
+			for k, t := range lastSeenCache {
+				if t.Before(cutoff) {
+					delete(lastSeenCache, k)
+				}
+			}
+			lastSeenMu.Unlock()
 		}
 	}()
 }
@@ -265,6 +298,10 @@ func migrateDB() {
 	db.Exec("ALTER TABLE users ADD COLUMN disabled INTEGER DEFAULT 0")
 	db.Exec("ALTER TABLE users ADD COLUMN failed_login_count INTEGER DEFAULT 0")
 	db.Exec("ALTER TABLE users ADD COLUMN failed_login_since DATETIME")
+	db.Exec("ALTER TABLE tokens ADD COLUMN user_agent TEXT")
+	db.Exec("ALTER TABLE tokens ADD COLUMN ip TEXT")
+	db.Exec("ALTER TABLE tokens ADD COLUMN fingerprint TEXT")
+	db.Exec("ALTER TABLE tokens ADD COLUMN last_seen_at DATETIME")
 }
 
 func createTables() error {
@@ -307,6 +344,10 @@ func createTables() error {
 		user_id INTEGER NOT NULL,
 		token TEXT UNIQUE NOT NULL,
 		expires_at DATETIME NOT NULL,
+		user_agent TEXT,
+		ip TEXT,
+		fingerprint TEXT,
+		last_seen_at DATETIME,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 	);
@@ -531,6 +572,12 @@ func main() {
 	apiKeyRoutes.HandleFunc("", listAPIKeys).Methods("GET")
 	apiKeyRoutes.HandleFunc("", createAPIKey).Methods("POST")
 	apiKeyRoutes.HandleFunc("/{id}", deleteAPIKey).Methods("DELETE")
+
+	// Session endpoints (protected)
+	sessionRoutes := router.PathPrefix("/api/v1/sessions").Subrouter()
+	sessionRoutes.Use(TokenMiddleware)
+	sessionRoutes.HandleFunc("", getSessions).Methods("GET")
+	sessionRoutes.HandleFunc("/{id}", deleteSession).Methods("DELETE")
 
 	adminLn := startAdminSocket(config.Server.AdminSocket)
 	startMetricsServer()

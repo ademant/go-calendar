@@ -16,6 +16,7 @@ type adminRequest struct {
 	OrgID        int    `json:"org_id,omitempty"`
 	Path         string `json:"path,omitempty"`
 	Since        string `json:"since,omitempty"`
+	SessionID       int    `json:"session_id,omitempty"`
 	SMTPHost        string `json:"smtp_host,omitempty"`
 	SMTPPort        int    `json:"smtp_port,omitempty"`
 	SMTPUsername    string `json:"smtp_username,omitempty"`
@@ -98,6 +99,10 @@ func dispatchAdminCmd(req adminRequest) adminResponse {
 		return adminIncrementalBackup(req)
 	case "restore":
 		return adminRestore(req)
+	case "list-sessions":
+		return adminListSessions(req)
+	case "revoke-session":
+		return adminRevokeSession(req)
 	case "enable-user":
 		return adminEnableUser(req)
 	case "disable-user":
@@ -132,6 +137,54 @@ func adminListUsers() adminResponse {
 		users = append(users, u)
 	}
 	return adminResponse{OK: true, Data: users}
+}
+
+func adminListSessions(req adminRequest) adminResponse {
+	if req.Username == "" {
+		return adminResponse{OK: false, Error: "username is required"}
+	}
+	var userID int
+	if err := db.QueryRow("SELECT id FROM users WHERE username=?", req.Username).Scan(&userID); err != nil {
+		return adminResponse{OK: false, Error: "user not found"}
+	}
+	rows, err := db.Query(`
+		SELECT id,
+		       COALESCE(user_agent,''),
+		       COALESCE(ip,''),
+		       CASE WHEN fingerprint IS NOT NULL AND fingerprint != '' THEN 1 ELSE 0 END,
+		       created_at,
+		       COALESCE(last_seen_at,''),
+		       expires_at
+		FROM tokens WHERE user_id=?
+		ORDER BY COALESCE(last_seen_at, created_at) DESC`, userID)
+	if err != nil {
+		return adminResponse{OK: false, Error: err.Error()}
+	}
+	defer rows.Close()
+	sessions := []Session{}
+	for rows.Next() {
+		var s Session
+		var hasFP int
+		if err := rows.Scan(&s.ID, &s.UserAgent, &s.IP, &hasFP, &s.CreatedAt, &s.LastSeenAt, &s.ExpiresAt); err != nil {
+			return adminResponse{OK: false, Error: err.Error()}
+		}
+		s.Fingerprint = hasFP == 1
+		sessions = append(sessions, s)
+	}
+	return adminResponse{OK: true, Data: sessions}
+}
+
+func adminRevokeSession(req adminRequest) adminResponse {
+	if req.SessionID == 0 {
+		return adminResponse{OK: false, Error: "session_id is required"}
+	}
+	var token string
+	if err := db.QueryRow("SELECT token FROM tokens WHERE id=?", req.SessionID).Scan(&token); err != nil {
+		return adminResponse{OK: false, Error: "session not found"}
+	}
+	db.Exec("DELETE FROM tokens WHERE id=?", req.SessionID)
+	credentials.invalidate(token)
+	return adminResponse{OK: true}
 }
 
 func adminEnableUser(req adminRequest) adminResponse {

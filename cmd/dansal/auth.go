@@ -23,8 +23,9 @@ type Token struct {
 }
 
 type LoginRequest struct {
-	Username string `json:"username"`
-	Password string `json:"password"`
+	Username    string `json:"username"`
+	Password    string `json:"password"`
+	Fingerprint string `json:"fingerprint,omitempty"`
 }
 
 type LoginResponse struct {
@@ -85,24 +86,27 @@ func generateToken() (string, error) {
 	return base64.URLEncoding.EncodeToString(b), nil
 }
 
-// createTokenInDB stores the token in the database
-func createTokenInDB(userID int) (string, time.Time, error) {
+// createTokenInDB stores the token with session metadata in the database.
+func createTokenInDB(userID int, userAgent, ip, fingerprint string) (string, time.Time, error) {
 	token, err := generateToken()
 	if err != nil {
 		return "", time.Time{}, err
 	}
 
-	// Use configured token expiration time
-	expirationHours := 24 // default
+	expirationHours := 24
 	if config != nil && config.Server.TokenExpirationHours > 0 {
 		expirationHours = config.Server.TokenExpirationHours
 	}
 	expiresAt := time.Now().UTC().Add(time.Duration(expirationHours) * time.Hour)
 	expiresAtStr := expiresAt.Format(time.RFC3339Nano)
 
+	var fpVal interface{}
+	if fingerprint != "" {
+		fpVal = fingerprint
+	}
 	_, err = db.Exec(
-		"INSERT INTO tokens (user_id, token, expires_at) VALUES (?, ?, ?)",
-		userID, token, expiresAtStr,
+		"INSERT INTO tokens (user_id, token, expires_at, user_agent, ip, fingerprint) VALUES (?, ?, ?, ?, ?, ?)",
+		userID, token, expiresAtStr, userAgent, ip, fpVal,
 	)
 	if err != nil {
 		return "", time.Time{}, err
@@ -113,38 +117,38 @@ func createTokenInDB(userID int) (string, time.Time, error) {
 
 // validateToken checks if a token is valid and not expired.
 // Results are cached for up to credCacheTTL to avoid a DB round-trip per request.
-func validateToken(token string) (int, string, error) {
-	if userID, role, ok := credentials.get(token); ok {
-		return userID, role, nil
+// Returns userID, role, tokenID (DB row id of the token).
+func validateToken(token string) (int, string, int, error) {
+	if userID, role, tokenID, ok := credentials.get(token); ok {
+		return userID, role, tokenID, nil
 	}
 
-	var userID int
-	var userRole string
-	var expiresAt string
+	var userID, tokenID int
+	var userRole, expiresAt string
 
 	err := db.QueryRow(
-		"SELECT users.id, users.role, tokens.expires_at FROM tokens JOIN users ON tokens.user_id = users.id WHERE tokens.token = ? AND users.disabled = 0",
+		"SELECT users.id, users.role, tokens.expires_at, tokens.id FROM tokens JOIN users ON tokens.user_id = users.id WHERE tokens.token = ? AND users.disabled = 0",
 		token,
-	).Scan(&userID, &userRole, &expiresAt)
+	).Scan(&userID, &userRole, &expiresAt, &tokenID)
 
 	if err == sql.ErrNoRows {
-		return 0, "", fmt.Errorf("invalid token")
+		return 0, "", 0, fmt.Errorf("invalid token")
 	}
 	if err != nil {
-		return 0, "", err
+		return 0, "", 0, err
 	}
 
 	expTime, err := parseTokenExpiration(expiresAt)
 	if err != nil {
-		return 0, "", fmt.Errorf("invalid token expiration format")
+		return 0, "", 0, fmt.Errorf("invalid token expiration format")
 	}
 
 	if time.Now().After(expTime) {
-		return 0, "", fmt.Errorf("token expired")
+		return 0, "", 0, fmt.Errorf("token expired")
 	}
 
-	credentials.set(token, userID, userRole, expTime)
-	return userID, userRole, nil
+	credentials.set(token, userID, userRole, tokenID, expTime)
+	return userID, userRole, tokenID, nil
 }
 
 func parseTokenExpiration(value string) (time.Time, error) {
@@ -313,8 +317,8 @@ func login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Generate token
-	token, expiresAt, err := createTokenInDB(user.ID)
+	// Generate token / session
+	token, expiresAt, err := createTokenInDB(user.ID, r.UserAgent(), clientIP, req.Fingerprint)
 	if err != nil {
 		log.Printf("Error creating token: %v\n", err)
 		w.WriteHeader(http.StatusInternalServerError)
@@ -371,15 +375,19 @@ func TokenMiddleware(next http.Handler) http.Handler {
 		token := parts[1]
 
 		// Validate token, fall back to API key
-		userID, userRole, err := validateToken(token)
+		userID, userRole, tokenID, err := validateToken(token)
 		if err != nil {
-			userID, userRole, err = validateAPIKey(token)
-			if err != nil {
+			var apiErr error
+			userID, userRole, apiErr = validateAPIKey(token)
+			if apiErr != nil {
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(http.StatusUnauthorized)
 				json.NewEncoder(w).Encode(TokenError{Error: "Invalid or expired credentials"})
 				return
 			}
+		} else {
+			updateLastSeen(token)
+			r.Header.Set("X-Session-ID", fmt.Sprintf("%d", tokenID))
 		}
 
 		// Store userID and role in request header for later use

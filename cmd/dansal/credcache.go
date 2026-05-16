@@ -12,6 +12,7 @@ const credCacheTTL = 5 * time.Minute
 type credEntry struct {
 	userID    int
 	userRole  string
+	tokenID   int // 0 for API keys
 	expiresAt time.Time
 }
 
@@ -30,25 +31,26 @@ func newCredCache() *credCache {
 var credentials = newCredCache()
 
 // get returns a cached entry if it exists and has not expired.
-func (c *credCache) get(key string) (userID int, role string, ok bool) {
+func (c *credCache) get(key string) (userID int, role string, tokenID int, ok bool) {
 	c.mu.RLock()
 	e, found := c.entries[key]
 	c.mu.RUnlock()
 	if !found || time.Now().After(e.expiresAt) {
-		return 0, "", false
+		return 0, "", 0, false
 	}
-	return e.userID, e.userRole, true
+	return e.userID, e.userRole, e.tokenID, true
 }
 
 // set stores a credential. tokenExpiry is the real token expiry from the DB;
 // pass time.Time{} for API keys (no natural expiry) to use the TTL cap only.
-func (c *credCache) set(key string, userID int, role string, tokenExpiry time.Time) {
+// tokenID should be 0 for API keys.
+func (c *credCache) set(key string, userID int, role string, tokenID int, tokenExpiry time.Time) {
 	exp := time.Now().Add(credCacheTTL)
 	if !tokenExpiry.IsZero() && tokenExpiry.Before(exp) {
 		exp = tokenExpiry
 	}
 	c.mu.Lock()
-	c.entries[key] = credEntry{userID: userID, userRole: role, expiresAt: exp}
+	c.entries[key] = credEntry{userID: userID, userRole: role, tokenID: tokenID, expiresAt: exp}
 	c.mu.Unlock()
 }
 

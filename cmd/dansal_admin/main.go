@@ -40,6 +40,7 @@ type request struct {
 	OrgID        int    `json:"org_id,omitempty"`
 	Path         string `json:"path,omitempty"`
 	Since        string `json:"since,omitempty"`
+	SessionID       int    `json:"session_id,omitempty"`
 	SMTPHost        string `json:"smtp_host,omitempty"`
 	SMTPPort        int    `json:"smtp_port,omitempty"`
 	SMTPUsername    string `json:"smtp_username,omitempty"`
@@ -54,6 +55,16 @@ type response struct {
 	OK    bool            `json:"ok"`
 	Error string          `json:"error,omitempty"`
 	Data  json.RawMessage `json:"data,omitempty"`
+}
+
+type session struct {
+	ID          int    `json:"id"`
+	UserAgent   string `json:"user_agent"`
+	IP          string `json:"ip"`
+	Fingerprint bool   `json:"fingerprint"`
+	CreatedAt   string `json:"created_at"`
+	LastSeenAt  string `json:"last_seen_at"`
+	ExpiresAt   string `json:"expires_at"`
 }
 
 type user struct {
@@ -130,6 +141,10 @@ func main() {
 		cmdSetPassword(rest)
 	case "set-role":
 		cmdSetRole(rest)
+	case "list-sessions":
+		cmdListSessions(rest)
+	case "revoke-session":
+		cmdRevokeSession(rest)
 	case "enable-user":
 		cmdEnableUser(rest)
 	case "disable-user":
@@ -183,6 +198,10 @@ User management:
   set-role     --username STR --role STR             Change a user's role
   enable-user  --username STR                        Re-enable a disabled user
   disable-user --username STR                        Disable a user account
+
+Session management:
+  list-sessions  --username STR                      List active sessions for a user
+  revoke-session --id INT                            Revoke a specific session
 
 Organization management:
   list-orgs                                          List all organizations
@@ -248,6 +267,20 @@ Change the role of a user account.
 Flags:
   --username  Username of the target account (required)
   --role      New role: admin, user, publisher, viewer (required)`,
+
+	"list-sessions": `Usage: dansal_admin list-sessions --username STR
+
+List all sessions (active and expired) for a user.
+
+Flags:
+  --username  Username (required)`,
+
+	"revoke-session": `Usage: dansal_admin revoke-session --id INT
+
+Revoke a session by its numeric ID. The session token is invalidated immediately.
+
+Flags:
+  --id  Session ID (required)`,
 
 	"enable-user": `Usage: dansal_admin enable-user --username STR
 
@@ -741,6 +774,48 @@ func cmdPasswordRestore(args []string) {
 	}
 	json.Unmarshal(resp.Data, &result)
 	fmt.Printf("restored: config=%v db=%v images=%d\n", result.Config, result.DB, result.Images)
+}
+
+func cmdListSessions(args []string) {
+	fs := flag.NewFlagSet("list-sessions", flag.ExitOnError)
+	fs.Usage = func() { fmt.Println(commandHelp["list-sessions"]) }
+	username := fs.String("username", "", "username")
+	fs.Parse(args)
+	if *username == "" {
+		die("--username is required")
+	}
+	resp := send(socketPath, request{Cmd: "list-sessions", Username: *username})
+	if !resp.OK {
+		die("%s", resp.Error)
+	}
+	var sessions []session
+	json.Unmarshal(resp.Data, &sessions)
+	if len(sessions) == 0 {
+		fmt.Println("no sessions found")
+		return
+	}
+	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+	fmt.Fprintln(w, "ID\tIP\tFINGERPRINT\tLAST_SEEN\tEXPIRES\tUSER_AGENT")
+	for _, s := range sessions {
+		fmt.Fprintf(w, "%d\t%s\t%v\t%s\t%s\t%s\n",
+			s.ID, s.IP, s.Fingerprint, s.LastSeenAt, s.ExpiresAt, s.UserAgent)
+	}
+	w.Flush()
+}
+
+func cmdRevokeSession(args []string) {
+	fs := flag.NewFlagSet("revoke-session", flag.ExitOnError)
+	fs.Usage = func() { fmt.Println(commandHelp["revoke-session"]) }
+	id := fs.Int("id", 0, "session ID")
+	fs.Parse(args)
+	if *id == 0 {
+		die("--id is required")
+	}
+	resp := send(socketPath, request{Cmd: "revoke-session", SessionID: *id})
+	if !resp.OK {
+		die("%s", resp.Error)
+	}
+	fmt.Printf("session %d revoked\n", *id)
 }
 
 func cmdEnableUser(args []string) {
