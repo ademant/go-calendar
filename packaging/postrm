@@ -1,0 +1,22 @@
+#!/bin/sh
+set -e
+
+case "$1" in
+    remove)
+        systemctl disable dansal.service 2>/dev/null || true
+        systemctl daemon-reload || true
+        ;;
+    purge)
+        systemctl disable dansal.service 2>/dev/null || true
+        systemctl daemon-reload || true
+        # Remove runtime state and config only on purge.
+        rm -rf /var/lib/dansal
+        rm -rf /etc/dansal
+        if getent passwd dansal >/dev/null; then
+            deluser --system dansal || true
+        fi
+        if getent group dansal >/dev/null; then
+            delgroup --system dansal 2>/dev/null || true
+        fi
+        ;;
+esac

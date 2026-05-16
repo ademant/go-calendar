@@ -2,6 +2,7 @@
 /dansal
 /web
 /dansal_admin
+*.deb
 
 # Admin socket
 *.sock

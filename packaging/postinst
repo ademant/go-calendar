@@ -1,0 +1,27 @@
+#!/bin/sh
+set -e
+
+case "$1" in
+    configure)
+        # Ensure state directories exist with correct ownership.
+        # (systemd StateDirectory= handles this at runtime, but we need
+        #  the images subdir too which systemd doesn't create.)
+        install -d -m 750 -o dansal -g dansal /var/lib/dansal
+        install -d -m 750 -o dansal -g dansal /var/lib/dansal/images
+
+        # Secure the config file installed by dpkg.
+        chown root:dansal /etc/dansal/config.yaml
+        chmod 640         /etc/dansal/config.yaml
+
+        systemctl daemon-reload
+
+        if [ -z "$2" ]; then
+            # Fresh install — enable and start.
+            systemctl enable dansal.service
+            systemctl start  dansal.service || true
+        else
+            # Upgrade — restart to pick up the new binary.
+            systemctl try-restart dansal.service || true
+        fi
+        ;;
+esac

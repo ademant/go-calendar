@@ -1,0 +1,14 @@
+#!/bin/sh
+set -e
+
+case "$1" in
+    install|upgrade)
+        if ! getent passwd dansal >/dev/null; then
+            adduser --system --group --no-create-home \
+                    --home /var/lib/dansal \
+                    --shell /usr/sbin/nologin \
+                    --gecos "Dansal calendar server" \
+                    dansal
+        fi
+        ;;
+esac

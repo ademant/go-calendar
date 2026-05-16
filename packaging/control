@@ -1,0 +1,13 @@
+Package: dansal
+Version: VERSION_PLACEHOLDER
+Architecture: amd64
+Maintainer: ademant <ademant@users.noreply.github.com>
+Depends: adduser
+Recommends: fail2ban
+Description: Dance event calendar server
+ Dansal is a REST API server for managing folk and balfolk dance events.
+ It supports iCal feed import (with RRULE expansion), a JSON feed type for
+ folkdance.page, per-event organisations, image attachments, magic-link
+ login, and Prometheus metrics.
+Section: web
+Priority: optional

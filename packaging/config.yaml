@@ -1,0 +1,41 @@
+server:
+  port: 8000
+  token_expiration_hours: 24
+  admin_allowed_ips:
+    - "127.0.0.1"
+    - "::1"
+  rate_limit: 100
+  login_rate_limit: 5
+  login_tarpit_secs: 10
+  reserved_usernames:
+    - admin
+    - administrator
+    - root
+    - superuser
+    - sysadmin
+    - system
+    - su
+  max_body_bytes: 1048576  # 1 MiB
+  read_timeout_secs: 10
+  write_timeout_secs: 30
+  idle_timeout_secs: 60
+  max_conns_per_ip: 10
+  db_path: /var/lib/dansal/calendar.db
+  images_dir: /var/lib/dansal/images
+  admin_socket: /run/dansal/dansal.sock
+  image_x_max: 1024
+  image_y_max: 1024
+  base_url: ""       # Set to your public URL, e.g. https://dansal.example.com
+  metrics_port: 9090
+  metrics_allowed_ips:
+    - "127.0.0.1"
+    - "::1"
+
+smtp:
+  host: ""
+  port: 587
+  username: ""
+  password: ""
+  from: ""
+  from_name: "Dansal"
+  tls: starttls
