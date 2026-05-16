@@ -4,8 +4,8 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"text/tabwriter"
 	"os"
+	"text/tabwriter"
 )
 
 func cmdSMTPShow(_ []string) {
@@ -16,7 +16,7 @@ func cmdSMTPShow(_ []string) {
 	var cfg map[string]interface{}
 	json.Unmarshal(resp.Data, &cfg)
 	tw := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-	for _, k := range []string{"host", "port", "username", "from", "from_name", "tls", "password_set"} {
+	for _, k := range []string{"host", "port", "username", "from", "from_name", "tls", "timeout_secs", "password_set"} {
 		fmt.Fprintf(tw, "%s\t%v\n", k, cfg[k])
 	}
 	tw.Flush()
@@ -31,20 +31,22 @@ func cmdSMTPSet(args []string) {
 	from := fs.String("from", "", "envelope From address")
 	fromName := fs.String("from-name", "", "display name in From header")
 	tlsMode := fs.String("tls", "", "TLS mode: starttls, tls, none")
+	timeout := fs.Int("timeout", 0, "dial and send timeout in seconds (default 30)")
 	fs.Parse(args)
 
-	if *host == "" && *port == 0 && *username == "" && *from == "" && *fromName == "" && *tlsMode == "" {
+	if *host == "" && *port == 0 && *username == "" && *from == "" && *fromName == "" && *tlsMode == "" && *timeout == 0 {
 		die("at least one flag is required (see smtp-set --help)")
 	}
 
 	resp := send(socketPath, request{
-		Cmd:          "smtp-set",
-		SMTPHost:     *host,
-		SMTPPort:     *port,
-		SMTPUsername: *username,
-		SMTPFrom:     *from,
-		SMTPFromName: *fromName,
-		SMTPTLS:      *tlsMode,
+		Cmd:             "smtp-set",
+		SMTPHost:        *host,
+		SMTPPort:        *port,
+		SMTPUsername:    *username,
+		SMTPFrom:        *from,
+		SMTPFromName:    *fromName,
+		SMTPTLS:         *tlsMode,
+		SMTPTimeoutSecs: *timeout,
 	})
 	if !resp.OK {
 		die("%s", resp.Error)
@@ -85,9 +87,42 @@ func cmdSMTPTest(args []string) {
 		die("--to is required")
 	}
 
+	// Fetch and display current config so the user knows what is being tested.
+	cfgResp := send(socketPath, request{Cmd: "smtp-get"})
+	if !cfgResp.OK {
+		die("could not read SMTP config: %s", cfgResp.Error)
+	}
+	var cfg map[string]interface{}
+	json.Unmarshal(cfgResp.Data, &cfg)
+
+	port := cfg["port"]
+	if port == nil || port == float64(0) {
+		port = 587
+	}
+	tls := cfg["tls"]
+	if tls == nil || tls == "" {
+		tls = "starttls"
+	}
+	timeout := cfg["timeout_secs"]
+	if timeout == nil || timeout == float64(0) {
+		timeout = 30
+	}
+
+	fmt.Println("SMTP configuration:")
+	tw := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+	fmt.Fprintf(tw, "  host\t%v:%v\n", cfg["host"], port)
+	fmt.Fprintf(tw, "  tls\t%v\n", tls)
+	fmt.Fprintf(tw, "  username\t%v\n", cfg["username"])
+	fmt.Fprintf(tw, "  from\t%v\n", cfg["from"])
+	fmt.Fprintf(tw, "  timeout\t%vs\n", timeout)
+	fmt.Fprintf(tw, "  password_set\t%v\n", cfg["password_set"])
+	tw.Flush()
+	fmt.Printf("\nSending test email to %s...\n", *to)
+
 	resp := send(socketPath, request{Cmd: "smtp-test", SMTPTo: *to})
 	if !resp.OK {
-		die("%s", resp.Error)
+		fmt.Fprintf(os.Stderr, "error: %s\n", resp.Error)
+		os.Exit(1)
 	}
-	fmt.Printf("test email sent to %s\n", *to)
+	fmt.Println("ok")
 }

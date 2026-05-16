@@ -40,7 +40,8 @@ type SMTPConfig struct {
 	PasswordKey string `yaml:"password_key,omitempty"`
 	From        string `yaml:"from,omitempty"`
 	FromName    string `yaml:"from_name,omitempty"`
-	TLS         string `yaml:"tls,omitempty"` // starttls | tls | none
+	TLS         string `yaml:"tls,omitempty"`          // starttls | tls | none
+	TimeoutSecs int    `yaml:"timeout_secs,omitempty"` // dial+send timeout; default 30
 }
 
 type Config struct {

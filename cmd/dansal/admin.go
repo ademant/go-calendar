@@ -16,13 +16,14 @@ type adminRequest struct {
 	OrgID        int    `json:"org_id,omitempty"`
 	Path         string `json:"path,omitempty"`
 	Since        string `json:"since,omitempty"`
-	SMTPHost     string `json:"smtp_host,omitempty"`
-	SMTPPort     int    `json:"smtp_port,omitempty"`
-	SMTPUsername string `json:"smtp_username,omitempty"`
-	SMTPFrom     string `json:"smtp_from,omitempty"`
-	SMTPFromName string `json:"smtp_from_name,omitempty"`
-	SMTPTLS      string `json:"smtp_tls,omitempty"`
-	SMTPTo       string `json:"smtp_to,omitempty"`
+	SMTPHost        string `json:"smtp_host,omitempty"`
+	SMTPPort        int    `json:"smtp_port,omitempty"`
+	SMTPUsername    string `json:"smtp_username,omitempty"`
+	SMTPFrom        string `json:"smtp_from,omitempty"`
+	SMTPFromName    string `json:"smtp_from_name,omitempty"`
+	SMTPTLS         string `json:"smtp_tls,omitempty"`
+	SMTPTimeoutSecs int    `json:"smtp_timeout_secs,omitempty"`
+	SMTPTo          string `json:"smtp_to,omitempty"`
 }
 
 type adminResponse struct {
@@ -286,6 +287,9 @@ func adminSMTPSet(req adminRequest) adminResponse {
 	if req.SMTPTLS != "" {
 		config.SMTP.TLS = req.SMTPTLS
 	}
+	if req.SMTPTimeoutSecs != 0 {
+		config.SMTP.TimeoutSecs = req.SMTPTimeoutSecs
+	}
 	if err := saveConfig(configFilePath); err != nil {
 		return adminResponse{OK: false, Error: "save config: " + err.Error()}
 	}
@@ -319,6 +323,10 @@ func adminSMTPTest(req adminRequest) adminResponse {
 }
 
 func smtpPublicConfig() map[string]interface{} {
+	timeout := config.SMTP.TimeoutSecs
+	if timeout == 0 {
+		timeout = 30
+	}
 	return map[string]interface{}{
 		"host":         config.SMTP.Host,
 		"port":         config.SMTP.Port,
@@ -326,6 +334,7 @@ func smtpPublicConfig() map[string]interface{} {
 		"from":         config.SMTP.From,
 		"from_name":    config.SMTP.FromName,
 		"tls":          config.SMTP.TLS,
+		"timeout_secs": timeout,
 		"password_set": config.SMTP.Password != "",
 	}
 }

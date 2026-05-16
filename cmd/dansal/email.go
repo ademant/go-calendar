@@ -9,7 +9,9 @@ import (
 	"encoding/hex"
 	"fmt"
 	"mime"
+	"net"
 	"net/smtp"
+	"time"
 )
 
 // smtpObscure encrypts password with AES-256-GCM.
@@ -86,6 +88,11 @@ func SendEmail(to, subject, body string) error {
 		port = 587
 	}
 
+	timeout := time.Duration(cfg.TimeoutSecs) * time.Second
+	if timeout == 0 {
+		timeout = 30 * time.Second
+	}
+
 	password := ""
 	if cfg.Password != "" && cfg.PasswordKey != "" {
 		var err error
@@ -112,44 +119,73 @@ func SendEmail(to, subject, body string) error {
 
 	addr := fmt.Sprintf("%s:%d", cfg.Host, port)
 
-	switch cfg.TLS {
-	case "tls":
-		conn, err := tls.Dial("tcp", addr, &tls.Config{ServerName: cfg.Host})
+	if cfg.TLS == "tls" {
+		dialer := &net.Dialer{Timeout: timeout}
+		conn, err := tls.DialWithDialer(dialer, "tcp", addr, &tls.Config{ServerName: cfg.Host})
 		if err != nil {
-			return fmt.Errorf("TLS dial: %w", err)
+			return fmt.Errorf("TLS dial %s: %w", addr, err)
 		}
+		conn.SetDeadline(time.Now().Add(timeout))
 		defer conn.Close()
-		c, err := smtp.NewClient(conn, cfg.Host)
-		if err != nil {
-			return fmt.Errorf("SMTP client: %w", err)
-		}
-		defer c.Quit()
-		if cfg.Username != "" {
-			if err := c.Auth(smtp.PlainAuth("", cfg.Username, password, cfg.Host)); err != nil {
-				return fmt.Errorf("SMTP auth: %w", err)
+		return smtpSend(conn, cfg.Host, cfg.Username, password, from, to, msg)
+	}
+
+	conn, err := net.DialTimeout("tcp", addr, timeout)
+	if err != nil {
+		return fmt.Errorf("dial %s: %w", addr, err)
+	}
+	conn.SetDeadline(time.Now().Add(timeout))
+	defer conn.Close()
+
+	c, err := smtp.NewClient(conn, cfg.Host)
+	if err != nil {
+		return fmt.Errorf("SMTP client: %w", err)
+	}
+	defer c.Quit()
+
+	if cfg.TLS != "none" {
+		if ok, _ := c.Extension("STARTTLS"); ok {
+			if err := c.StartTLS(&tls.Config{ServerName: cfg.Host}); err != nil {
+				return fmt.Errorf("STARTTLS: %w", err)
 			}
 		}
-		if err := c.Mail(from); err != nil {
-			return err
-		}
-		if err := c.Rcpt(to); err != nil {
-			return err
-		}
-		w, err := c.Data()
-		if err != nil {
-			return err
-		}
-		if _, err := w.Write(msg); err != nil {
-			return err
-		}
-		return w.Close()
-	case "none":
-		return smtp.SendMail(addr, nil, from, []string{to}, msg)
-	default: // "starttls" or ""
-		var auth smtp.Auth
-		if cfg.Username != "" {
-			auth = smtp.PlainAuth("", cfg.Username, password, cfg.Host)
-		}
-		return smtp.SendMail(addr, auth, from, []string{to}, msg)
 	}
+
+	if cfg.Username != "" {
+		if err := c.Auth(smtp.PlainAuth("", cfg.Username, password, cfg.Host)); err != nil {
+			return fmt.Errorf("SMTP auth: %w", err)
+		}
+	}
+	return smtpDeliver(c, from, to, msg)
+}
+
+func smtpSend(conn net.Conn, host, username, password, from, to string, msg []byte) error {
+	c, err := smtp.NewClient(conn, host)
+	if err != nil {
+		return fmt.Errorf("SMTP client: %w", err)
+	}
+	defer c.Quit()
+	if username != "" {
+		if err := c.Auth(smtp.PlainAuth("", username, password, host)); err != nil {
+			return fmt.Errorf("SMTP auth: %w", err)
+		}
+	}
+	return smtpDeliver(c, from, to, msg)
+}
+
+func smtpDeliver(c *smtp.Client, from, to string, msg []byte) error {
+	if err := c.Mail(from); err != nil {
+		return fmt.Errorf("SMTP MAIL FROM: %w", err)
+	}
+	if err := c.Rcpt(to); err != nil {
+		return fmt.Errorf("SMTP RCPT TO: %w", err)
+	}
+	w, err := c.Data()
+	if err != nil {
+		return fmt.Errorf("SMTP DATA: %w", err)
+	}
+	if _, err := w.Write(msg); err != nil {
+		return fmt.Errorf("SMTP write: %w", err)
+	}
+	return w.Close()
 }

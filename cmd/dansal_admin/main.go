@@ -8,9 +8,28 @@ import (
 	"os"
 	"text/tabwriter"
 	"time"
+
+	"gopkg.in/yaml.v2"
 )
 
 const defaultSocket = "./dansal.sock"
+const defaultConfigPath = "/etc/dansal/config.yaml"
+
+func socketFromConfig() string {
+	data, err := os.ReadFile(defaultConfigPath)
+	if err != nil {
+		return defaultSocket
+	}
+	var cfg struct {
+		Server struct {
+			AdminSocket string `yaml:"admin_socket"`
+		} `yaml:"server"`
+	}
+	if err := yaml.Unmarshal(data, &cfg); err != nil || cfg.Server.AdminSocket == "" {
+		return defaultSocket
+	}
+	return cfg.Server.AdminSocket
+}
 
 type request struct {
 	Cmd          string `json:"cmd"`
@@ -21,13 +40,14 @@ type request struct {
 	OrgID        int    `json:"org_id,omitempty"`
 	Path         string `json:"path,omitempty"`
 	Since        string `json:"since,omitempty"`
-	SMTPHost     string `json:"smtp_host,omitempty"`
-	SMTPPort     int    `json:"smtp_port,omitempty"`
-	SMTPUsername string `json:"smtp_username,omitempty"`
-	SMTPFrom     string `json:"smtp_from,omitempty"`
-	SMTPFromName string `json:"smtp_from_name,omitempty"`
-	SMTPTLS      string `json:"smtp_tls,omitempty"`
-	SMTPTo       string `json:"smtp_to,omitempty"`
+	SMTPHost        string `json:"smtp_host,omitempty"`
+	SMTPPort        int    `json:"smtp_port,omitempty"`
+	SMTPUsername    string `json:"smtp_username,omitempty"`
+	SMTPFrom        string `json:"smtp_from,omitempty"`
+	SMTPFromName    string `json:"smtp_from_name,omitempty"`
+	SMTPTLS         string `json:"smtp_tls,omitempty"`
+	SMTPTimeoutSecs int    `json:"smtp_timeout_secs,omitempty"`
+	SMTPTo          string `json:"smtp_to,omitempty"`
 }
 
 type response struct {
@@ -84,7 +104,7 @@ func die(format string, args ...any) {
 var socketPath string
 
 func main() {
-	flag.StringVar(&socketPath, "socket", defaultSocket, "path to dansal admin socket")
+	flag.StringVar(&socketPath, "socket", socketFromConfig(), "path to dansal admin socket")
 	flag.Usage = usage
 	flag.Parse()
 
@@ -170,7 +190,7 @@ Maintenance:
 SMTP:
   smtp-show                                          Show current SMTP configuration
   smtp-set     [--host H] [--port P] [--username U]  Set SMTP server settings
-               [--from F] [--from-name N] [--tls M]
+               [--from F] [--from-name N] [--tls M] [--timeout S]
   smtp-set-password [--password P]                   Set (obscured) SMTP account password
   smtp-test    --to EMAIL                            Send a test email
   backup             [--output PATH]                 Full backup (config + db + images)
@@ -245,7 +265,7 @@ Flags:
 
 Show the current SMTP configuration. The password is never displayed.`,
 
-	"smtp-set": `Usage: dansal_admin smtp-set [--host H] [--port P] [--username U] [--from F] [--from-name N] [--tls M]
+	"smtp-set": `Usage: dansal_admin smtp-set [--host H] [--port P] [--username U] [--from F] [--from-name N] [--tls M] [--timeout S]
 
 Set SMTP server settings. Only provided flags are updated.
 
@@ -255,7 +275,8 @@ Flags:
   --username   SMTP account username
   --from       Envelope From address (defaults to username)
   --from-name  Display name in the From header
-  --tls        TLS mode: starttls (default), tls (port 465), none`,
+  --tls        TLS mode: starttls (default), tls (port 465), none
+  --timeout    Dial and send timeout in seconds (default 30)`,
 
 	"smtp-set-password": `Usage: dansal_admin smtp-set-password [--password P]
 
