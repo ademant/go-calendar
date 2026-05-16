@@ -230,6 +230,7 @@ func importFromSource(src FetchSource) ([]Event, bool, error) {
 			StartTime:      startTime,
 			EndTime:        endTime,
 			Tags:           tags,
+			URL:            attachURL(vevent),
 			Source:         src.URL,
 			OrganizationID: ensureOrgFromOrganizer(vevent),
 			Location:       EventLocationRequest{Location: prop(ics.ComponentPropertyLocation)},

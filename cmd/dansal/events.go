@@ -35,6 +35,7 @@ type Event struct {
 	Tags           []string `json:"tags"`
 	IsPublished    bool     `json:"is_published"`
 	ShortCode      string   `json:"short_code"`
+	URL            string   `json:"url,omitempty"`
 	Source         string   `json:"source,omitempty"`
 	CreatedAt      string   `json:"created_at"`
 	ImageURL       string   `json:"image_url,omitempty"`
@@ -58,6 +59,7 @@ type EventCreateRequest struct {
 	HasBall        bool                 `json:"has_ball"`
 	HasWorkshop    bool                 `json:"has_workshop"`
 	Tags           []string             `json:"tags"`
+	URL            string               `json:"url,omitempty"`
 	Location       EventLocationRequest `json:"location"`
 	Date           []EventDate          `json:"date"`
 	Musicians      []string             `json:"musicians"`
@@ -86,7 +88,7 @@ var timeFormats = []string{
 }
 
 // SELECT used by all event list / single-event queries
-const eventListSelect = `SELECT e.id, e.uid, e.title, e.description, e.start_time, e.end_time, e.has_ball, e.has_workshop, e.tags, e.is_published, e.short_code, COALESCE(e.source,''), e.created_at, COALESCE(l.location, ''), e.organization_id FROM events e LEFT JOIN locations l ON e.location_id = l.id`
+const eventListSelect = `SELECT e.id, e.uid, e.title, e.description, e.start_time, e.end_time, e.has_ball, e.has_workshop, e.tags, e.is_published, e.short_code, COALESCE(e.url,''), COALESCE(e.source,''), e.created_at, COALESCE(l.location, ''), e.organization_id FROM events e LEFT JOIN locations l ON e.location_id = l.id`
 
 // ── low-level helpers ──────────────────────────────────────────────────────
 
@@ -133,7 +135,7 @@ func scanEventRow(s scanner) (Event, error) {
 	var uid sql.NullString
 	if err := s.Scan(&event.ID, &uid, &event.Title, &event.Description, &startEpoch, &endEpoch,
 		&hasBallInt, &hasWorkshopInt, &event.TagsJSON, &isPublishedInt,
-		&event.ShortCode, &event.Source, &event.CreatedAt, &event.Location, &orgID); err != nil {
+		&event.ShortCode, &event.URL, &event.Source, &event.CreatedAt, &event.Location, &orgID); err != nil {
 		return Event{}, err
 	}
 	if uid.Valid {
@@ -163,10 +165,10 @@ func fetchEventByID(q querier, id int) (Event, error) {
 	var orgID sql.NullInt64
 	var uid sql.NullString
 	err := q.QueryRow(
-		"SELECT id, uid, title, description, start_time, end_time, has_ball, has_workshop, tags, is_published, short_code, COALESCE(source,''), created_at, organization_id FROM events WHERE id = ?", id,
+		"SELECT id, uid, title, description, start_time, end_time, has_ball, has_workshop, tags, is_published, short_code, COALESCE(url,''), COALESCE(source,''), created_at, organization_id FROM events WHERE id = ?", id,
 	).Scan(&event.ID, &uid, &event.Title, &event.Description, &startEpoch, &endEpoch,
 		&hasBallInt, &hasWorkshopInt, &event.TagsJSON, &isPublishedInt,
-		&event.ShortCode, &event.Source, &event.CreatedAt, &orgID)
+		&event.ShortCode, &event.URL, &event.Source, &event.CreatedAt, &orgID)
 	if uid.Valid {
 		event.UID = uid.String
 	}
@@ -190,6 +192,17 @@ func fetchEventByID(q querier, id int) (Event, error) {
 }
 
 // ── iCal helpers ───────────────────────────────────────────────────────────
+
+// attachURL returns the first ATTACH value that looks like an http(s) URL,
+// or an empty string when no such attachment is present.
+func attachURL(event *ics.VEvent) string {
+	for _, prop := range event.GetProperties(ics.ComponentPropertyAttach) {
+		if strings.HasPrefix(prop.Value, "http://") || strings.HasPrefix(prop.Value, "https://") {
+			return prop.Value
+		}
+	}
+	return ""
+}
 
 // addEventToCalendar appends one Event to an iCal calendar object.
 func addEventToCalendar(cal *ics.Calendar, event Event) {
@@ -279,13 +292,21 @@ func generateShortCode() string {
 	return fmt.Sprintf("%x", b)
 }
 
+// urlVal returns nil when s is empty so the DB column stays NULL.
+func urlVal(s string) interface{} {
+	if s == "" {
+		return nil
+	}
+	return s
+}
+
 // insertEvent upserts an event. Returns (id, shortCode, created, error) where
 // created=false means an existing event was updated instead of inserted.
 // Deduplication order: UID exact match → title+location+time fuzzy match (±3 h).
 // The fuzzy fallback runs for both UID-less events and events whose UID is not yet
 // known to the DB, so that two feeds publishing the same event with different UIDs
 // converge to a single row.
-func insertEvent(q querier, title, description string, startTime, endTime int64, locationID int64, hasBall, hasWorkshop bool, tags []string, isPublished bool, organizationID *int, uid, source string) (int, string, bool, error) {
+func insertEvent(q querier, title, description string, startTime, endTime int64, locationID int64, hasBall, hasWorkshop bool, tags []string, isPublished bool, organizationID *int, uid, url, source string) (int, string, bool, error) {
 	var existingID int
 	var existingShortCode string
 	var lookupErr error
@@ -316,9 +337,10 @@ func insertEvent(q querier, title, description string, startTime, endTime int64,
 
 	if lookupErr == nil {
 		// Duplicate — update existing event
+		urlArg := urlVal(url)
 		_, err := q.Exec(
-			"UPDATE events SET description=?, start_time=?, end_time=?, location_id=?, has_ball=?, has_workshop=?, tags=?, is_published=? WHERE id=?",
-			description, startTime, endTime, locationID, hasBall, hasWorkshop, string(tagsJSON), isPublished, existingID,
+			"UPDATE events SET description=?, start_time=?, end_time=?, location_id=?, has_ball=?, has_workshop=?, tags=?, is_published=?, url=? WHERE id=?",
+			description, startTime, endTime, locationID, hasBall, hasWorkshop, string(tagsJSON), isPublished, urlArg, existingID,
 		)
 		if err != nil {
 			return 0, "", false, err
@@ -346,8 +368,8 @@ func insertEvent(q querier, title, description string, startTime, endTime int64,
 			sourceArg = source
 		}
 		result, err = q.Exec(
-			"INSERT INTO events (uid, title, description, start_time, end_time, location_id, has_ball, has_workshop, tags, is_published, organization_id, short_code, source) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-			uidArg, title, description, startTime, endTime, locationID, hasBall, hasWorkshop, string(tagsJSON), isPublished, orgIDArg, shortCode, sourceArg,
+			"INSERT INTO events (uid, title, description, start_time, end_time, location_id, has_ball, has_workshop, tags, is_published, organization_id, short_code, url, source) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+			uidArg, title, description, startTime, endTime, locationID, hasBall, hasWorkshop, string(tagsJSON), isPublished, orgIDArg, shortCode, urlVal(url), sourceArg,
 		)
 		if err == nil {
 			break
@@ -396,7 +418,7 @@ func createEventFromRequest(q querier, req EventCreateRequest, locationID int64,
 			return nil, false, fmt.Errorf("end_time: %w", err)
 		}
 
-		id, shortCode, created, err := insertEvent(q, req.Title, entry.description, startTime, endTime, locationID, req.HasBall, req.HasWorkshop, req.Tags, isPublished, req.OrganizationID, req.UID, req.Source)
+		id, shortCode, created, err := insertEvent(q, req.Title, entry.description, startTime, endTime, locationID, req.HasBall, req.HasWorkshop, req.Tags, isPublished, req.OrganizationID, req.UID, req.URL, req.Source)
 		if err != nil {
 			return nil, false, err
 		}
@@ -564,6 +586,7 @@ func createEvent(w http.ResponseWriter, r *http.Request) {
 				StartTime:      startTime,
 				EndTime:        endTime,
 				Tags:           parseICalCategories(event),
+				URL:            attachURL(event),
 				OrganizationID: orgID,
 				Location: EventLocationRequest{
 					Location: event.GetProperty(ics.ComponentPropertyLocation).Value,

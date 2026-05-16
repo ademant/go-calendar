@@ -304,6 +304,7 @@ func migrateDB() {
 	db.Exec("ALTER TABLE tokens ADD COLUMN ip TEXT")
 	db.Exec("ALTER TABLE tokens ADD COLUMN fingerprint TEXT")
 	db.Exec("ALTER TABLE tokens ADD COLUMN last_seen_at DATETIME")
+	db.Exec("ALTER TABLE events ADD COLUMN url TEXT")
 	db.Exec("ALTER TABLE users ADD COLUMN last_magic_sent_at DATETIME")
 	db.Exec(`CREATE TABLE IF NOT EXISTS magic_login_tokens (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -357,6 +358,7 @@ func createTables() error {
 		tags TEXT,
 		is_published INTEGER DEFAULT 0,
 		short_code TEXT UNIQUE,
+		url TEXT,
 		source TEXT,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		FOREIGN KEY (location_id) REFERENCES locations(id)
