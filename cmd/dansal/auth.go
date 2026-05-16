@@ -112,6 +112,11 @@ func createTokenInDB(userID int, userAgent, ip, fingerprint string) (string, tim
 		return "", time.Time{}, err
 	}
 
+	// Keep only the 5 most recent tokens per user; drop older ones.
+	db.Exec(`DELETE FROM tokens WHERE user_id=? AND id NOT IN (
+		SELECT id FROM tokens WHERE user_id=? ORDER BY created_at DESC LIMIT 5
+	)`, userID, userID)
+
 	return token, expiresAt, nil
 }
 
