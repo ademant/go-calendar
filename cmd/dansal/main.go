@@ -781,8 +781,12 @@ func main() {
 	fetchRoutes.HandleFunc("", fetchURL).Methods("POST")
 	fetchRoutes.HandleFunc("/bulk", fetchURLBulk).Methods("POST")
 	fetchRoutes.HandleFunc("/fetch-all", fetchAllURLs).Methods("POST")
+	fetchRoutes.HandleFunc("/bulk-delete", bulkDeleteFetchSources).Methods("POST")
+	fetchRoutes.HandleFunc("/bulk-fetch", bulkFetchURLsByIDs).Methods("POST")
+	fetchRoutes.HandleFunc("/bulk-assign-org", bulkAssignFetchSourceOrg).Methods("POST")
 	fetchRoutes.HandleFunc("/{id}", getFetchSource).Methods("GET")
 	fetchRoutes.HandleFunc("/{id}", patchFetchSource).Methods("PATCH")
+	fetchRoutes.HandleFunc("/{id}", deleteFetchSource).Methods("DELETE")
 	fetchRoutes.HandleFunc("/{id}/fetch", fetchURLByID).Methods("POST")
 
 	// API key endpoints (protected)

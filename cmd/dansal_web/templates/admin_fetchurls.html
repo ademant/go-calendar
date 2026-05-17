@@ -3,10 +3,28 @@
 <h1>{{.Strings.T "admin_fetchurls_title"}}</h1>
 
 {{with .Data}}
+<form method="post" action="/admin/fetchurls/bulk" id="bulk-form">
+<div class="bulk-toolbar">
+  <label class="check-all-label">
+    <input type="checkbox" id="check-all"> {{$.Strings.T "admin_select_all"}}
+  </label>
+  <select name="bulk_action" id="bulk-action">
+    <option value="run">{{$.Strings.T "fetch_run"}}</option>
+    <option value="delete">{{$.Strings.T "admin_delete"}}</option>
+    <option value="assign-org">{{$.Strings.T "fetch_assign_org"}}</option>
+  </select>
+  <select name="organization_id" id="bulk-org" class="bulk-org-select" style="display:none">
+    <option value="">— {{$.Strings.T "fetch_no_org"}} —</option>
+    {{range .Orgs}}<option value="{{.ID}}">{{.Name}}</option>{{end}}
+  </select>
+  <button type="submit" class="btn-sm">{{$.Strings.T "admin_apply"}}</button>
+</div>
+
 <div class="table-wrap">
 <table class="event-table">
   <thead>
     <tr>
+      <th class="col-check"></th>
       <th>{{$.Strings.T "fetch_url"}}</th>
       <th>{{$.Strings.T "fetch_type"}}</th>
       <th>{{$.Strings.T "fetch_tags"}}</th>
@@ -20,6 +38,7 @@
   {{$orgName := ""}}
   {{if .OrganizationID}}{{with index $.Data.OrgMap (derefInt .OrganizationID)}}{{$orgName = .Name}}{{end}}{{end}}
   <tr>
+    <td class="col-check"><input type="checkbox" name="src_ids" value="{{.ID}}" class="row-check"></td>
     <td class="url-cell"><span title="{{.URL}}">{{.URL}}</span></td>
     <td>{{.Type}}</td>
     <td>{{range .Tags}}<span class="tag">{{.}}</span>{{end}}</td>
@@ -27,16 +46,43 @@
     <td class="date-cell">{{if .LastFetchedAt}}{{formatDate .LastFetchedAt}}{{else}}{{$.Strings.T "fetch_never"}}{{end}}</td>
     <td class="col-actions">
       <a href="/admin/fetchurls/{{.ID}}/edit" class="btn-sm">{{$.Strings.T "admin_edit"}}</a>
+      <button type="button" class="btn-sm btn-run"
+              onclick="rowAction('/admin/fetchurls/{{.ID}}/run')">{{$.Strings.T "fetch_run"}}</button>
+      <button type="button" class="btn-sm btn-del"
+              onclick="if(confirm('{{$.Strings.T "fetch_confirm_delete"}}'))rowAction('/admin/fetchurls/{{.ID}}/delete')">{{$.Strings.T "admin_delete"}}</button>
     </td>
   </tr>
   {{end}}
   </tbody>
 </table>
 </div>
+</form>
 {{end}}
 
+<script>
+function rowAction(url) {
+  var f = document.createElement('form');
+  f.method = 'post'; f.action = url;
+  document.body.appendChild(f); f.submit();
+}
+document.getElementById('check-all').addEventListener('change', function() {
+  document.querySelectorAll('.row-check').forEach(function(cb){ cb.checked = this.checked; }, this);
+});
+document.getElementById('bulk-action').addEventListener('change', function() {
+  document.getElementById('bulk-org').style.display = this.value === 'assign-org' ? '' : 'none';
+});
+</script>
+
 <style>
-.url-cell{max-width:320px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bulk-toolbar{display:flex;align-items:center;gap:.5rem;margin-bottom:.75rem;flex-wrap:wrap}
+.check-all-label{display:flex;align-items:center;gap:.3rem;font-size:.9rem;cursor:pointer}
+.col-check{width:2rem;text-align:center}
+.url-cell{max-width:260px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .date-cell{white-space:nowrap;color:#666;font-size:.85rem}
+.col-actions{white-space:nowrap;display:flex;gap:.3rem;align-items:center}
+.btn-run{background:#2a7a2a;color:#fff;border:none}
+.btn-run:hover{background:#1a5a1a}
+.btn-del{background:#b00020;color:#fff;border:none}
+.btn-del:hover{background:#800016}
 </style>
 {{end}}

@@ -50,6 +50,50 @@ func adminOrgsHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n 
 	}
 }
 
+func adminOrgNewPageHandler(cfg *Config, tmpls *Templates, i18n *I18n) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		user, ok := requireLogin(w, r)
+		if !ok {
+			return
+		}
+		if user.Role != "admin" {
+			http.Error(w, "Forbidden", http.StatusForbidden)
+			return
+		}
+		title := i18n.T(r, "admin_new")
+		renderTemplate(w, tmpls.adminOrgEdit, tmplData(r, cfg, i18n, title, AdminOrgEditData{}))
+	}
+}
+
+func adminOrgCreateHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		user, ok := requireLogin(w, r)
+		if !ok {
+			return
+		}
+		if user.Role != "admin" {
+			http.Error(w, "Forbidden", http.StatusForbidden)
+			return
+		}
+		if err := r.ParseForm(); err != nil {
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+		name := strings.TrimSpace(r.FormValue("name"))
+		description := strings.TrimSpace(r.FormValue("description"))
+		token := getSessionToken(r)
+		if _, err := client.CreateOrganization(r.Context(), name, description, token); err != nil {
+			title := i18n.T(r, "admin_new")
+			renderTemplate(w, tmpls.adminOrgEdit, tmplData(r, cfg, i18n, title, AdminOrgEditData{
+				Org:      Organization{Name: name, Description: description},
+				ErrorKey: "admin_save_error",
+			}))
+			return
+		}
+		http.Redirect(w, r, "/admin/organizations", http.StatusSeeOther)
+	}
+}
+
 func adminOrgEditPageHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		user, ok := requireLogin(w, r)
@@ -118,6 +162,7 @@ func adminOrgSaveHandler(cfg *Config, tmpls *Templates, client *DansalClient, i1
 type AdminFetchurlsData struct {
 	Sources []FetchSource
 	OrgMap  map[int]Organization
+	Orgs    []Organization
 }
 
 type AdminFetchurlEditData struct {
@@ -148,6 +193,7 @@ func adminFetchurlsHandler(cfg *Config, tmpls *Templates, client *DansalClient, 
 		renderTemplate(w, tmpls.adminFetchurls, tmplData(r, cfg, i18n, title, AdminFetchurlsData{
 			Sources: sources,
 			OrgMap:  orgMap,
+			Orgs:    orgs,
 		}))
 	}
 }
@@ -235,6 +281,90 @@ func adminFetchurlSaveHandler(cfg *Config, tmpls *Templates, client *DansalClien
 	}
 }
 
+func adminFetchurlDeleteHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		user, ok := requireLogin(w, r)
+		if !ok {
+			return
+		}
+		if user.Role != "admin" {
+			http.Error(w, "Forbidden", http.StatusForbidden)
+			return
+		}
+		id, err := strconv.Atoi(mux.Vars(r)["id"])
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		_ = client.DeleteFetchSource(r.Context(), id, getSessionToken(r))
+		http.Redirect(w, r, "/admin/fetchurls", http.StatusSeeOther)
+	}
+}
+
+func adminFetchurlRunHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		_, ok := requireLogin(w, r)
+		if !ok {
+			return
+		}
+		id, err := strconv.Atoi(mux.Vars(r)["id"])
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		_ = client.RunFetchSource(r.Context(), id, getSessionToken(r))
+		http.Redirect(w, r, "/admin/fetchurls", http.StatusSeeOther)
+	}
+}
+
+func adminFetchurlBulkHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		user, ok := requireLogin(w, r)
+		if !ok {
+			return
+		}
+		if err := r.ParseForm(); err != nil {
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+		var ids []int
+		for _, s := range r.Form["src_ids"] {
+			if n, err := strconv.Atoi(s); err == nil {
+				ids = append(ids, n)
+			}
+		}
+		if len(ids) == 0 {
+			http.Redirect(w, r, "/admin/fetchurls", http.StatusSeeOther)
+			return
+		}
+		token := getSessionToken(r)
+		action := r.FormValue("bulk_action")
+		switch action {
+		case "delete":
+			if user.Role != "admin" {
+				http.Error(w, "Forbidden", http.StatusForbidden)
+				return
+			}
+			_ = client.BulkDeleteFetchSources(r.Context(), ids, token)
+		case "run":
+			_ = client.BulkRunFetchSources(r.Context(), ids, token)
+		case "assign-org":
+			if user.Role != "admin" {
+				http.Error(w, "Forbidden", http.StatusForbidden)
+				return
+			}
+			var orgID *int
+			if v := r.FormValue("organization_id"); v != "" {
+				if n, err := strconv.Atoi(v); err == nil {
+					orgID = &n
+				}
+			}
+			_ = client.BulkAssignFetchSourceOrg(r.Context(), ids, orgID, token)
+		}
+		http.Redirect(w, r, "/admin/fetchurls", http.StatusSeeOther)
+	}
+}
+
 // ── Locations ─────────────────────────────────────────────────────────────────
 
 type AdminLocationsData struct {
@@ -314,6 +444,61 @@ func adminLocationBulkAssignHandler(cfg *Config, client *DansalClient) http.Hand
 		}
 		if len(ids) > 0 {
 			client.BulkAssignLocationOrg(r.Context(), ids, orgID, getSessionToken(r))
+		}
+		http.Redirect(w, r, "/admin/locations", http.StatusSeeOther)
+	}
+}
+
+func adminLocationNewPageHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		_, ok := requireLogin(w, r)
+		if !ok {
+			return
+		}
+		orgs, _ := client.GetOrganizations(r.Context())
+		title := i18n.T(r, "admin_new")
+		renderTemplate(w, tmpls.adminLocationEdit, tmplData(r, cfg, i18n, title, AdminLocationEditData{Orgs: orgs}))
+	}
+}
+
+func adminLocationCreateHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		_, ok := requireLogin(w, r)
+		if !ok {
+			return
+		}
+		if err := r.ParseForm(); err != nil {
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+		var orgID *int
+		if v := r.FormValue("organization_id"); v != "" {
+			if n, err := strconv.Atoi(v); err == nil {
+				orgID = &n
+			}
+		}
+		loc := Location{
+			Location:     strings.TrimSpace(r.FormValue("location")),
+			ShortName:    strings.TrimSpace(r.FormValue("short_name")),
+			Address:      strings.TrimSpace(r.FormValue("address")),
+			Zipcode:      strings.TrimSpace(r.FormValue("zipcode")),
+			Town:         strings.TrimSpace(r.FormValue("town")),
+			Country:      strings.TrimSpace(r.FormValue("country")),
+			Latitude:     strings.TrimSpace(r.FormValue("latitude")),
+			Longitude:    strings.TrimSpace(r.FormValue("longitude")),
+			Internetsite: strings.TrimSpace(r.FormValue("internetsite")),
+			OrganizationID: orgID,
+		}
+		token := getSessionToken(r)
+		if _, err := client.CreateLocation(r.Context(), loc, token); err != nil {
+			orgs, _ := client.GetOrganizations(r.Context())
+			title := i18n.T(r, "admin_new")
+			renderTemplate(w, tmpls.adminLocationEdit, tmplData(r, cfg, i18n, title, AdminLocationEditData{
+				Location: loc,
+				Orgs:     orgs,
+				ErrorKey: "admin_save_error",
+			}))
+			return
 		}
 		http.Redirect(w, r, "/admin/locations", http.StatusSeeOther)
 	}

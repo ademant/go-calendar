@@ -667,6 +667,124 @@ func fetchURLBulk(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(results)
 }
 
+// DELETE /api/v1/fetchurl/{id}
+func deleteFetchSource(w http.ResponseWriter, r *http.Request) {
+	userRole := r.Header.Get("X-User-Role")
+	if userRole != RoleAdmin {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
+	id := mux.Vars(r)["id"]
+	result, err := db.Exec("DELETE FROM fetch_sources WHERE id = ?", id)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if n, _ := result.RowsAffected(); n == 0 {
+		http.Error(w, "Fetch source not found", http.StatusNotFound)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// POST /api/v1/fetchurl/bulk-delete
+func bulkDeleteFetchSources(w http.ResponseWriter, r *http.Request) {
+	userRole := r.Header.Get("X-User-Role")
+	if userRole != RoleAdmin {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
+	var req struct {
+		IDs []int `json:"ids"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || len(req.IDs) == 0 {
+		http.Error(w, "ids required", http.StatusBadRequest)
+		return
+	}
+	for _, id := range req.IDs {
+		db.Exec("DELETE FROM fetch_sources WHERE id = ?", id)
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// POST /api/v1/fetchurl/bulk-fetch
+func bulkFetchURLsByIDs(w http.ResponseWriter, r *http.Request) {
+	userRole := r.Header.Get("X-User-Role")
+	if userRole != RoleAdmin && userRole != RoleUser && userRole != RolePublisher {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
+	var req struct {
+		IDs []int `json:"ids"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || len(req.IDs) == 0 {
+		http.Error(w, "ids required", http.StatusBadRequest)
+		return
+	}
+
+	placeholders := make([]string, len(req.IDs))
+	args := make([]interface{}, len(req.IDs))
+	for i, id := range req.IDs {
+		placeholders[i] = "?"
+		args[i] = id
+	}
+	query := "SELECT id, url, type, tags, organization_id, last_fetched_at, created_at FROM fetch_sources WHERE id IN (" + strings.Join(placeholders, ",") + ")"
+	rows, err := db.Query(query, args...)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+	var sources []FetchSource
+	for rows.Next() {
+		src, err := scanFetchSource(rows)
+		if err != nil {
+			continue
+		}
+		sources = append(sources, src)
+	}
+
+	results := make([]BulkSourceResult, len(sources))
+	var wg sync.WaitGroup
+	for i, src := range sources {
+		wg.Add(1)
+		go func(i int, src FetchSource) {
+			defer wg.Done()
+			events, allCreated, err := importFromSource(src)
+			if err != nil {
+				results[i] = BulkSourceResult{URL: src.URL, SourceID: src.ID, Error: err.Error()}
+				return
+			}
+			results[i] = BulkSourceResult{URL: src.URL, SourceID: src.ID, Events: len(events), AllCreated: allCreated}
+		}(i, src)
+	}
+	wg.Wait()
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(results)
+}
+
+// POST /api/v1/fetchurl/bulk-assign-org
+func bulkAssignFetchSourceOrg(w http.ResponseWriter, r *http.Request) {
+	userRole := r.Header.Get("X-User-Role")
+	if userRole != RoleAdmin {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
+	var req struct {
+		IDs            []int `json:"ids"`
+		OrganizationID *int  `json:"organization_id"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || len(req.IDs) == 0 {
+		http.Error(w, "ids required", http.StatusBadRequest)
+		return
+	}
+	for _, id := range req.IDs {
+		db.Exec("UPDATE fetch_sources SET organization_id = ? WHERE id = ?", req.OrganizationID, id)
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 // POST /api/v1/fetchurl/{id}/fetch
 func fetchURLByID(w http.ResponseWriter, r *http.Request) {
 	userRole := r.Header.Get("X-User-Role")

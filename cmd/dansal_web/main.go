@@ -53,8 +53,11 @@ func main() {
 	r.HandleFunc("/admin/organizations/{id}/edit", adminOrgSaveHandler(cfg, tmpls, client, i18n)).Methods("POST")
 
 	r.HandleFunc("/admin/fetchurls", adminFetchurlsHandler(cfg, tmpls, client, i18n)).Methods("GET")
+	r.HandleFunc("/admin/fetchurls/bulk", adminFetchurlBulkHandler(cfg, client)).Methods("POST")
 	r.HandleFunc("/admin/fetchurls/{id}/edit", adminFetchurlEditPageHandler(cfg, tmpls, client, i18n)).Methods("GET")
 	r.HandleFunc("/admin/fetchurls/{id}/edit", adminFetchurlSaveHandler(cfg, tmpls, client, i18n)).Methods("POST")
+	r.HandleFunc("/admin/fetchurls/{id}/delete", adminFetchurlDeleteHandler(cfg, client)).Methods("POST")
+	r.HandleFunc("/admin/fetchurls/{id}/run", adminFetchurlRunHandler(cfg, client)).Methods("POST")
 
 	r.HandleFunc("/admin/locations", adminLocationsHandler(cfg, tmpls, client, i18n)).Methods("GET")
 	r.HandleFunc("/admin/locations/new", adminLocationNewPageHandler(cfg, tmpls, client, i18n)).Methods("GET")

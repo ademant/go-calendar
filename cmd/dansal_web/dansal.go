@@ -352,6 +352,72 @@ func (c *DansalClient) UpdateLocation(ctx context.Context, id int, loc Location,
 	return nil
 }
 
+func (c *DansalClient) DeleteFetchSource(ctx context.Context, id int, token string) error {
+	resp, err := c.authed(ctx, http.MethodDelete, fmt.Sprintf("/api/v1/fetchurl/%d", id), token, nil)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode == http.StatusNotFound {
+		return fmt.Errorf("not found")
+	}
+	if resp.StatusCode != http.StatusNoContent {
+		return fmt.Errorf("dansal API: %s", resp.Status)
+	}
+	return nil
+}
+
+func (c *DansalClient) RunFetchSource(ctx context.Context, id int, token string) error {
+	resp, err := c.authed(ctx, http.MethodPost, fmt.Sprintf("/api/v1/fetchurl/%d/fetch", id), token, nil)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
+		return fmt.Errorf("dansal API: %s", resp.Status)
+	}
+	return nil
+}
+
+func (c *DansalClient) BulkDeleteFetchSources(ctx context.Context, ids []int, token string) error {
+	body, _ := json.Marshal(map[string]interface{}{"ids": ids})
+	resp, err := c.authed(ctx, http.MethodPost, "/api/v1/fetchurl/bulk-delete", token, body)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusNoContent {
+		return fmt.Errorf("dansal API: %s", resp.Status)
+	}
+	return nil
+}
+
+func (c *DansalClient) BulkRunFetchSources(ctx context.Context, ids []int, token string) error {
+	body, _ := json.Marshal(map[string]interface{}{"ids": ids})
+	resp, err := c.authed(ctx, http.MethodPost, "/api/v1/fetchurl/bulk-fetch", token, body)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("dansal API: %s", resp.Status)
+	}
+	return nil
+}
+
+func (c *DansalClient) BulkAssignFetchSourceOrg(ctx context.Context, ids []int, orgID *int, token string) error {
+	body, _ := json.Marshal(map[string]interface{}{"ids": ids, "organization_id": orgID})
+	resp, err := c.authed(ctx, http.MethodPost, "/api/v1/fetchurl/bulk-assign-org", token, body)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusNoContent {
+		return fmt.Errorf("dansal API: %s", resp.Status)
+	}
+	return nil
+}
+
 func (c *DansalClient) BulkAssignLocationOrg(ctx context.Context, ids []int, orgID *int, token string) error {
 	payload := map[string]interface{}{"ids": ids, "organization_id": orgID}
 	body, _ := json.Marshal(payload)
