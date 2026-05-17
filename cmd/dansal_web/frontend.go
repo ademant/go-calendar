@@ -87,6 +87,7 @@ func svgHandler(data []byte) http.HandlerFunc {
 }
 
 var locMonths = map[string][12]string{
+	"br": {"Gen.", "C'hwev.", "Meur.", "Ebr.", "Mae", "Mezh.", "Gouer.", "Eost", "Gwen.", "Here", "Du", "Kerz."},
 	"de": {"Jan", "Feb", "Mär", "Apr", "Mai", "Jun", "Jul", "Aug", "Sep", "Okt", "Nov", "Dez"},
 	"en": {"Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"},
 	"fr": {"jan.", "fév.", "mar.", "avr.", "mai", "juin", "juil.", "août", "sept.", "oct.", "nov.", "déc."},
@@ -96,6 +97,7 @@ var locMonths = map[string][12]string{
 	"br": {"Gen", "C'hw", "Meu", "Ebr", "Mae", "Mez", "Gou", "Eos", "Gwe", "Her", "Du", "Ker"},
 }
 var locWeekdays = map[string][7]string{
+	"br": {"Sul.", "Lun.", "Meur.", "Merc'h.", "Yaou.", "Gwen.", "Sad."},
 	"de": {"So.", "Mo.", "Di.", "Mi.", "Do.", "Fr.", "Sa."},
 	"en": {"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"},
 	"fr": {"Dim.", "Lun.", "Mar.", "Mer.", "Jeu.", "Ven.", "Sam."},
