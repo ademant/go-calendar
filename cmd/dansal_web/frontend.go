@@ -57,6 +57,15 @@ type OrgData struct {
 //go:embed templates
 var templateFS embed.FS
 
+//go:embed static/favicon.svg
+var faviconSVG []byte
+
+func faviconHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "image/svg+xml")
+	w.Header().Set("Cache-Control", "public, max-age=86400")
+	w.Write(faviconSVG)
+}
+
 var tmplFuncMap = template.FuncMap{
 	"formatTime": func(s string) string {
 		for _, layout := range []string{time.RFC3339, "2006-01-02T15:04:05", "2006-01-02 15:04:05"} {
