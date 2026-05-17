@@ -1,6 +1,7 @@
 package main
 
 import (
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"strings"
@@ -56,6 +57,27 @@ func folkdanceLocationString(city, state, country string) string {
 		parts = append(parts, country)
 	}
 	return strings.Join(parts, ", ")
+}
+
+// ensureMusician returns the id of an existing musician matching bandname,
+// or inserts a new one with just the bandname set.
+func ensureMusician(q querier, bandname string) (int64, error) {
+	if bandname == "" {
+		return 0, nil
+	}
+	var id int64
+	err := q.QueryRow("SELECT id FROM musicians WHERE bandname = ?", bandname).Scan(&id)
+	if err == nil {
+		return id, nil
+	}
+	if err != sql.ErrNoRows {
+		return 0, err
+	}
+	result, err := q.Exec("INSERT INTO musicians (bandname) VALUES (?)", bandname)
+	if err != nil {
+		return 0, err
+	}
+	return result.LastInsertId()
 }
 
 func importFromFolkdanceJSON(src FetchSource) ([]Event, bool, error) {
@@ -130,6 +152,17 @@ func importFromFolkdanceJSON(src FetchSource) ([]Event, bool, error) {
 
 		locStr := folkdanceLocationString(fe.City, fe.State, fe.Country)
 
+		var musicianIDs []int
+		for _, band := range fe.Bands {
+			id, err := ensureMusician(tx, band)
+			if err != nil {
+				return nil, false, fmt.Errorf("ensureMusician %q: %w", band, err)
+			}
+			if id > 0 {
+				musicianIDs = append(musicianIDs, int(id))
+			}
+		}
+
 		eventReq := EventCreateRequest{
 			Title:          fe.Name,
 			StartTime:      startTime,
@@ -141,9 +174,11 @@ func importFromFolkdanceJSON(src FetchSource) ([]Event, bool, error) {
 			URL:            eventURL,
 			Source:         src.URL,
 			OrganizationID: ensureOrgByName(fe.Organisation),
+			Musicians:      musicianIDs,
 			Location: EventLocationRequest{
 				Location: locStr,
 				Town:     fe.City,
+				Country:  fe.Country,
 			},
 		}
 

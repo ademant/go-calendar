@@ -100,6 +100,7 @@ type EventLocationRequest struct {
 	Address   string `json:"address"`
 	Zipcode   string `json:"zipcode"`
 	Town      string `json:"town"`
+	Country   string `json:"country"`
 	Latitude  string `json:"latitude"`
 	Longitude string `json:"longitude"`
 	Eventsite string `json:"eventsite"`

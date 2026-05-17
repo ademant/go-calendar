@@ -51,8 +51,8 @@ func ensureLocation(q querier, loc EventLocationRequest) (int64, error) {
 		return 0, err
 	}
 	result, err := q.Exec(
-		"INSERT INTO locations (location, address, zipcode, town, latitude, longitude, internetsite) VALUES (?, ?, ?, ?, ?, ?, ?)",
-		loc.Location, loc.Address, loc.Zipcode, loc.Town, loc.Latitude, loc.Longitude, loc.Eventsite,
+		"INSERT INTO locations (location, address, zipcode, town, country, latitude, longitude, internetsite) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+		loc.Location, loc.Address, loc.Zipcode, loc.Town, loc.Country, loc.Latitude, loc.Longitude, loc.Eventsite,
 	)
 	if err != nil {
 		return 0, err
