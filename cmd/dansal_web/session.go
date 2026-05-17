@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"net/http"
 	"time"
@@ -22,8 +23,12 @@ func getSessionUser(r *http.Request) *SessionUser {
 	if err != nil {
 		return nil
 	}
+	decoded, err := base64.StdEncoding.DecodeString(c.Value)
+	if err != nil {
+		return nil
+	}
 	var u SessionUser
-	if json.Unmarshal([]byte(c.Value), &u) != nil {
+	if json.Unmarshal(decoded, &u) != nil {
 		return nil
 	}
 	return &u
@@ -39,6 +44,7 @@ func getSessionToken(r *http.Request) string {
 
 func setSession(w http.ResponseWriter, token string, user SessionUser, expiresAt time.Time) {
 	userJSON, _ := json.Marshal(user)
+	userEncoded := base64.StdEncoding.EncodeToString(userJSON)
 	http.SetCookie(w, &http.Cookie{
 		Name:     cookieToken,
 		Value:    token,
@@ -49,7 +55,7 @@ func setSession(w http.ResponseWriter, token string, user SessionUser, expiresAt
 	})
 	http.SetCookie(w, &http.Cookie{
 		Name:     cookieUser,
-		Value:    string(userJSON),
+		Value:    userEncoded,
 		Path:     "/",
 		Expires:  expiresAt,
 		HttpOnly: true,
