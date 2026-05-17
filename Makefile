@@ -8,15 +8,12 @@ SYSCONFDIR := /etc/dansal
 STATEDIR   := /var/lib/dansal
 SYSTEMDDIR := /lib/systemd/system
 
-.PHONY: build build-dansal build-web build-dansal_admin run clean install update deb
+.PHONY: build build-dansal build-dansal_admin run clean install update deb
 
-build: build-dansal build-web build-dansal_admin
+build: build-dansal build-dansal_admin
 
 build-dansal:
 	go build $(LDFLAGS) -o dansal ./cmd/dansal
-
-build-web:
-	go build -o web ./cmd/web
 
 build-dansal_admin:
 	go build -o dansal_admin ./cmd/dansal_admin
@@ -25,7 +22,7 @@ run: build-dansal
 	./dansal --config ./config.yaml
 
 clean:
-	rm -f dansal web dansal_admin *.deb
+	rm -f dansal dansal_admin *.deb
 
 install: build
 	# system user
