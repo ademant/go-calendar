@@ -1,6 +1,6 @@
 {{template "base" .}}
 {{define "content"}}
-<h1>{{.Strings.T "admin_edit"}} — {{with .Data}}{{.Location.Location}}{{end}}</h1>
+<h1>{{.Strings.T "admin_edit"}}{{with .Data.Location.Location}} — {{.}}{{end}}</h1>
 
 <div class="edit-wrap">
 {{with .Data}}

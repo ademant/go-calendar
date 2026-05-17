@@ -1,6 +1,9 @@
 {{template "base" .}}
 {{define "content"}}
-<h1>{{.Strings.T "admin_orgs_title"}}</h1>
+<div class="page-header">
+  <h1>{{.Strings.T "admin_orgs_title"}}</h1>
+  {{if .Data.CanEdit}}<a href="/admin/organizations/new" class="btn-sm">{{.Strings.T "admin_new"}}</a>{{end}}
+</div>
 
 {{with .Data}}
 <div class="table-wrap">
@@ -30,6 +33,8 @@
 {{end}}
 
 <style>
+.page-header{display:flex;align-items:center;gap:1rem;margin-bottom:.5rem}
+.page-header h1{margin:0}
 .row-muted td{color:#999}
 .desc-cell{max-width:420px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 </style>
