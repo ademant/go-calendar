@@ -16,7 +16,17 @@ import (
 type TemplateData struct {
 	Title  string
 	Domain string
+	User   *SessionUser
 	Data   interface{}
+}
+
+func tmplData(r *http.Request, cfg *Config, title string, data interface{}) TemplateData {
+	return TemplateData{
+		Title:  title,
+		Domain: cfg.Domain,
+		User:   getSessionUser(r),
+		Data:   data,
+	}
 }
 
 type IndexData struct {
@@ -99,6 +109,7 @@ type Templates struct {
 	index *template.Template
 	event *template.Template
 	org   *template.Template
+	login *template.Template
 }
 
 func loadTemplates() *Templates {
@@ -114,6 +125,7 @@ func loadTemplates() *Templates {
 		index: load("index"),
 		event: load("event"),
 		org:   load("org"),
+		login: load("login"),
 	}
 }
 
@@ -138,11 +150,7 @@ func indexHandler(cfg *Config, tmpls *Templates, client *DansalClient) http.Hand
 				orgMap[o.ID] = o
 			}
 		}
-		renderTemplate(w, tmpls.index, TemplateData{
-			Title:  "Upcoming Events",
-			Domain: cfg.Domain,
-			Data:   IndexData{Events: events, OrgMap: orgMap},
-		})
+		renderTemplate(w, tmpls.index, tmplData(r, cfg, "Upcoming Events", IndexData{Events: events, OrgMap: orgMap}))
 	}
 }
 
@@ -170,11 +178,7 @@ func eventHandler(cfg *Config, tmpls *Templates, client *DansalClient) http.Hand
 			}
 		}
 
-		renderTemplate(w, tmpls.event, TemplateData{
-			Title:  event.Title,
-			Domain: cfg.Domain,
-			Data:   EventData{Event: event, Org: org, OrgSlug: slug},
-		})
+		renderTemplate(w, tmpls.event, tmplData(r, cfg, event.Title, EventData{Event: event, Org: org, OrgSlug: slug}))
 	}
 }
 
@@ -203,16 +207,12 @@ func orgFrontendHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *Dansa
 		}
 
 		handle := "@" + slug + "@" + cfg.Domain
-		renderTemplate(w, tmpls.org, TemplateData{
-			Title:  org.Name,
-			Domain: cfg.Domain,
-			Data: OrgData{
-				Org:    org,
-				Events: events,
-				Slug:   slug,
-				Handle: handle,
-			},
-		})
+		renderTemplate(w, tmpls.org, tmplData(r, cfg, org.Name, OrgData{
+			Org:    org,
+			Events: events,
+			Slug:   slug,
+			Handle: handle,
+		}))
 	}
 }
 

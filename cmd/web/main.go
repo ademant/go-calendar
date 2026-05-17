@@ -31,6 +31,9 @@ func main() {
 
 	r.HandleFunc("/", indexHandler(cfg, tmpls, client)).Methods("GET")
 	r.HandleFunc("/events/{id}", eventHandler(cfg, tmpls, client)).Methods("GET")
+	r.HandleFunc("/login", loginPageHandler(cfg, tmpls)).Methods("GET")
+	r.HandleFunc("/login", loginHandler(cfg, tmpls, client)).Methods("POST")
+	r.HandleFunc("/logout", logoutHandler(cfg, client)).Methods("POST")
 
 	go startDelivery(cfg, db, client)
 

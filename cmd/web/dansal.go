@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -59,6 +60,16 @@ type Musician struct {
 	Bandname string `json:"bandname"`
 }
 
+type LoginResponse struct {
+	Token     string `json:"token"`
+	ExpiresAt string `json:"expires_at"`
+	User      struct {
+		ID       int    `json:"id"`
+		Username string `json:"username"`
+		Role     string `json:"role"`
+	} `json:"user"`
+}
+
 func (c *DansalClient) get(ctx context.Context, path string, out interface{}) error {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.BaseURL+path, nil)
 	if err != nil {
@@ -76,6 +87,46 @@ func (c *DansalClient) get(ctx context.Context, path string, out interface{}) er
 		return fmt.Errorf("dansal API: %s", resp.Status)
 	}
 	return json.NewDecoder(resp.Body).Decode(out)
+}
+
+func (c *DansalClient) Login(ctx context.Context, username, password string) (*LoginResponse, error) {
+	body, _ := json.Marshal(map[string]string{"username": username, "password": password})
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.BaseURL+"/api/v1/login",
+		bytes.NewReader(body))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := c.HTTP.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
+		return nil, fmt.Errorf("invalid credentials")
+	}
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("dansal API: %s", resp.Status)
+	}
+	var lr LoginResponse
+	if err := json.NewDecoder(resp.Body).Decode(&lr); err != nil {
+		return nil, err
+	}
+	return &lr, nil
+}
+
+func (c *DansalClient) Logout(ctx context.Context, token string) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, c.BaseURL+"/api/v1/login", nil)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
+	resp, err := c.HTTP.Do(req)
+	if err != nil {
+		return err
+	}
+	resp.Body.Close()
+	return nil
 }
 
 func (c *DansalClient) GetEvents(ctx context.Context, after string) ([]Event, error) {
