@@ -43,8 +43,10 @@ type Event struct {
 	OrganizationID *int             `json:"organization_id,omitempty"`
 	Editable       *bool            `json:"editable,omitempty"`
 	Timetable      []TimetableEntry `json:"timetable,omitempty"`
+	Pricing        *Pricing         `json:"pricing,omitempty"`
 	Location       string           `json:"-"`
-	TagsJSON       string   `json:"-"`
+	TagsJSON       string           `json:"-"`
+	PricingJSON    string           `json:"-"`
 }
 
 type EventDate struct {
@@ -54,13 +56,14 @@ type EventDate struct {
 }
 
 type EventPatchRequest struct {
-	IDs            []int  `json:"ids"`
-	OrganizationID *int   `json:"organization_id"`
-	LocationID     *int   `json:"location_id"`
-	IsCancelled    *bool  `json:"is_cancelled"`
-	IsPublished    *bool  `json:"is_published"`
-	HasBall        *bool  `json:"has_ball"`
-	HasWorkshop    *bool  `json:"has_workshop"`
+	IDs            []int    `json:"ids"`
+	OrganizationID *int     `json:"organization_id"`
+	LocationID     *int     `json:"location_id"`
+	IsCancelled    *bool    `json:"is_cancelled"`
+	IsPublished    *bool    `json:"is_published"`
+	HasBall        *bool    `json:"has_ball"`
+	HasWorkshop    *bool    `json:"has_workshop"`
+	Pricing        *Pricing `json:"pricing"`
 }
 
 type EventCreateRequest struct {
@@ -80,6 +83,7 @@ type EventCreateRequest struct {
 	Source             string               `json:"source,omitempty"`
 	OrganizationID     *int                 `json:"organization_id,omitempty"`
 	SourceLastModified int64                `json:"source_last_modified,omitempty"`
+	Pricing            *Pricing             `json:"pricing,omitempty"`
 }
 
 type EventLocationRequest struct {
@@ -90,6 +94,23 @@ type EventLocationRequest struct {
 	Latitude  string `json:"latitude"`
 	Longitude string `json:"longitude"`
 	Eventsite string `json:"eventsite"`
+}
+
+// Price is one entry in a multi-tier pricing list.
+type Price struct {
+	Label  string  `json:"label"`
+	Amount float64 `json:"amount"`
+}
+
+// Pricing describes the admission cost for an event.
+// Type must be one of: "free", "donation", "single", "multiple".
+// Amount is used for type "single"; Prices is used for type "multiple".
+// Currency is optional (ISO 4217, e.g. "EUR").
+type Pricing struct {
+	Type     string  `json:"type"`
+	Amount   float64 `json:"amount,omitempty"`
+	Currency string  `json:"currency,omitempty"`
+	Prices   []Price `json:"prices,omitempty"`
 }
 
 // ── package-level state ────────────────────────────────────────────────────
@@ -103,7 +124,7 @@ var timeFormats = []string{
 }
 
 // SELECT used by all event list / single-event queries
-const eventListSelect = `SELECT e.id, e.uid, e.title, e.description, e.start_time, e.end_time, e.has_ball, e.has_workshop, e.is_cancelled, e.tags, e.is_published, e.short_code, COALESCE(e.url,''), COALESCE(e.source,''), e.created_at, COALESCE(l.location, ''), e.organization_id FROM events e LEFT JOIN locations l ON e.location_id = l.id`
+const eventListSelect = `SELECT e.id, e.uid, e.title, e.description, e.start_time, e.end_time, e.has_ball, e.has_workshop, e.is_cancelled, e.tags, e.is_published, e.short_code, COALESCE(e.url,''), COALESCE(e.source,''), e.created_at, COALESCE(l.location, ''), e.organization_id, COALESCE(e.pricing,'') FROM events e LEFT JOIN locations l ON e.location_id = l.id`
 
 // ── low-level helpers ──────────────────────────────────────────────────────
 
@@ -150,7 +171,8 @@ func scanEventRow(s scanner) (Event, error) {
 	var uid sql.NullString
 	if err := s.Scan(&event.ID, &uid, &event.Title, &event.Description, &startEpoch, &endEpoch,
 		&hasBallInt, &hasWorkshopInt, &isCancelledInt, &event.TagsJSON, &isPublishedInt,
-		&event.ShortCode, &event.URL, &event.Source, &event.CreatedAt, &event.Location, &orgID); err != nil {
+		&event.ShortCode, &event.URL, &event.Source, &event.CreatedAt, &event.Location, &orgID,
+		&event.PricingJSON); err != nil {
 		return Event{}, err
 	}
 	if uid.Valid {
@@ -170,6 +192,12 @@ func scanEventRow(s scanner) (Event, error) {
 	if event.TagsJSON != "" {
 		json.Unmarshal([]byte(event.TagsJSON), &event.Tags)
 	}
+	if event.PricingJSON != "" {
+		var p Pricing
+		if json.Unmarshal([]byte(event.PricingJSON), &p) == nil {
+			event.Pricing = &p
+		}
+	}
 	return event, nil
 }
 
@@ -181,10 +209,10 @@ func fetchEventByID(q querier, id int) (Event, error) {
 	var orgID sql.NullInt64
 	var uid sql.NullString
 	err := q.QueryRow(
-		"SELECT id, uid, title, description, start_time, end_time, has_ball, has_workshop, is_cancelled, tags, is_published, short_code, COALESCE(url,''), COALESCE(source,''), created_at, organization_id FROM events WHERE id = ?", id,
+		"SELECT id, uid, title, description, start_time, end_time, has_ball, has_workshop, is_cancelled, tags, is_published, short_code, COALESCE(url,''), COALESCE(source,''), created_at, organization_id, COALESCE(pricing,'') FROM events WHERE id = ?", id,
 	).Scan(&event.ID, &uid, &event.Title, &event.Description, &startEpoch, &endEpoch,
 		&hasBallInt, &hasWorkshopInt, &isCancelledInt, &event.TagsJSON, &isPublishedInt,
-		&event.ShortCode, &event.URL, &event.Source, &event.CreatedAt, &orgID)
+		&event.ShortCode, &event.URL, &event.Source, &event.CreatedAt, &orgID, &event.PricingJSON)
 	if uid.Valid {
 		event.UID = uid.String
 	}
@@ -204,6 +232,12 @@ func fetchEventByID(q querier, id int) (Event, error) {
 	}
 	if event.TagsJSON != "" {
 		json.Unmarshal([]byte(event.TagsJSON), &event.Tags)
+	}
+	if event.PricingJSON != "" {
+		var p Pricing
+		if json.Unmarshal([]byte(event.PricingJSON), &p) == nil {
+			event.Pricing = &p
+		}
 	}
 	return event, nil
 }
@@ -328,7 +362,7 @@ func urlVal(s string) interface{} {
 // Deduplication order: UID exact match → URL exact match → title+location+time fuzzy match (±3 h).
 // The URL and fuzzy tiers run whenever the previous tier misses, so two feeds that
 // publish the same event with different UIDs (or none) converge to a single row.
-func insertEvent(q querier, title, description string, startTime, endTime int64, locationID int64, hasBall, hasWorkshop, isCancelled bool, tags []string, isPublished bool, organizationID *int, uid, url, source string, sourceLastModified int64) (int, string, bool, error) {
+func insertEvent(q querier, title, description string, startTime, endTime int64, locationID int64, hasBall, hasWorkshop, isCancelled bool, tags []string, isPublished bool, organizationID *int, uid, url, source string, sourceLastModified int64, pricing *Pricing) (int, string, bool, error) {
 	var existingID int
 	var existingShortCode string
 	var existingSourceLastModified int64
@@ -368,6 +402,13 @@ func insertEvent(q querier, title, description string, startTime, endTime int64,
 
 	tagsJSON, _ := json.Marshal(tags)
 
+	var pricingArg interface{}
+	if pricing != nil {
+		if b, err := json.Marshal(pricing); err == nil {
+			pricingArg = string(b)
+		}
+	}
+
 	if lookupErr == nil {
 		// Skip update when the source tells us nothing has changed since last import.
 		if sourceLastModified > 0 && sourceLastModified <= existingSourceLastModified {
@@ -378,8 +419,8 @@ func insertEvent(q querier, title, description string, startTime, endTime int64,
 			slmArg = sourceLastModified
 		}
 		_, err := q.Exec(
-			"UPDATE events SET description=?, start_time=?, end_time=?, location_id=?, has_ball=?, has_workshop=?, is_cancelled=?, tags=?, is_published=?, url=?, source_last_modified=? WHERE id=?",
-			description, startTime, endTime, locationID, hasBall, hasWorkshop, isCancelled, string(tagsJSON), isPublished, urlVal(url), slmArg, existingID,
+			"UPDATE events SET description=?, start_time=?, end_time=?, location_id=?, has_ball=?, has_workshop=?, is_cancelled=?, tags=?, is_published=?, url=?, source_last_modified=?, pricing=? WHERE id=?",
+			description, startTime, endTime, locationID, hasBall, hasWorkshop, isCancelled, string(tagsJSON), isPublished, urlVal(url), slmArg, pricingArg, existingID,
 		)
 		if err != nil {
 			return 0, "", false, err
@@ -411,8 +452,8 @@ func insertEvent(q querier, title, description string, startTime, endTime int64,
 			sourceArg = source
 		}
 		result, err = q.Exec(
-			"INSERT INTO events (uid, title, description, start_time, end_time, location_id, has_ball, has_workshop, is_cancelled, tags, is_published, organization_id, short_code, url, source, source_last_modified) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-			uidArg, title, description, startTime, endTime, locationID, hasBall, hasWorkshop, isCancelled, string(tagsJSON), isPublished, orgIDArg, shortCode, urlVal(url), sourceArg, slmArg,
+			"INSERT INTO events (uid, title, description, start_time, end_time, location_id, has_ball, has_workshop, is_cancelled, tags, is_published, organization_id, short_code, url, source, source_last_modified, pricing) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+			uidArg, title, description, startTime, endTime, locationID, hasBall, hasWorkshop, isCancelled, string(tagsJSON), isPublished, orgIDArg, shortCode, urlVal(url), sourceArg, slmArg, pricingArg,
 		)
 		if err == nil {
 			break
@@ -461,7 +502,7 @@ func createEventFromRequest(q querier, req EventCreateRequest, locationID int64,
 			return nil, false, fmt.Errorf("end_time: %w", err)
 		}
 
-		id, shortCode, created, err := insertEvent(q, req.Title, entry.description, startTime, endTime, locationID, req.HasBall, req.HasWorkshop, req.IsCancelled, req.Tags, isPublished, req.OrganizationID, req.UID, req.URL, req.Source, req.SourceLastModified)
+		id, shortCode, created, err := insertEvent(q, req.Title, entry.description, startTime, endTime, locationID, req.HasBall, req.HasWorkshop, req.IsCancelled, req.Tags, isPublished, req.OrganizationID, req.UID, req.URL, req.Source, req.SourceLastModified, req.Pricing)
 		if err != nil {
 			return nil, false, err
 		}
@@ -560,6 +601,11 @@ func patchEvents(w http.ResponseWriter, r *http.Request) {
 	if req.HasWorkshop != nil {
 		setClauses = append(setClauses, "has_workshop = ?")
 		setArgs = append(setArgs, *req.HasWorkshop)
+	}
+	if req.Pricing != nil {
+		pricingJSON, _ := json.Marshal(req.Pricing)
+		setClauses = append(setClauses, "pricing = ?")
+		setArgs = append(setArgs, string(pricingJSON))
 	}
 	if len(setClauses) == 0 {
 		http.Error(w, "no fields to update", http.StatusBadRequest)

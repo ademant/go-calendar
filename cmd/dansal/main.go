@@ -318,6 +318,7 @@ func migrateDB() {
 		FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 	)`)
 	db.Exec("CREATE INDEX IF NOT EXISTS idx_magic_login_tokens_token ON magic_login_tokens(token)")
+	db.Exec("ALTER TABLE events ADD COLUMN pricing TEXT")
 	db.Exec(`CREATE TABLE IF NOT EXISTS verification_tokens (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		token TEXT UNIQUE NOT NULL,
@@ -363,6 +364,7 @@ func createTables() error {
 		short_code TEXT UNIQUE,
 		url TEXT,
 		source TEXT,
+		pricing TEXT,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		FOREIGN KEY (location_id) REFERENCES locations(id)
 	);

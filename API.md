@@ -202,9 +202,26 @@ Requires authentication. Users manage their own keys; admins can manage any.
   "short_code": "8b911390",
   "image_url": "/api/v1/images/1",
   "organization_id": 3,
+  "pricing": {
+    "type": "multiple",
+    "currency": "EUR",
+    "prices": [
+      { "label": "normal", "amount": 12 },
+      { "label": "student", "amount": 8 }
+    ]
+  },
   "created_at": "..."
 }
 ```
+
+The `pricing` field is optional. `type` must be one of:
+
+| Value | Description |
+|-------|-------------|
+| `free` | No admission fee |
+| `donation` | Pay what you want |
+| `single` | One fixed price; set `amount` (and optionally `currency`) |
+| `multiple` | Tiered pricing; set `prices` as an array of `{label, amount}` objects (and optionally `currency`) |
 
 `uid` is set from the iCal `UID` field when importing; used for deduplication on re-import. When `uid` is present, re-importing the same feed updates the event rather than creating a duplicate. Without `uid`, deduplication falls back to matching by title + location + start time (±3 hours).
 
@@ -263,7 +280,8 @@ Query parameters:
     "zipcode": "10115", "town": "Berlin",
     "latitude": "52.52", "longitude": "13.40",
     "eventsite": "https://example.com/event/42"
-  }
+  },
+  "pricing": { "type": "single", "amount": 10, "currency": "EUR" }
 }
 ```
 
