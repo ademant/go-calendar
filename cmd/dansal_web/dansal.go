@@ -231,6 +231,11 @@ func (c *DansalClient) GetEventsByMusician(ctx context.Context, musicianID int, 
 	return events, json.NewDecoder(resp.Body).Decode(&events)
 }
 
+func (c *DansalClient) GetPublicEventsByMusician(ctx context.Context, musicianID int) ([]Event, error) {
+	var events []Event
+	return events, c.get(ctx, fmt.Sprintf("/api/v1/events?musician_id=%d", musicianID), &events)
+}
+
 func (c *DansalClient) GetMusicians(ctx context.Context) ([]Musician, error) {
 	var ms []Musician
 	return ms, c.get(ctx, "/api/v1/musicians", &ms)

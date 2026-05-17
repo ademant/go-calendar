@@ -1,0 +1,29 @@
+{{template "base" .}}
+{{define "content"}}
+<h1>{{.Strings.T "musicians_title"}}</h1>
+
+{{with .Data}}
+{{if .Musicians}}
+<ul class="musician-list">
+{{range .Musicians}}
+<li class="musician-item">
+  <a href="/musicians/{{.ID}}" class="musician-name">{{.Bandname}}</a>
+  {{with .ShortName}}<span class="musician-short">({{.}})</span>{{end}}
+  {{with .Description}}<p class="musician-desc">{{.}}</p>{{end}}
+</li>
+{{end}}
+</ul>
+{{else}}
+<p>{{$.Strings.T "musicians_none"}}</p>
+{{end}}
+{{end}}
+
+<style>
+.musician-list{list-style:none;padding:0;display:grid;gap:.6rem}
+.musician-item{background:#fff;border:1px solid #ddd;border-radius:6px;padding:.9rem 1.1rem}
+.musician-name{font-size:1.05rem;font-weight:600;color:#1a1a2e;text-decoration:none}
+.musician-name:hover{text-decoration:underline;color:#1a6eb5}
+.musician-short{color:#888;font-size:.9rem;margin-left:.35rem}
+.musician-desc{margin:.35rem 0 0;font-size:.9rem;color:#555;white-space:pre-wrap}
+</style>
+{{end}}

@@ -11,6 +11,10 @@ languages:
     strings:
       # Navigation
       nav_events: "Veranstaltungen"
+      nav_musicians: "Musiker"
+      musicians_title: "Musiker"
+      musicians_none: "Noch keine Musiker vorhanden."
+      musician_no_events: "Keine bevorstehenden Veranstaltungen."
       nav_login: "Anmelden"
       nav_logout: "Abmelden"
       nav_footer: "Betrieben von dansal"
@@ -187,6 +191,10 @@ languages:
     strings:
       # Navigation
       nav_events: "Events"
+      nav_musicians: "Musicians"
+      musicians_title: "Musicians"
+      musicians_none: "No musicians yet."
+      musician_no_events: "No upcoming events."
       nav_login: "Login"
       nav_logout: "Logout"
       nav_footer: "Powered by dansal"
@@ -363,6 +371,10 @@ languages:
     strings:
       # Navigation
       nav_events: "Événements"
+      nav_musicians: "Musiciens"
+      musicians_title: "Musiciens"
+      musicians_none: "Aucun musicien pour l'instant."
+      musician_no_events: "Aucun événement à venir."
       nav_login: "Connexion"
       nav_logout: "Déconnexion"
       nav_footer: "Propulsé par dansal"
