@@ -132,7 +132,7 @@ languages:
       settings_email_verified_ok: "E-Mail-Adresse erfolgreich bestätigt."
       # Magic link login
       login_magic_title: "Ohne Passwort anmelden"
-      login_magic_email: "E-Mail-Adresse"
+      login_magic_identifier: "Benutzername oder E-Mail-Adresse"
       login_magic_submit: "Link senden"
       login_magic_sent: "Falls die E-Mail-Adresse bekannt und bestätigt ist, wurde ein Anmeldelink gesendet."
       login_magic_error: "Ungültiger oder abgelaufener Anmeldelink."
@@ -271,7 +271,7 @@ languages:
       settings_email_verified_ok: "Email address verified successfully."
       # Magic link login
       login_magic_title: "Login without password"
-      login_magic_email: "Email address"
+      login_magic_identifier: "Username or email address"
       login_magic_submit: "Send link"
       login_magic_sent: "If the email address is known and verified, a login link has been sent."
       login_magic_error: "Invalid or expired login link."
@@ -410,7 +410,7 @@ languages:
       settings_email_verified_ok: "Adresse e-mail vérifiée avec succès."
       # Magic link login
       login_magic_title: "Se connecter sans mot de passe"
-      login_magic_email: "Adresse e-mail"
+      login_magic_identifier: "Nom d'utilisateur ou adresse e-mail"
       login_magic_submit: "Envoyer le lien"
       login_magic_sent: "Si l'adresse e-mail est connue et vérifiée, un lien de connexion a été envoyé."
       login_magic_error: "Lien de connexion invalide ou expiré."

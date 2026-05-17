@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 )
 
 type DansalClient struct {
@@ -418,8 +419,14 @@ func (c *DansalClient) SendEmailVerification(ctx context.Context, id int, baseUR
 	return nil
 }
 
-func (c *DansalClient) RequestMagicLogin(ctx context.Context, email string) error {
-	body, _ := json.Marshal(map[string]string{"email": email})
+func (c *DansalClient) RequestMagicLogin(ctx context.Context, identifier string) error {
+	var payload map[string]string
+	if strings.Contains(identifier, "@") {
+		payload = map[string]string{"email": identifier}
+	} else {
+		payload = map[string]string{"username": identifier}
+	}
+	body, _ := json.Marshal(payload)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.BaseURL+"/api/v1/login/magic",
 		bytes.NewReader(body))
 	if err != nil {

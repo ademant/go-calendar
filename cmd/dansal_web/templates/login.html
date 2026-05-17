@@ -19,8 +19,8 @@
   <details class="magic-section">
     <summary>{{$.Strings.T "login_magic_title"}}</summary>
     <form method="post" action="/magic" class="login-form" style="margin-top:.75rem">
-      <label for="magic-email">{{$.Strings.T "login_magic_email"}}</label>
-      <input id="magic-email" type="email" name="email" required autocomplete="email">
+      <label for="magic-identifier">{{$.Strings.T "login_magic_identifier"}}</label>
+      <input id="magic-identifier" type="text" name="identifier" required autocomplete="username email">
       <button type="submit">{{$.Strings.T "login_magic_submit"}}</button>
     </form>
   </details>

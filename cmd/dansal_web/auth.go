@@ -76,9 +76,9 @@ func magicRequestHandler(cfg *Config, tmpls *Templates, client *DansalClient, i1
 			http.Error(w, "bad request", http.StatusBadRequest)
 			return
 		}
-		email := r.FormValue("email")
-		if email != "" {
-			_ = client.RequestMagicLogin(r.Context(), email)
+		identifier := r.FormValue("identifier")
+		if identifier != "" {
+			_ = client.RequestMagicLogin(r.Context(), identifier)
 		}
 		http.Redirect(w, r, "/login?magic_sent=1", http.StatusSeeOther)
 	}
