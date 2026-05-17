@@ -173,6 +173,7 @@ type AdminMusiciansData struct {
 
 type AdminMusicianEditData struct {
 	Musician Musician
+	Events   []Event
 	IsNew    bool
 	ErrorKey string
 }
@@ -256,8 +257,12 @@ func adminMusicianEditPageHandler(cfg *Config, tmpls *Templates, client *DansalC
 			http.NotFound(w, r)
 			return
 		}
+		events, _ := client.GetEventsByMusician(r.Context(), id, getSessionToken(r))
 		title := i18n.T(r, "admin_edit")
-		renderTemplate(w, tmpls.adminMusicianEdit, tmplData(r, cfg, i18n, title, AdminMusicianEditData{Musician: musician}))
+		renderTemplate(w, tmpls.adminMusicianEdit, tmplData(r, cfg, i18n, title, AdminMusicianEditData{
+			Musician: musician,
+			Events:   events,
+		}))
 	}
 }
 

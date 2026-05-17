@@ -220,6 +220,17 @@ func (c *DansalClient) GetOrganization(ctx context.Context, id int) (Organizatio
 	return org, nil
 }
 
+func (c *DansalClient) GetEventsByMusician(ctx context.Context, musicianID int, token string) ([]Event, error) {
+	path := fmt.Sprintf("/api/v1/events?musician_id=%d", musicianID)
+	resp, err := c.authed(ctx, http.MethodGet, path, token, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	var events []Event
+	return events, json.NewDecoder(resp.Body).Decode(&events)
+}
+
 func (c *DansalClient) GetMusicians(ctx context.Context) ([]Musician, error) {
 	var ms []Musician
 	return ms, c.get(ctx, "/api/v1/musicians", &ms)

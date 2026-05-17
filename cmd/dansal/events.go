@@ -345,6 +345,10 @@ func applyEventFilters(r *http.Request, query *string, args *[]interface{}) {
 		*query += " AND l.country = ?"
 		*args = append(*args, country)
 	}
+	if v := q.Get("musician_id"); v != "" {
+		*query += " AND EXISTS (SELECT 1 FROM event_musicians em WHERE em.event_id = e.id AND em.musician_id = ?)"
+		*args = append(*args, v)
+	}
 	if latStr, lonStr, radStr := q.Get("lat"), q.Get("lon"), q.Get("radius_km"); latStr != "" && lonStr != "" && radStr != "" {
 		lat, latErr := strconv.ParseFloat(latStr, 64)
 		lon, lonErr := strconv.ParseFloat(lonStr, 64)
