@@ -6,7 +6,7 @@ SERVICE    := dansal
 BINDIR     := /usr/bin
 SYSCONFDIR := /etc/dansal
 STATEDIR   := /var/lib/dansal
-SYSTEMDDIR := /lib/systemd/system
+SYSTEMDDIR := /etc/systemd/system
 
 .PHONY: build build-dansal build-dansal_web build-dansal_admin run clean install install-web update deb
 
