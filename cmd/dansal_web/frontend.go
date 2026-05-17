@@ -60,10 +60,18 @@ var templateFS embed.FS
 //go:embed static/favicon.svg
 var faviconSVG []byte
 
-func faviconHandler(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "image/svg+xml")
-	w.Header().Set("Cache-Control", "public, max-age=86400")
-	w.Write(faviconSVG)
+//go:embed static/logo.svg
+var logoSVG []byte
+
+//go:embed static/banner.svg
+var bannerSVG []byte
+
+func svgHandler(data []byte) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "image/svg+xml")
+		w.Header().Set("Cache-Control", "public, max-age=86400")
+		w.Write(data)
+	}
 }
 
 var tmplFuncMap = template.FuncMap{

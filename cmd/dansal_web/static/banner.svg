@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="400" viewBox="0 0 1600 400">
+  <defs>
+    <style>
+      .bg { fill: #f7f2e8; }
+      .navy { fill: #10263f; }
+      .gold { fill: #c8873a; }
+      .line { stroke: #c8873a; stroke-width: 4; fill: none; }
+      .title {
+        font-family: Georgia, "Times New Roman", serif;
+        font-weight: 700;
+        letter-spacing: 4px;
+      }
+      .subtitle {
+        font-family: Georgia, "Times New Roman", serif;
+        font-weight: 600;
+        letter-spacing: 6px;
+      }
+    </style>
+  </defs>
+
+  <rect width="1600" height="400" class="bg"/>
+
+  <!-- Left accordion -->
+  <g transform="translate(70,210)" class="navy">
+    <rect x="0" y="0" width="55" height="90" rx="6"/>
+    <rect x="55" y="5" width="40" height="80" rx="4"/>
+    <g stroke="white" stroke-width="2">
+      <line x1="62" y1="10" x2="62" y2="80"/>
+      <line x1="70" y1="10" x2="70" y2="80"/>
+      <line x1="78" y1="10" x2="78" y2="80"/>
+    </g>
+  </g>
+
+  <!-- Dancing couple -->
+  <g transform="translate(220,70)" class="navy">
+    <circle cx="40" cy="55" r="14"/>
+    <path d="M40 70 C20 100, 15 140, 30 190 C40 220, 20 250, 0 280 L35 280
+             C55 250, 70 220, 70 185 C70 140, 82 100, 105 75 Z"/>
+    <circle cx="150" cy="55" r="14"/>
+    <path d="M150 70 C170 100, 175 140, 160 190 C150 220, 170 250, 190 280 L155 280
+             C135 250, 120 220, 120 185 C120 140, 108 100, 85 75 Z"/>
+    <rect x="82" y="87" width="26" height="6" rx="3"/>
+  </g>
+
+  <!-- Right violin -->
+  <g transform="translate(1380,90)" class="navy">
+    <ellipse cx="0" cy="150" rx="35" ry="70"/>
+    <ellipse cx="0" cy="85" rx="24" ry="50"/>
+    <rect x="-3" y="0" width="6" height="90"/>
+    <line x1="0" y1="0" x2="35" y2="230" stroke="#10263f" stroke-width="5"/>
+  </g>
+
+  <!-- Decorative lines -->
+  <path d="M500 85 H730" class="line"/>
+  <path d="M870 85 H1100" class="line"/>
+  <path d="M500 320 C620 280, 700 280, 760 320" class="line"/>
+  <path d="M840 320 C900 280, 980 280, 1100 320" class="line"/>
+
+  <!-- Title -->
+  <text x="800" y="180" text-anchor="middle" class="navy title" font-size="120">BALFOLK</text>
+  <text x="800" y="255" text-anchor="middle" class="gold subtitle" font-size="68">CALENDAR</text>
+
+  <!-- Calendar icon -->
+  <g transform="translate(760,285)">
+    <rect x="0" y="0" width="80" height="70" rx="8" fill="#ffffff" stroke="#10263f" stroke-width="6"/>
+    <line x1="20" y1="-10" x2="20" y2="15" stroke="#10263f" stroke-width="6" stroke-linecap="round"/>
+    <line x1="60" y1="-10" x2="60" y2="15" stroke="#10263f" stroke-width="6" stroke-linecap="round"/>
+    <g fill="#10263f">
+      <circle cx="20" cy="30" r="3"/>
+      <circle cx="40" cy="30" r="3"/>
+      <circle cx="60" cy="30" r="3"/>
+      <circle cx="20" cy="50" r="3"/>
+      <circle cx="40" cy="50" r="3"/>
+      <circle cx="60" cy="50" r="3"/>
+    </g>
+  </g>
+</svg>

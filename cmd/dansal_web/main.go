@@ -30,7 +30,9 @@ func main() {
 	r.HandleFunc("/org/{name}/followers", followersHandler(cfg, db)).Methods("GET")
 	r.HandleFunc("/org/{name}/inbox", inboxHandler(cfg, db, client)).Methods("POST")
 
-	r.HandleFunc("/favicon.svg", faviconHandler).Methods("GET")
+	r.HandleFunc("/favicon.svg", svgHandler(faviconSVG)).Methods("GET")
+	r.HandleFunc("/logo.svg", svgHandler(logoSVG)).Methods("GET")
+	r.HandleFunc("/banner.svg", svgHandler(bannerSVG)).Methods("GET")
 	r.HandleFunc("/", indexHandler(cfg, tmpls, client, i18n)).Methods("GET")
 	r.HandleFunc("/events/{id}", eventHandler(cfg, tmpls, client, i18n)).Methods("GET")
 	r.HandleFunc("/login", loginPageHandler(cfg, tmpls, i18n)).Methods("GET")
