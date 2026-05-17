@@ -1,0 +1,27 @@
+{{template "base" .}}
+{{define "content"}}
+<div class="verify-wrap">
+  {{with .Data}}
+  {{if .Success}}
+    <div class="verify-box verify-ok">
+      <p>{{$.Strings.T "verify_success"}}</p>
+      <a href="/settings">{{$.Strings.T "verify_back_settings"}}</a>
+    </div>
+  {{else}}
+    <div class="verify-box verify-error">
+      <p>{{$.Strings.T .ErrorKey}}</p>
+      <a href="/login">{{$.Strings.T "verify_back_login"}}</a>
+    </div>
+  {{end}}
+  {{end}}
+</div>
+
+<style>
+.verify-wrap{max-width:480px;margin:3rem auto}
+.verify-box{border-radius:6px;padding:1.5rem;text-align:center;font-size:1rem}
+.verify-ok{background:#d4edda;color:#155724;border:1px solid #c3e6cb}
+.verify-error{background:#f8d7da;color:#721c24;border:1px solid #f5c6cb}
+.verify-box p{margin-bottom:.75rem;font-size:1.05rem}
+.verify-box a{color:inherit;font-weight:600}
+</style>
+{{end}}

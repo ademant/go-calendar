@@ -39,8 +39,16 @@ func main() {
 	r.HandleFunc("/login", loginHandler(cfg, tmpls, client, i18n)).Methods("POST")
 	r.HandleFunc("/logout", logoutHandler(cfg, client)).Methods("POST")
 	r.HandleFunc("/lang", langHandler(i18n)).Methods("GET")
+	r.HandleFunc("/settings", settingsPageHandler(cfg, tmpls, client, i18n)).Methods("GET")
+	r.HandleFunc("/settings", settingsUpdateHandler(cfg, tmpls, client, i18n)).Methods("POST")
+	r.HandleFunc("/settings/verify", settingsSendVerifyHandler(cfg, tmpls, client, i18n)).Methods("POST")
+	r.HandleFunc("/magic", magicRequestHandler(cfg, tmpls, client, i18n)).Methods("POST")
+	r.HandleFunc("/api/v1/login/magic/{token}", magicLoginHandler(cfg, tmpls, client, i18n)).Methods("GET")
+	r.HandleFunc("/api/v1/verify/{token}", verifyEmailHandler(cfg, tmpls, client, i18n)).Methods("GET")
 
 	r.HandleFunc("/admin/organizations", adminOrgsHandler(cfg, tmpls, client, i18n)).Methods("GET")
+	r.HandleFunc("/admin/organizations/new", adminOrgNewPageHandler(cfg, tmpls, i18n)).Methods("GET")
+	r.HandleFunc("/admin/organizations/new", adminOrgCreateHandler(cfg, tmpls, client, i18n)).Methods("POST")
 	r.HandleFunc("/admin/organizations/{id}/edit", adminOrgEditPageHandler(cfg, tmpls, client, i18n)).Methods("GET")
 	r.HandleFunc("/admin/organizations/{id}/edit", adminOrgSaveHandler(cfg, tmpls, client, i18n)).Methods("POST")
 
@@ -49,6 +57,8 @@ func main() {
 	r.HandleFunc("/admin/fetchurls/{id}/edit", adminFetchurlSaveHandler(cfg, tmpls, client, i18n)).Methods("POST")
 
 	r.HandleFunc("/admin/locations", adminLocationsHandler(cfg, tmpls, client, i18n)).Methods("GET")
+	r.HandleFunc("/admin/locations/new", adminLocationNewPageHandler(cfg, tmpls, client, i18n)).Methods("GET")
+	r.HandleFunc("/admin/locations/new", adminLocationCreateHandler(cfg, tmpls, client, i18n)).Methods("POST")
 	r.HandleFunc("/admin/locations/bulk-assign", adminLocationBulkAssignHandler(cfg, client)).Methods("POST")
 	r.HandleFunc("/admin/locations/{id}/edit", adminLocationEditPageHandler(cfg, tmpls, client, i18n)).Methods("GET")
 	r.HandleFunc("/admin/locations/{id}/edit", adminLocationSaveHandler(cfg, tmpls, client, i18n)).Methods("POST")

@@ -1,0 +1,72 @@
+{{template "base" .}}
+{{define "content"}}
+<h1>{{.Strings.T "settings_title"}}</h1>
+
+<div class="settings-wrap">
+  {{with .Data}}
+  {{if .ErrorKey}}<p class="msg msg-error" role="alert">{{$.Strings.T .ErrorKey}}</p>{{end}}
+  {{if .Saved}}<p class="msg msg-ok" role="status">{{$.Strings.T "settings_saved"}}</p>{{end}}
+  {{if .VerifySent}}<p class="msg msg-ok" role="status">{{$.Strings.T "settings_verify_sent"}}</p>{{end}}
+
+  <div class="settings-card">
+    <h2>{{$.Strings.T "settings_account"}}</h2>
+    <div class="settings-row">
+      <span class="settings-label">{{$.Strings.T "settings_username"}}</span>
+      <span>{{.User.Username}}</span>
+    </div>
+    <div class="settings-row">
+      <span class="settings-label">{{$.Strings.T "settings_role"}}</span>
+      <span>{{.User.Role}}</span>
+    </div>
+  </div>
+
+  <div class="settings-card">
+    <h2>{{$.Strings.T "settings_email_section"}}</h2>
+    <form method="post" action="/settings" class="settings-form">
+      <label for="email">{{$.Strings.T "settings_email"}}</label>
+      <div class="email-row">
+        <input id="email" type="email" name="email" value="{{.User.Email}}" required>
+        <button type="submit">{{$.Strings.T "settings_save"}}</button>
+      </div>
+    </form>
+
+    {{if .User.Email}}
+    <div class="verify-row">
+      {{if .User.EmailVerified}}
+        <span class="badge badge-ok">{{$.Strings.T "settings_email_verified"}}</span>
+      {{else}}
+        <span class="badge badge-warn">{{$.Strings.T "settings_email_not_verified"}}</span>
+        <form method="post" action="/settings/verify" style="display:inline;margin-left:.75rem">
+          <button type="submit" class="btn-link">{{$.Strings.T "settings_send_verify"}}</button>
+        </form>
+      {{end}}
+    </div>
+    {{end}}
+  </div>
+  {{end}}
+</div>
+
+<style>
+.settings-wrap{max-width:520px;margin:1.5rem auto;display:flex;flex-direction:column;gap:1.25rem}
+.msg{border-radius:4px;padding:.6rem .9rem;font-size:.9rem;margin-bottom:.25rem}
+.msg-error{background:#f8d7da;color:#721c24;border:1px solid #f5c6cb}
+.msg-ok{background:#d4edda;color:#155724;border:1px solid #c3e6cb}
+.settings-card{background:#fff;border:1px solid #ddd;border-radius:6px;padding:1.25rem}
+.settings-card h2{font-size:1rem;margin:0 0 .9rem;color:#333}
+.settings-row{display:flex;gap:.75rem;margin-bottom:.5rem;font-size:.95rem}
+.settings-label{font-weight:600;color:#555;min-width:120px}
+.settings-form{display:flex;flex-direction:column;gap:.5rem}
+.settings-form label{font-weight:600;font-size:.9rem;color:#444}
+.email-row{display:flex;gap:.5rem;align-items:center}
+.email-row input{flex:1;padding:.45rem .6rem;border:1px solid #ccc;border-radius:4px;font-size:1rem}
+.email-row input:focus{outline:2px solid #1a6eb5;border-color:#1a6eb5}
+.email-row button{padding:.45rem .9rem;background:#1a6eb5;color:#fff;border:none;border-radius:4px;font-size:.95rem;cursor:pointer;white-space:nowrap}
+.email-row button:hover{background:#0d4a80}
+.verify-row{margin-top:.75rem;display:flex;align-items:center}
+.badge{display:inline-block;border-radius:3px;padding:.15rem .5rem;font-size:.82rem;font-weight:600}
+.badge-ok{background:#d4edda;color:#155724}
+.badge-warn{background:#fff3cd;color:#856404}
+.btn-link{background:none;border:none;color:#1a6eb5;cursor:pointer;font-size:.9rem;padding:0;text-decoration:underline}
+.btn-link:hover{color:#0d4a80}
+</style>
+{{end}}

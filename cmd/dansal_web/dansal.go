@@ -95,6 +95,15 @@ type LoginResponse struct {
 	} `json:"user"`
 }
 
+type UserInfo struct {
+	ID            int    `json:"id"`
+	Username      string `json:"username"`
+	Email         string `json:"email"`
+	Role          string `json:"role"`
+	EmailVerified bool   `json:"email_verified"`
+	CreatedAt     string `json:"created_at"`
+}
+
 func (c *DansalClient) get(ctx context.Context, path string, out interface{}) error {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.BaseURL+path, nil)
 	if err != nil {
@@ -208,6 +217,23 @@ func (c *DansalClient) authed(ctx context.Context, method, path, token string, b
 	return c.HTTP.Do(req)
 }
 
+func (c *DansalClient) CreateOrganization(ctx context.Context, name, description, token string) (Organization, error) {
+	body, _ := json.Marshal(map[string]string{"name": name, "description": description})
+	resp, err := c.authed(ctx, http.MethodPost, "/api/v1/organizations", token, body)
+	if err != nil {
+		return Organization{}, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode == http.StatusForbidden {
+		return Organization{}, fmt.Errorf("forbidden")
+	}
+	if resp.StatusCode != http.StatusCreated {
+		return Organization{}, fmt.Errorf("dansal API: %s", resp.Status)
+	}
+	var org Organization
+	return org, json.NewDecoder(resp.Body).Decode(&org)
+}
+
 func (c *DansalClient) UpdateOrganization(ctx context.Context, id int, name, description, token string) error {
 	body, _ := json.Marshal(map[string]string{"name": name, "description": description})
 	resp, err := c.authed(ctx, http.MethodPut, fmt.Sprintf("/api/v1/organizations/%d", id), token, body)
@@ -287,6 +313,23 @@ func (c *DansalClient) GetLocation(ctx context.Context, id int) (Location, error
 	return loc, nil
 }
 
+func (c *DansalClient) CreateLocation(ctx context.Context, loc Location, token string) (Location, error) {
+	body, _ := json.Marshal(loc)
+	resp, err := c.authed(ctx, http.MethodPost, "/api/v1/locations", token, body)
+	if err != nil {
+		return Location{}, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode == http.StatusForbidden {
+		return Location{}, fmt.Errorf("forbidden")
+	}
+	if resp.StatusCode != http.StatusCreated {
+		return Location{}, fmt.Errorf("dansal API: %s", resp.Status)
+	}
+	var created Location
+	return created, json.NewDecoder(resp.Body).Decode(&created)
+}
+
 func (c *DansalClient) UpdateLocation(ctx context.Context, id int, loc Location, token string) error {
 	body, _ := json.Marshal(loc)
 	resp, err := c.authed(ctx, http.MethodPatch, fmt.Sprintf("/api/v1/locations/%d", id), token, body)
@@ -329,4 +372,103 @@ func (c *DansalClient) GetEventsByOrg(ctx context.Context, orgID int) ([]Event, 
 		}
 	}
 	return events, nil
+}
+
+func (c *DansalClient) GetUser(ctx context.Context, id int, token string) (UserInfo, error) {
+	resp, err := c.authed(ctx, http.MethodGet, fmt.Sprintf("/api/v1/users/%d", id), token, nil)
+	if err != nil {
+		return UserInfo{}, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return UserInfo{}, fmt.Errorf("dansal API: %s", resp.Status)
+	}
+	var u UserInfo
+	return u, json.NewDecoder(resp.Body).Decode(&u)
+}
+
+func (c *DansalClient) UpdateUserEmail(ctx context.Context, id int, email, token string) error {
+	body, _ := json.Marshal(map[string]string{"email": email})
+	resp, err := c.authed(ctx, http.MethodPut, fmt.Sprintf("/api/v1/users/%d", id), token, body)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("dansal API: %s", resp.Status)
+	}
+	return nil
+}
+
+func (c *DansalClient) SendEmailVerification(ctx context.Context, id int, token string) error {
+	body, _ := json.Marshal(map[string]string{"channel": "email"})
+	resp, err := c.authed(ctx, http.MethodPost, fmt.Sprintf("/api/v1/users/%d/verify", id), token, body)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusNoContent {
+		return fmt.Errorf("dansal API: %s", resp.Status)
+	}
+	return nil
+}
+
+func (c *DansalClient) RequestMagicLogin(ctx context.Context, email string) error {
+	body, _ := json.Marshal(map[string]string{"email": email})
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.BaseURL+"/api/v1/login/magic",
+		bytes.NewReader(body))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := c.HTTP.Do(req)
+	if err != nil {
+		return err
+	}
+	resp.Body.Close()
+	return nil
+}
+
+func (c *DansalClient) UseMagicLogin(ctx context.Context, token string) (*LoginResponse, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet,
+		c.BaseURL+"/api/v1/login/magic/"+token, nil)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := c.HTTP.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode == http.StatusNotFound || resp.StatusCode == http.StatusGone {
+		return nil, fmt.Errorf("invalid_or_expired")
+	}
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("dansal API: %s", resp.Status)
+	}
+	var lr LoginResponse
+	return &lr, json.NewDecoder(resp.Body).Decode(&lr)
+}
+
+func (c *DansalClient) ConsumeVerification(ctx context.Context, token string) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet,
+		c.BaseURL+"/api/v1/verify/"+token, nil)
+	if err != nil {
+		return err
+	}
+	resp, err := c.HTTP.Do(req)
+	if err != nil {
+		return err
+	}
+	resp.Body.Close()
+	if resp.StatusCode == http.StatusNotFound {
+		return fmt.Errorf("invalid")
+	}
+	if resp.StatusCode == http.StatusGone {
+		return fmt.Errorf("expired")
+	}
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("dansal API: %s", resp.Status)
+	}
+	return nil
 }

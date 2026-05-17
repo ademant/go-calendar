@@ -134,6 +134,8 @@ type Templates struct {
 	event              *template.Template
 	org                *template.Template
 	login              *template.Template
+	settings           *template.Template
+	verify             *template.Template
 	adminOrgs          *template.Template
 	adminOrgEdit       *template.Template
 	adminFetchurls     *template.Template
@@ -156,6 +158,8 @@ func loadTemplates() *Templates {
 		event:             load("event"),
 		org:               load("org"),
 		login:             load("login"),
+		settings:          load("settings"),
+		verify:            load("verify"),
 		adminOrgs:         load("admin_orgs"),
 		adminOrgEdit:      load("admin_org_edit"),
 		adminFetchurls:    load("admin_fetchurls"),

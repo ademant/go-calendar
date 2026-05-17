@@ -1,0 +1,104 @@
+package main
+
+import (
+	"net/http"
+
+	"github.com/gorilla/mux"
+)
+
+type SettingsData struct {
+	User       UserInfo
+	ErrorKey   string
+	Saved      bool
+	VerifySent bool
+}
+
+func settingsPageHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		su, ok := requireLogin(w, r)
+		if !ok {
+			return
+		}
+		token := getSessionToken(r)
+		u, err := client.GetUser(r.Context(), su.ID, token)
+		if err != nil {
+			http.Error(w, "could not load user", http.StatusBadGateway)
+			return
+		}
+		title := i18n.T(r, "settings_title")
+		renderTemplate(w, tmpls.settings, tmplData(r, cfg, i18n, title, SettingsData{
+			User:       u,
+			Saved:      r.URL.Query().Get("saved") == "1",
+			VerifySent: r.URL.Query().Get("verify_sent") == "1",
+		}))
+	}
+}
+
+func settingsUpdateHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		su, ok := requireLogin(w, r)
+		if !ok {
+			return
+		}
+		if err := r.ParseForm(); err != nil {
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+		token := getSessionToken(r)
+		email := r.FormValue("email")
+
+		if err := client.UpdateUserEmail(r.Context(), su.ID, email, token); err != nil {
+			u, _ := client.GetUser(r.Context(), su.ID, token)
+			title := i18n.T(r, "settings_title")
+			renderTemplate(w, tmpls.settings, tmplData(r, cfg, i18n, title, SettingsData{
+				User:     u,
+				ErrorKey: "settings_save_error",
+			}))
+			return
+		}
+		http.Redirect(w, r, "/settings?saved=1", http.StatusSeeOther)
+	}
+}
+
+func settingsSendVerifyHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		su, ok := requireLogin(w, r)
+		if !ok {
+			return
+		}
+		token := getSessionToken(r)
+
+		if err := client.SendEmailVerification(r.Context(), su.ID, token); err != nil {
+			u, _ := client.GetUser(r.Context(), su.ID, token)
+			title := i18n.T(r, "settings_title")
+			renderTemplate(w, tmpls.settings, tmplData(r, cfg, i18n, title, SettingsData{
+				User:     u,
+				ErrorKey: "settings_verify_error",
+			}))
+			return
+		}
+		http.Redirect(w, r, "/settings?verify_sent=1", http.StatusSeeOther)
+	}
+}
+
+type VerifyData struct {
+	Success  bool
+	ErrorKey string
+}
+
+func verifyEmailHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		token := mux.Vars(r)["token"]
+		title := i18n.T(r, "verify_title")
+		err := client.ConsumeVerification(r.Context(), token)
+		var data VerifyData
+		if err == nil {
+			data = VerifyData{Success: true}
+		} else if err.Error() == "expired" {
+			data = VerifyData{ErrorKey: "verify_error_expired"}
+		} else {
+			data = VerifyData{ErrorKey: "verify_error_invalid"}
+		}
+		renderTemplate(w, tmpls.verify, tmplData(r, cfg, i18n, title, data))
+	}
+}

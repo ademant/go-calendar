@@ -22,7 +22,8 @@ nav{background:#1a1a2e;color:#fff;padding:.4rem 1rem;margin:0 -1rem 0;display:fl
 .nav-links a{color:#c0c8ff;text-decoration:none;font-size:.95rem}
 .nav-links a:hover{color:#fff;text-decoration:underline}
 .nav-user{display:flex;align-items:center;gap:.75rem;margin-left:auto}
-.nav-user span{color:#c0c8ff;font-size:.9rem}
+.nav-user-name{color:#c0c8ff;font-size:.9rem;text-decoration:none}
+.nav-user-name:hover{color:#fff;text-decoration:underline}
 .nav-btn{background:transparent;border:1px solid #c0c8ff;color:#c0c8ff;border-radius:4px;padding:.25rem .75rem;font-size:.85rem;cursor:pointer;text-decoration:none;line-height:1.6}
 .nav-btn:hover{background:#c0c8ff;color:#1a1a2e}
 main{max-width:960px;margin:0 auto;padding-bottom:3rem}
@@ -63,7 +64,7 @@ footer{text-align:center;color:#999;font-size:.8rem;margin-top:2rem;padding-top:
   </div>
   <div class="nav-user">
     {{if .User}}
-      <span>{{.User.Username}}</span>
+      <a href="/settings" class="nav-user-name">{{.User.Username}}</a>
       <form method="post" action="/logout" style="margin:0">
         <button type="submit" class="nav-btn">{{.Strings.T "nav_logout"}}</button>
       </form>
