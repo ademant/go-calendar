@@ -60,6 +60,16 @@ type Musician struct {
 	Bandname string `json:"bandname"`
 }
 
+type FetchSource struct {
+	ID             int      `json:"id"`
+	URL            string   `json:"url"`
+	Type           string   `json:"type"`
+	Tags           []string `json:"tags"`
+	OrganizationID *int     `json:"organization_id,omitempty"`
+	LastFetchedAt  string   `json:"last_fetched_at,omitempty"`
+	CreatedAt      string   `json:"created_at"`
+}
+
 type LoginResponse struct {
 	Token     string `json:"token"`
 	ExpiresAt string `json:"expires_at"`
@@ -163,6 +173,87 @@ func (c *DansalClient) GetOrganization(ctx context.Context, id int) (Organizatio
 		return Organization{}, err
 	}
 	return org, nil
+}
+
+func (c *DansalClient) authed(ctx context.Context, method, path, token string, body []byte) (*http.Response, error) {
+	var bodyReader *bytes.Reader
+	if body != nil {
+		bodyReader = bytes.NewReader(body)
+	} else {
+		bodyReader = bytes.NewReader(nil)
+	}
+	req, err := http.NewRequestWithContext(ctx, method, c.BaseURL+path, bodyReader)
+	if err != nil {
+		return nil, err
+	}
+	if body != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
+	return c.HTTP.Do(req)
+}
+
+func (c *DansalClient) UpdateOrganization(ctx context.Context, id int, name, description, token string) error {
+	body, _ := json.Marshal(map[string]string{"name": name, "description": description})
+	resp, err := c.authed(ctx, http.MethodPut, fmt.Sprintf("/api/v1/organizations/%d", id), token, body)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode == http.StatusForbidden {
+		return fmt.Errorf("forbidden")
+	}
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("dansal API: %s", resp.Status)
+	}
+	return nil
+}
+
+func (c *DansalClient) GetFetchSources(ctx context.Context, token string) ([]FetchSource, error) {
+	resp, err := c.authed(ctx, http.MethodGet, "/api/v1/fetchurl", token, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("dansal API: %s", resp.Status)
+	}
+	var sources []FetchSource
+	return sources, json.NewDecoder(resp.Body).Decode(&sources)
+}
+
+func (c *DansalClient) GetFetchSource(ctx context.Context, id int, token string) (FetchSource, error) {
+	resp, err := c.authed(ctx, http.MethodGet, fmt.Sprintf("/api/v1/fetchurl/%d", id), token, nil)
+	if err != nil {
+		return FetchSource{}, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode == http.StatusNotFound {
+		return FetchSource{}, fmt.Errorf("not found")
+	}
+	if resp.StatusCode != http.StatusOK {
+		return FetchSource{}, fmt.Errorf("dansal API: %s", resp.Status)
+	}
+	var src FetchSource
+	return src, json.NewDecoder(resp.Body).Decode(&src)
+}
+
+func (c *DansalClient) UpdateFetchSource(ctx context.Context, id int, typ string, tags []string, orgID *int, token string) error {
+	payload := map[string]interface{}{
+		"type":            typ,
+		"tags":            tags,
+		"organization_id": orgID,
+	}
+	body, _ := json.Marshal(payload)
+	resp, err := c.authed(ctx, http.MethodPatch, fmt.Sprintf("/api/v1/fetchurl/%d", id), token, body)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("dansal API: %s", resp.Status)
+	}
+	return nil
 }
 
 func (c *DansalClient) GetEventsByOrg(ctx context.Context, orgID int) ([]Event, error) {

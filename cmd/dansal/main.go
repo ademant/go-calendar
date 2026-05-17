@@ -771,6 +771,7 @@ func main() {
 	fetchRoutes.HandleFunc("/bulk", fetchURLBulk).Methods("POST")
 	fetchRoutes.HandleFunc("/fetch-all", fetchAllURLs).Methods("POST")
 	fetchRoutes.HandleFunc("/{id}", getFetchSource).Methods("GET")
+	fetchRoutes.HandleFunc("/{id}", patchFetchSource).Methods("PATCH")
 	fetchRoutes.HandleFunc("/{id}/fetch", fetchURLByID).Methods("POST")
 
 	// API key endpoints (protected)

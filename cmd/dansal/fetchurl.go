@@ -249,6 +249,55 @@ func getFetchSource(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(src)
 }
 
+// PATCH /api/v1/fetchurl/{id}
+func patchFetchSource(w http.ResponseWriter, r *http.Request) {
+	id := mux.Vars(r)["id"]
+	src, err := scanFetchSource(db.QueryRow(
+		"SELECT id, url, type, tags, organization_id, last_fetched_at, created_at FROM fetch_sources WHERE id = ?", id,
+	))
+	if err == sql.ErrNoRows {
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	} else if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	var req struct {
+		Type           string   `json:"type"`
+		Tags           []string `json:"tags"`
+		OrganizationID *int     `json:"organization_id"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "invalid body", http.StatusBadRequest)
+		return
+	}
+
+	if req.Type != "" {
+		src.Type = req.Type
+	}
+	if req.Tags != nil {
+		src.Tags = req.Tags
+	}
+	src.OrganizationID = req.OrganizationID
+
+	tagsJSON, _ := json.Marshal(src.Tags)
+	var orgVal interface{}
+	if src.OrganizationID != nil {
+		orgVal = *src.OrganizationID
+	}
+	if _, err := db.Exec(
+		"UPDATE fetch_sources SET type = ?, tags = ?, organization_id = ? WHERE id = ?",
+		src.Type, string(tagsJSON), orgVal, src.ID,
+	); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(src)
+}
+
 // importFromSource dispatches to the correct importer based on src.Type.
 func importFromSource(src FetchSource) ([]Event, bool, error) {
 	if src.Type == "folkdance-json" {

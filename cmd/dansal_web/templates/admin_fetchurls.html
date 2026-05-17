@@ -1,0 +1,42 @@
+{{template "base" .}}
+{{define "content"}}
+<h1>{{.Strings.T "admin_fetchurls_title"}}</h1>
+
+{{with .Data}}
+<div class="table-wrap">
+<table class="event-table">
+  <thead>
+    <tr>
+      <th>{{$.Strings.T "fetch_url"}}</th>
+      <th>{{$.Strings.T "fetch_type"}}</th>
+      <th>{{$.Strings.T "fetch_tags"}}</th>
+      <th>{{$.Strings.T "fetch_org"}}</th>
+      <th>{{$.Strings.T "fetch_last_fetched"}}</th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+  {{range .Sources}}
+  {{$orgName := ""}}
+  {{if .OrganizationID}}{{with index $.Data.OrgMap (derefInt .OrganizationID)}}{{$orgName = .Name}}{{end}}{{end}}
+  <tr>
+    <td class="url-cell"><span title="{{.URL}}">{{.URL}}</span></td>
+    <td>{{.Type}}</td>
+    <td>{{range .Tags}}<span class="tag">{{.}}</span>{{end}}</td>
+    <td>{{$orgName}}</td>
+    <td class="date-cell">{{if .LastFetchedAt}}{{formatDate .LastFetchedAt}}{{else}}{{$.Strings.T "fetch_never"}}{{end}}</td>
+    <td class="col-actions">
+      <a href="/admin/fetchurls/{{.ID}}/edit" class="btn-sm">{{$.Strings.T "admin_edit"}}</a>
+    </td>
+  </tr>
+  {{end}}
+  </tbody>
+</table>
+</div>
+{{end}}
+
+<style>
+.url-cell{max-width:320px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.date-cell{white-space:nowrap;color:#666;font-size:.85rem}
+</style>
+{{end}}

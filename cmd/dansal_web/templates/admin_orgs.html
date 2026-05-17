@@ -1,0 +1,36 @@
+{{template "base" .}}
+{{define "content"}}
+<h1>{{.Strings.T "admin_orgs_title"}}</h1>
+
+{{with .Data}}
+<div class="table-wrap">
+<table class="event-table">
+  <thead>
+    <tr>
+      <th>{{$.Strings.T "org_name"}}</th>
+      <th>{{$.Strings.T "org_description"}}</th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+  {{range .Orgs}}
+  <tr class="{{if not $.Data.CanEdit}}row-muted{{end}}">
+    <td>{{.Name}}</td>
+    <td class="desc-cell">{{.Description}}</td>
+    <td class="col-actions">
+      {{if $.Data.CanEdit}}
+      <a href="/admin/organizations/{{.ID}}/edit" class="btn-sm">{{$.Strings.T "admin_edit"}}</a>
+      {{end}}
+    </td>
+  </tr>
+  {{end}}
+  </tbody>
+</table>
+</div>
+{{end}}
+
+<style>
+.row-muted td{color:#999}
+.desc-cell{max-width:420px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+</style>
+{{end}}

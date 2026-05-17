@@ -130,10 +130,14 @@ var tmplFuncMap = template.FuncMap{
 }
 
 type Templates struct {
-	index *template.Template
-	event *template.Template
-	org   *template.Template
-	login *template.Template
+	index             *template.Template
+	event             *template.Template
+	org               *template.Template
+	login             *template.Template
+	adminOrgs         *template.Template
+	adminOrgEdit      *template.Template
+	adminFetchurls    *template.Template
+	adminFetchurlEdit *template.Template
 }
 
 func loadTemplates() *Templates {
@@ -146,10 +150,14 @@ func loadTemplates() *Templates {
 		return t
 	}
 	return &Templates{
-		index: load("index"),
-		event: load("event"),
-		org:   load("org"),
-		login: load("login"),
+		index:             load("index"),
+		event:             load("event"),
+		org:               load("org"),
+		login:             load("login"),
+		adminOrgs:         load("admin_orgs"),
+		adminOrgEdit:      load("admin_org_edit"),
+		adminFetchurls:    load("admin_fetchurls"),
+		adminFetchurlEdit: load("admin_fetchurl_edit"),
 	}
 }
 

@@ -40,6 +40,14 @@ func main() {
 	r.HandleFunc("/logout", logoutHandler(cfg, client)).Methods("POST")
 	r.HandleFunc("/lang", langHandler(i18n)).Methods("GET")
 
+	r.HandleFunc("/admin/organizations", adminOrgsHandler(cfg, tmpls, client, i18n)).Methods("GET")
+	r.HandleFunc("/admin/organizations/{id}/edit", adminOrgEditPageHandler(cfg, tmpls, client, i18n)).Methods("GET")
+	r.HandleFunc("/admin/organizations/{id}/edit", adminOrgSaveHandler(cfg, tmpls, client, i18n)).Methods("POST")
+
+	r.HandleFunc("/admin/fetchurls", adminFetchurlsHandler(cfg, tmpls, client, i18n)).Methods("GET")
+	r.HandleFunc("/admin/fetchurls/{id}/edit", adminFetchurlEditPageHandler(cfg, tmpls, client, i18n)).Methods("GET")
+	r.HandleFunc("/admin/fetchurls/{id}/edit", adminFetchurlSaveHandler(cfg, tmpls, client, i18n)).Methods("POST")
+
 	go startDelivery(cfg, db, client)
 
 	log.Printf("web server listening on %s (domain: %s)", cfg.Listen, cfg.Domain)
