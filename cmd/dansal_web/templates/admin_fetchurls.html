@@ -2,6 +2,8 @@
 {{define "content"}}
 <h1>{{.Strings.T "admin_fetchurls_title"}}</h1>
 
+<div id="toast" class="toast" role="status" aria-live="polite"></div>
+
 {{with .Data}}
 <form method="post" action="/admin/fetchurls/bulk" id="bulk-form">
 <div class="bulk-toolbar">
@@ -47,7 +49,7 @@
     <td class="col-actions">
       <a href="/admin/fetchurls/{{.ID}}/edit" class="btn-sm">{{$.Strings.T "admin_edit"}}</a>
       <button type="button" class="btn-sm btn-run"
-              onclick="rowAction('/admin/fetchurls/{{.ID}}/run')">{{$.Strings.T "fetch_run"}}</button>
+              data-run-url="/admin/fetchurls/{{.ID}}/run">{{$.Strings.T "fetch_run"}}</button>
       <button type="button" class="btn-sm btn-del"
               onclick="if(confirm('{{$.Strings.T "fetch_confirm_delete"}}'))rowAction('/admin/fetchurls/{{.ID}}/delete')">{{$.Strings.T "admin_delete"}}</button>
     </td>
@@ -60,11 +62,39 @@
 {{end}}
 
 <script>
+var toastTimer;
+function showToast(msg, ok) {
+  var t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast ' + (ok ? 'toast-ok' : 'toast-err') + ' toast-show';
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(function(){ t.className = 'toast'; }, 5000);
+}
+
 function rowAction(url) {
   var f = document.createElement('form');
   f.method = 'post'; f.action = url;
   document.body.appendChild(f); f.submit();
 }
+
+document.querySelectorAll('.btn-run[data-run-url]').forEach(function(btn) {
+  btn.addEventListener('click', function() {
+    var url = btn.dataset.runUrl;
+    btn.disabled = true;
+    fetch(url, {method: 'POST', headers: {Accept: 'application/json'}})
+      .then(function(r){ return r.json().then(function(d){ return {ok: r.ok, data: d}; }); })
+      .then(function(res) {
+        if (res.ok) {
+          showToast(res.data.count + ' {{.Strings.T "fetch_run_result"}}', true);
+        } else {
+          showToast(res.data.error || '{{.Strings.T "fetch_run_error"}}', false);
+        }
+      })
+      .catch(function(){ showToast('{{.Strings.T "fetch_run_error"}}', false); })
+      .finally(function(){ btn.disabled = false; });
+  });
+});
+
 document.getElementById('check-all').addEventListener('change', function() {
   document.querySelectorAll('.row-check').forEach(function(cb){ cb.checked = this.checked; }, this);
 });
@@ -74,6 +104,10 @@ document.getElementById('bulk-action').addEventListener('change', function() {
 </script>
 
 <style>
+.toast{position:fixed;top:1.2rem;left:50%;transform:translateX(-50%) translateY(-120%);padding:.65rem 1.4rem;border-radius:6px;font-size:.95rem;font-weight:600;box-shadow:0 4px 16px rgba(0,0,0,.18);transition:transform .25s ease,opacity .25s ease;opacity:0;pointer-events:none;z-index:9999;white-space:nowrap}
+.toast.toast-show{transform:translateX(-50%) translateY(0);opacity:1}
+.toast-ok{background:#1e7e34;color:#fff}
+.toast-err{background:#b00020;color:#fff}
 .bulk-toolbar{display:flex;align-items:center;gap:.5rem;margin-bottom:.75rem;flex-wrap:wrap}
 .check-all-label{display:flex;align-items:center;gap:.3rem;font-size:.9rem;cursor:pointer}
 .col-check{width:2rem;text-align:center}

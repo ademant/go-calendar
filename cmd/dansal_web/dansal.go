@@ -367,16 +367,20 @@ func (c *DansalClient) DeleteFetchSource(ctx context.Context, id int, token stri
 	return nil
 }
 
-func (c *DansalClient) RunFetchSource(ctx context.Context, id int, token string) error {
+func (c *DansalClient) RunFetchSource(ctx context.Context, id int, token string) (int, error) {
 	resp, err := c.authed(ctx, http.MethodPost, fmt.Sprintf("/api/v1/fetchurl/%d/fetch", id), token, nil)
 	if err != nil {
-		return err
+		return 0, err
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
-		return fmt.Errorf("dansal API: %s", resp.Status)
+		return 0, fmt.Errorf("dansal API: %s", resp.Status)
 	}
-	return nil
+	var events []json.RawMessage
+	if err := json.NewDecoder(resp.Body).Decode(&events); err != nil {
+		return 0, nil
+	}
+	return len(events), nil
 }
 
 func (c *DansalClient) BulkDeleteFetchSources(ctx context.Context, ids []int, token string) error {
