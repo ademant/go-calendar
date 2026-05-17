@@ -12,10 +12,16 @@ import (
 )
 
 type Organization struct {
-	ID          int    `json:"id"`
-	Name        string `json:"name"`
-	Description string `json:"description"`
-	CreatedAt   string `json:"created_at"`
+	ID           int    `json:"id"`
+	Name         string `json:"name"`
+	Description  string `json:"description"`
+	ActorName    string `json:"actor_name,omitempty"`
+	Website      string `json:"website,omitempty"`
+	Instagram    string `json:"instagram,omitempty"`
+	Mastodon     string `json:"mastodon,omitempty"`
+	Facebook     string `json:"facebook,omitempty"`
+	ContactEmail string `json:"contact_email,omitempty"`
+	CreatedAt    string `json:"created_at"`
 }
 
 type OrganizationMember struct {
@@ -26,8 +32,14 @@ type OrganizationMember struct {
 }
 
 type CreateOrganizationRequest struct {
-	Name        string `json:"name"`
-	Description string `json:"description"`
+	Name         string `json:"name"`
+	Description  string `json:"description"`
+	ActorName    string `json:"actor_name"`
+	Website      string `json:"website"`
+	Instagram    string `json:"instagram"`
+	Mastodon     string `json:"mastodon"`
+	Facebook     string `json:"facebook"`
+	ContactEmail string `json:"contact_email"`
 }
 
 type AddMemberRequest struct {
@@ -95,10 +107,17 @@ func isOrgMember(userID, orgID int) bool {
 	return n > 0
 }
 
+const orgSelectCols = `id, name, COALESCE(description,''), COALESCE(actor_name,''), COALESCE(website,''), COALESCE(instagram,''), COALESCE(mastodon,''), COALESCE(facebook,''), COALESCE(contact_email,''), created_at`
+
+func scanOrg(row interface{ Scan(...any) error }) (Organization, error) {
+	var o Organization
+	return o, row.Scan(&o.ID, &o.Name, &o.Description, &o.ActorName, &o.Website, &o.Instagram, &o.Mastodon, &o.Facebook, &o.ContactEmail, &o.CreatedAt)
+}
+
 // GET /api/v1/organizations
 func getOrganizations(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	rows, err := db.Query("SELECT id, name, description, created_at FROM organizations ORDER BY id")
+	rows, err := db.Query("SELECT " + orgSelectCols + " FROM organizations ORDER BY id")
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -106,8 +125,8 @@ func getOrganizations(w http.ResponseWriter, r *http.Request) {
 	defer rows.Close()
 	orgs := []Organization{}
 	for rows.Next() {
-		var o Organization
-		if err := rows.Scan(&o.ID, &o.Name, &o.Description, &o.CreatedAt); err != nil {
+		o, err := scanOrg(rows)
+		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
@@ -132,11 +151,10 @@ func createOrganization(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "name is required", http.StatusBadRequest)
 		return
 	}
-	var o Organization
-	err := db.QueryRow(
-		"INSERT INTO organizations (name, description) VALUES (?, ?) RETURNING id, name, description, created_at",
-		req.Name, req.Description,
-	).Scan(&o.ID, &o.Name, &o.Description, &o.CreatedAt)
+	o, err := scanOrg(db.QueryRow(
+		"INSERT INTO organizations (name, description, actor_name, website, instagram, mastodon, facebook, contact_email) VALUES (?,?,?,?,?,?,?,?) RETURNING "+orgSelectCols,
+		req.Name, req.Description, req.ActorName, req.Website, req.Instagram, req.Mastodon, req.Facebook, req.ContactEmail,
+	))
 	if err != nil {
 		http.Error(w, "Failed to create organization", http.StatusInternalServerError)
 		return
@@ -149,10 +167,7 @@ func createOrganization(w http.ResponseWriter, r *http.Request) {
 func getOrganization(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	id := mux.Vars(r)["id"]
-	var o Organization
-	err := db.QueryRow(
-		"SELECT id, name, description, created_at FROM organizations WHERE id = ?", id,
-	).Scan(&o.ID, &o.Name, &o.Description, &o.CreatedAt)
+	o, err := scanOrg(db.QueryRow("SELECT "+orgSelectCols+" FROM organizations WHERE id = ?", id))
 	if err == sql.ErrNoRows {
 		http.Error(w, "Organization not found", http.StatusNotFound)
 		return
@@ -172,10 +187,7 @@ func updateOrganization(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	id := mux.Vars(r)["id"]
-	var o Organization
-	err := db.QueryRow(
-		"SELECT id, name, description, created_at FROM organizations WHERE id = ?", id,
-	).Scan(&o.ID, &o.Name, &o.Description, &o.CreatedAt)
+	o, err := scanOrg(db.QueryRow("SELECT "+orgSelectCols+" FROM organizations WHERE id = ?", id))
 	if err == sql.ErrNoRows {
 		http.Error(w, "Organization not found", http.StatusNotFound)
 		return
@@ -193,8 +205,16 @@ func updateOrganization(w http.ResponseWriter, r *http.Request) {
 		o.Name = req.Name
 	}
 	o.Description = req.Description
-	if _, err := db.Exec("UPDATE organizations SET name = ?, description = ? WHERE id = ?",
-		o.Name, o.Description, id); err != nil {
+	o.ActorName = req.ActorName
+	o.Website = req.Website
+	o.Instagram = req.Instagram
+	o.Mastodon = req.Mastodon
+	o.Facebook = req.Facebook
+	o.ContactEmail = req.ContactEmail
+	if _, err := db.Exec(
+		"UPDATE organizations SET name=?, description=?, actor_name=?, website=?, instagram=?, mastodon=?, facebook=?, contact_email=? WHERE id=?",
+		o.Name, o.Description, o.ActorName, o.Website, o.Instagram, o.Mastodon, o.Facebook, o.ContactEmail, id,
+	); err != nil {
 		http.Error(w, "Failed to update organization", http.StatusInternalServerError)
 		return
 	}

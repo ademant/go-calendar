@@ -22,6 +22,19 @@ func requireLogin(w http.ResponseWriter, r *http.Request) (*SessionUser, bool) {
 
 // ── Organizations ─────────────────────────────────────────────────────────────
 
+func orgFromForm(r *http.Request) Organization {
+	return Organization{
+		Name:         strings.TrimSpace(r.FormValue("name")),
+		Description:  strings.TrimSpace(r.FormValue("description")),
+		ActorName:    strings.TrimSpace(r.FormValue("actor_name")),
+		Website:      strings.TrimSpace(r.FormValue("website")),
+		Instagram:    strings.TrimSpace(r.FormValue("instagram")),
+		Mastodon:     strings.TrimSpace(r.FormValue("mastodon")),
+		Facebook:     strings.TrimSpace(r.FormValue("facebook")),
+		ContactEmail: strings.TrimSpace(r.FormValue("contact_email")),
+	}
+}
+
 type AdminOrgsData struct {
 	Orgs    []Organization
 	CanEdit bool
@@ -80,13 +93,12 @@ func adminOrgCreateHandler(cfg *Config, tmpls *Templates, client *DansalClient, 
 			http.Error(w, "bad request", http.StatusBadRequest)
 			return
 		}
-		name := strings.TrimSpace(r.FormValue("name"))
-		description := strings.TrimSpace(r.FormValue("description"))
+		org := orgFromForm(r)
 		token := getSessionToken(r)
-		if _, err := client.CreateOrganization(r.Context(), name, description, token); err != nil {
+		if _, err := client.CreateOrganization(r.Context(), org, token); err != nil {
 			title := i18n.T(r, "admin_new")
 			renderTemplate(w, tmpls.adminOrgEdit, tmplData(r, cfg, i18n, title, AdminOrgEditData{
-				Org:      Organization{Name: name, Description: description},
+				Org:      org,
 				ErrorKey: "admin_save_error",
 			}))
 			return
@@ -139,14 +151,9 @@ func adminOrgSaveHandler(cfg *Config, tmpls *Templates, client *DansalClient, i1
 			http.Error(w, "bad request", http.StatusBadRequest)
 			return
 		}
-		name := strings.TrimSpace(r.FormValue("name"))
-		description := strings.TrimSpace(r.FormValue("description"))
+		org := orgFromForm(r)
 		token := getSessionToken(r)
-
-		if err := client.UpdateOrganization(r.Context(), id, name, description, token); err != nil {
-			org, _ := client.GetOrganization(r.Context(), id)
-			org.Name = name
-			org.Description = description
+		if err := client.UpdateOrganization(r.Context(), id, org, token); err != nil {
 			title := i18n.T(r, "admin_edit")
 			renderTemplate(w, tmpls.adminOrgEdit, tmplData(r, cfg, i18n, title, AdminOrgEditData{
 				Org:      org,

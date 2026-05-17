@@ -5,6 +5,20 @@
 
 {{with .Org.Description}}<p>{{.}}</p>{{end}}
 
+{{if or .Org.Website .Org.ContactEmail .Org.Mastodon .Org.Instagram .Org.Facebook}}
+<div class="org-links">
+  {{with .Org.Website}}<a href="{{.}}" class="org-link org-link-web" target="_blank" rel="noopener">{{$.Strings.T "org_website"}}</a>{{end}}
+  {{with .Org.ContactEmail}}<a href="mailto:{{.}}" class="org-link org-link-email">{{$.Strings.T "org_contact_email"}}</a>{{end}}
+  {{with .Org.Mastodon}}
+    {{$handle := .}}
+    {{$url := mastodonURL $handle}}
+    <a href="{{$url}}" class="org-link org-link-mastodon" target="_blank" rel="noopener me">Mastodon</a>
+  {{end}}
+  {{with .Org.Instagram}}<a href="https://instagram.com/{{.}}" class="org-link org-link-instagram" target="_blank" rel="noopener">Instagram</a>{{end}}
+  {{with .Org.Facebook}}<a href="https://facebook.com/{{.}}" class="org-link org-link-facebook" target="_blank" rel="noopener">Facebook</a>{{end}}
+</div>
+{{end}}
+
 <div class="fediverse">
   <strong>{{$.Strings.T "org_follow_fediverse"}}</strong> <code>{{.Handle}}</code>
   <p style="margin-top:.5rem;font-size:.9rem">{{$.Strings.TF "org_fediverse_hint" .Handle}}</p>
@@ -30,4 +44,19 @@
 {{else}}<p>{{$.Strings.T "org_no_events"}}</p>{{end}}
 
 {{end}}{{/* .Data */}}
+
+<style>
+.org-links{display:flex;flex-wrap:wrap;gap:.5rem;margin-bottom:1.25rem}
+.org-link{display:inline-block;padding:.3rem .8rem;border-radius:20px;font-size:.85rem;font-weight:600;text-decoration:none;color:#fff}
+.org-link-web{background:#1a6eb5}
+.org-link-web:hover{background:#0d4a80}
+.org-link-email{background:#555}
+.org-link-email:hover{background:#333}
+.org-link-mastodon{background:#563acc}
+.org-link-mastodon:hover{background:#3c278e}
+.org-link-instagram{background:#c13584}
+.org-link-instagram:hover{background:#8a255e}
+.org-link-facebook{background:#1877f2}
+.org-link-facebook:hover{background:#0d5ab5}
+</style>
 {{end}}

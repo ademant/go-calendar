@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"sort"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gorilla/mux"
@@ -104,6 +105,20 @@ var tmplFuncMap = template.FuncMap{
 			return 0
 		}
 		return *p
+	},
+	// mastodonURL converts "@user@instance.tld" → "https://instance.tld/@user".
+	// If the value already starts with "http", it is returned unchanged.
+	"mastodonURL": func(handle string) string {
+		if strings.HasPrefix(handle, "http") {
+			return handle
+		}
+		// strip leading @
+		h := strings.TrimPrefix(handle, "@")
+		parts := strings.SplitN(h, "@", 2)
+		if len(parts) == 2 {
+			return "https://" + parts[1] + "/@" + parts[0]
+		}
+		return handle
 	},
 	"orgName": func(orgMap map[int]Organization, id *int) string {
 		if id == nil {

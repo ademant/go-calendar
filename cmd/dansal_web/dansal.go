@@ -38,10 +38,16 @@ type Event struct {
 }
 
 type Organization struct {
-	ID          int    `json:"id"`
-	Name        string `json:"name"`
-	Description string `json:"description"`
-	CreatedAt   string `json:"created_at"`
+	ID           int    `json:"id"`
+	Name         string `json:"name"`
+	Description  string `json:"description"`
+	ActorName    string `json:"actor_name,omitempty"`
+	Website      string `json:"website,omitempty"`
+	Instagram    string `json:"instagram,omitempty"`
+	Mastodon     string `json:"mastodon,omitempty"`
+	Facebook     string `json:"facebook,omitempty"`
+	ContactEmail string `json:"contact_email,omitempty"`
+	CreatedAt    string `json:"created_at"`
 }
 
 type Pricing struct {
@@ -223,8 +229,8 @@ func (c *DansalClient) authed(ctx context.Context, method, path, token string, b
 	return c.HTTP.Do(req)
 }
 
-func (c *DansalClient) CreateOrganization(ctx context.Context, name, description, token string) (Organization, error) {
-	body, _ := json.Marshal(map[string]string{"name": name, "description": description})
+func (c *DansalClient) CreateOrganization(ctx context.Context, org Organization, token string) (Organization, error) {
+	body, _ := json.Marshal(org)
 	resp, err := c.authed(ctx, http.MethodPost, "/api/v1/organizations", token, body)
 	if err != nil {
 		return Organization{}, err
@@ -236,12 +242,12 @@ func (c *DansalClient) CreateOrganization(ctx context.Context, name, description
 	if resp.StatusCode != http.StatusCreated {
 		return Organization{}, fmt.Errorf("dansal API: %s", resp.Status)
 	}
-	var org Organization
-	return org, json.NewDecoder(resp.Body).Decode(&org)
+	var out Organization
+	return out, json.NewDecoder(resp.Body).Decode(&out)
 }
 
-func (c *DansalClient) UpdateOrganization(ctx context.Context, id int, name, description, token string) error {
-	body, _ := json.Marshal(map[string]string{"name": name, "description": description})
+func (c *DansalClient) UpdateOrganization(ctx context.Context, id int, org Organization, token string) error {
+	body, _ := json.Marshal(org)
 	resp, err := c.authed(ctx, http.MethodPut, fmt.Sprintf("/api/v1/organizations/%d", id), token, body)
 	if err != nil {
 		return err
