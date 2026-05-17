@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"embed"
 	"encoding/json"
+	"fmt"
 	"html/template"
 	"log"
 	"net/http"
@@ -76,28 +77,68 @@ func svgHandler(data []byte) http.HandlerFunc {
 	}
 }
 
+var locMonths = map[string][12]string{
+	"de": {"Jan", "Feb", "Mär", "Apr", "Mai", "Jun", "Jul", "Aug", "Sep", "Okt", "Nov", "Dez"},
+	"en": {"Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"},
+	"fr": {"jan.", "fév.", "mar.", "avr.", "mai", "juin", "juil.", "août", "sept.", "oct.", "nov.", "déc."},
+}
+var locWeekdays = map[string][7]string{
+	"de": {"So.", "Mo.", "Di.", "Mi.", "Do.", "Fr.", "Sa."},
+	"en": {"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"},
+	"fr": {"Dim.", "Lun.", "Mar.", "Mer.", "Jeu.", "Ven.", "Sam."},
+}
+
+func locMonth(lang string, m time.Month) string {
+	if names, ok := locMonths[lang]; ok {
+		return names[m-1]
+	}
+	return locMonths["en"][m-1]
+}
+func locWeekday(lang string, w time.Weekday) string {
+	if names, ok := locWeekdays[lang]; ok {
+		return names[w]
+	}
+	return locWeekdays["en"][w]
+}
+
+var parseLayouts = []string{time.RFC3339, "2006-01-02T15:04:05", "2006-01-02 15:04:05"}
+
+func parseTime(s string) (time.Time, bool) {
+	for _, layout := range parseLayouts {
+		if t, err := time.Parse(layout, s); err == nil {
+			return t, true
+		}
+	}
+	return time.Time{}, false
+}
+
 var tmplFuncMap = template.FuncMap{
-	"formatTime": func(s string) string {
-		for _, layout := range []string{time.RFC3339, "2006-01-02T15:04:05", "2006-01-02 15:04:05"} {
-			if t, err := time.Parse(layout, s); err == nil {
-				return t.Format("Mon 02 Jan 2006, 15:04")
-			}
+	"formatTime": func(lang, s string) string {
+		t, ok := parseTime(s)
+		if !ok {
+			return s
 		}
-		return s
+		wd := locWeekday(lang, t.Weekday())
+		mo := locMonth(lang, t.Month())
+		if lang == "de" {
+			return fmt.Sprintf("%s %02d. %s %d, %02d:%02d", wd, t.Day(), mo, t.Year(), t.Hour(), t.Minute())
+		}
+		return fmt.Sprintf("%s %02d %s %d, %02d:%02d", wd, t.Day(), mo, t.Year(), t.Hour(), t.Minute())
 	},
-	"formatDate": func(s string) string {
-		for _, layout := range []string{time.RFC3339, "2006-01-02T15:04:05", "2006-01-02 15:04:05"} {
-			if t, err := time.Parse(layout, s); err == nil {
-				return t.Format("02 Jan 2006")
-			}
+	"formatDate": func(lang, s string) string {
+		t, ok := parseTime(s)
+		if !ok {
+			return s
 		}
-		return s
+		mo := locMonth(lang, t.Month())
+		if lang == "de" {
+			return fmt.Sprintf("%02d. %s %d", t.Day(), mo, t.Year())
+		}
+		return fmt.Sprintf("%02d %s %d", t.Day(), mo, t.Year())
 	},
 	"isoDate": func(s string) string {
-		for _, layout := range []string{time.RFC3339, "2006-01-02T15:04:05", "2006-01-02 15:04:05"} {
-			if t, err := time.Parse(layout, s); err == nil {
-				return t.Format("2006-01-02")
-			}
+		if t, ok := parseTime(s); ok {
+			return t.Format("2006-01-02")
 		}
 		return s
 	},

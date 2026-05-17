@@ -45,7 +45,7 @@
     <td>{{.Type}}</td>
     <td>{{range .Tags}}<span class="tag">{{.}}</span>{{end}}</td>
     <td>{{$orgName}}</td>
-    <td class="date-cell">{{if .LastFetchedAt}}{{formatDate .LastFetchedAt}}{{else}}{{$.Strings.T "fetch_never"}}{{end}}</td>
+    <td class="date-cell">{{if .LastFetchedAt}}{{formatDate $.LangCode .LastFetchedAt}}{{else}}{{$.Strings.T "fetch_never"}}{{end}}</td>
     <td class="col-actions">
       <a href="/admin/fetchurls/{{.ID}}/edit" class="btn-sm">{{$.Strings.T "admin_edit"}}</a>
       <button type="button" class="btn-sm btn-run"

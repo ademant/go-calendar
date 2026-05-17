@@ -13,7 +13,7 @@
   <h1>{{.Title}}</h1>
   {{if .IsCancelled}}<p><span class="badge cancelled">{{$.Strings.T "evt_cancelled"}}</span></p>{{end}}
   <div class="evt-header-meta">
-    {{if .StartTime}}<span class="evt-time">{{formatTime .StartTime}}{{if .EndTime}} – {{formatTime .EndTime}}{{end}}</span>{{end}}
+    {{if .StartTime}}<span class="evt-time">{{formatTime $.LangCode .StartTime}}{{if .EndTime}} – {{formatTime $.LangCode .EndTime}}{{end}}</span>{{end}}
     {{if .Location}}<span class="evt-sep">·</span><span>{{.Location}}</span>{{end}}
     {{if .LocationTown}}<span class="evt-sep">·</span><span>{{.LocationTown}}{{if .LocationCountry}}, {{.LocationCountry}}{{end}}</span>{{end}}
   </div>

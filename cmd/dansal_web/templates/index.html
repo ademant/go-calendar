@@ -70,7 +70,7 @@
       data-id="{{.ID}}"
       data-start="{{.StartTime}}">
     <td class="col-date">
-      <span class="date-main">{{formatDate .StartTime}}</span>
+      <span class="date-main">{{formatDate $.LangCode .StartTime}}</span>
       {{if .IsCancelled}}<span class="badge cancelled">{{$.Strings.T "badge_cancelled"}}</span>{{end}}
     </td>
     <td><a href="/events/{{.ID}}">{{.Title}}</a></td>

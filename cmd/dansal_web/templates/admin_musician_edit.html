@@ -110,7 +110,7 @@
   <li class="event-item">
     <h3><a href="/events/{{.ID}}">{{.Title}}</a></h3>
     <div class="event-meta">
-      {{if .StartTime}}<span>{{formatTime .StartTime}}</span>{{end}}
+      {{if .StartTime}}<span>{{formatTime $.LangCode .StartTime}}</span>{{end}}
       {{if .Location}} &mdash; {{.Location}}{{else if .LocationTown}} &mdash; {{.LocationTown}}{{end}}
       {{if not .IsPublished}}<span class="badge unpublished">{{$.Strings.T "musician_unpublished"}}</span>{{end}}
       {{if .IsCancelled}}<span class="badge cancelled">{{$.Strings.T "badge_cancelled"}}</span>{{end}}
