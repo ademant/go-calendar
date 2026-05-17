@@ -405,8 +405,8 @@ func (c *DansalClient) UpdateUser(ctx context.Context, id int, fields map[string
 	return nil
 }
 
-func (c *DansalClient) SendEmailVerification(ctx context.Context, id int, token string) error {
-	body, _ := json.Marshal(map[string]string{"channel": "email"})
+func (c *DansalClient) SendEmailVerification(ctx context.Context, id int, baseURL, token string) error {
+	body, _ := json.Marshal(map[string]string{"channel": "email", "base_url": baseURL})
 	resp, err := c.authed(ctx, http.MethodPost, fmt.Sprintf("/api/v1/users/%d/verify", id), token, body)
 	if err != nil {
 		return err

@@ -4,6 +4,7 @@ import (
 	"flag"
 	"log"
 	"os"
+	"strings"
 
 	"gopkg.in/yaml.v2"
 )
@@ -11,10 +12,19 @@ import (
 type Config struct {
 	Listen    string `yaml:"listen"`
 	Domain    string `yaml:"domain"`
+	BaseURL   string `yaml:"base_url"`   // optional; defaults to https://{domain}
 	DansalURL string `yaml:"dansal_url"`
 	DBPath    string `yaml:"db_path"`
 	PollSecs  int    `yaml:"poll_secs"`
 	I18nFile  string `yaml:"i18n_file"` // optional path to override embedded i18n.yaml
+}
+
+// publicBaseURL returns the canonical public URL of the web app.
+func (cfg *Config) publicBaseURL() string {
+	if cfg.BaseURL != "" {
+		return strings.TrimRight(cfg.BaseURL, "/")
+	}
+	return "https://" + cfg.Domain
 }
 
 func loadConfig() *Config {

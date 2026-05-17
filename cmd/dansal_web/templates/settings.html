@@ -7,6 +7,7 @@
   {{if .ErrorKey}}<p class="msg msg-error" role="alert">{{$.Strings.T .ErrorKey}}</p>{{end}}
   {{if .Saved}}<p class="msg msg-ok" role="status">{{$.Strings.T "settings_saved"}}</p>{{end}}
   {{if .VerifySent}}<p class="msg msg-ok" role="status">{{$.Strings.T "settings_verify_sent"}}</p>{{end}}
+  {{if .Verified}}<p class="msg msg-ok" role="status">{{$.Strings.T "settings_email_verified_ok"}}</p>{{end}}
 
   <div class="settings-card">
     <h2>{{$.Strings.T "settings_account"}}</h2>

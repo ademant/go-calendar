@@ -57,6 +57,7 @@ func sendVerification(w http.ResponseWriter, r *http.Request) {
 
 	var req struct {
 		Channel string `json:"channel"`
+		BaseURL string `json:"base_url"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Channel == "" {
 		http.Error(w, "channel is required (email, telegram, matrix)", http.StatusBadRequest)
@@ -119,7 +120,12 @@ func sendVerification(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	vURL := buildVerifyURL(r, token)
+	var vURL string
+	if req.BaseURL != "" {
+		vURL = strings.TrimRight(req.BaseURL, "/") + "/api/v1/verify/" + token
+	} else {
+		vURL = buildVerifyURL(r, token)
+	}
 
 	var sendErr error
 	switch req.Channel {

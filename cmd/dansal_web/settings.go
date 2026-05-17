@@ -11,6 +11,7 @@ type SettingsData struct {
 	ErrorKey   string
 	Saved      bool
 	VerifySent bool
+	Verified   bool
 }
 
 func settingsPageHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {
@@ -30,6 +31,7 @@ func settingsPageHandler(cfg *Config, tmpls *Templates, client *DansalClient, i1
 			User:       u,
 			Saved:      r.URL.Query().Get("saved") == "1",
 			VerifySent: r.URL.Query().Get("verify_sent") == "1",
+			Verified:   r.URL.Query().Get("verified") == "1",
 		}))
 	}
 }
@@ -74,8 +76,9 @@ func settingsSendVerifyHandler(cfg *Config, tmpls *Templates, client *DansalClie
 			return
 		}
 		token := getSessionToken(r)
+		baseURL := cfg.publicBaseURL()
 
-		if err := client.SendEmailVerification(r.Context(), su.ID, token); err != nil {
+		if err := client.SendEmailVerification(r.Context(), su.ID, baseURL, token); err != nil {
 			u, _ := client.GetUser(r.Context(), su.ID, token)
 			title := i18n.T(r, "settings_title")
 			renderTemplate(w, tmpls.settings, tmplData(r, cfg, i18n, title, SettingsData{
@@ -96,8 +99,12 @@ type VerifyData struct {
 func verifyEmailHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		token := mux.Vars(r)["token"]
-		title := i18n.T(r, "verify_title")
 		err := client.ConsumeVerification(r.Context(), token)
+		if err == nil && getSessionUser(r) != nil {
+			http.Redirect(w, r, "/settings?verified=1", http.StatusSeeOther)
+			return
+		}
+		title := i18n.T(r, "verify_title")
 		var data VerifyData
 		if err == nil {
 			data = VerifyData{Success: true}

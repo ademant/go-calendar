@@ -129,6 +129,7 @@ languages:
       settings_saved: "Einstellungen gespeichert."
       settings_save_error: "Speichern fehlgeschlagen."
       settings_verify_error: "Bestätigungsmail konnte nicht gesendet werden."
+      settings_email_verified_ok: "E-Mail-Adresse erfolgreich bestätigt."
       # Magic link login
       login_magic_title: "Ohne Passwort anmelden"
       login_magic_email: "E-Mail-Adresse"
@@ -267,6 +268,7 @@ languages:
       settings_saved: "Settings saved."
       settings_save_error: "Save failed."
       settings_verify_error: "Could not send verification email."
+      settings_email_verified_ok: "Email address verified successfully."
       # Magic link login
       login_magic_title: "Login without password"
       login_magic_email: "Email address"
@@ -405,6 +407,7 @@ languages:
       settings_saved: "Paramètres enregistrés."
       settings_save_error: "Échec de l'enregistrement."
       settings_verify_error: "Impossible d'envoyer l'e-mail de vérification."
+      settings_email_verified_ok: "Adresse e-mail vérifiée avec succès."
       # Magic link login
       login_magic_title: "Se connecter sans mot de passe"
       login_magic_email: "Adresse e-mail"
