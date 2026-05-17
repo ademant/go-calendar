@@ -416,6 +416,7 @@ func migrateDB() {
 	db.Exec("DROP TABLE IF EXISTS threads")
 	db.Exec("DROP TABLE IF EXISTS bookings")
 	db.Exec("ALTER TABLE events DROP COLUMN capacity") // no-op if already absent
+	db.Exec("ALTER TABLE fetch_sources ADD COLUMN organization_id INTEGER REFERENCES organizations(id) ON DELETE SET NULL") // no-op if already present
 	migrateUsersRoles()
 	db.Exec(`CREATE TABLE IF NOT EXISTS verification_tokens (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -504,6 +505,7 @@ func createTables() error {
 		url TEXT UNIQUE NOT NULL,
 		type TEXT NOT NULL DEFAULT 'ical',
 		tags TEXT,
+		organization_id INTEGER REFERENCES organizations(id) ON DELETE SET NULL,
 		last_fetched_at DATETIME,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 	);
@@ -766,6 +768,7 @@ func main() {
 	fetchRoutes.Use(TokenMiddleware)
 	fetchRoutes.HandleFunc("", getFetchSources).Methods("GET")
 	fetchRoutes.HandleFunc("", fetchURL).Methods("POST")
+	fetchRoutes.HandleFunc("/bulk", fetchURLBulk).Methods("POST")
 	fetchRoutes.HandleFunc("/fetch-all", fetchAllURLs).Methods("POST")
 	fetchRoutes.HandleFunc("/{id}", getFetchSource).Methods("GET")
 	fetchRoutes.HandleFunc("/{id}/fetch", fetchURLByID).Methods("POST")

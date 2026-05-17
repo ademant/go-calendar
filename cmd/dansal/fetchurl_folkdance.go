@@ -242,7 +242,12 @@ func importFromFolkdanceJSON(src FetchSource) ([]Event, bool, error) {
 			Tags:           tags,
 			URL:            eventURL,
 			Source:         src.URL,
-			OrganizationID: ensureOrgByName(fe.Organisation),
+			OrganizationID: func() *int {
+				if src.OrganizationID != nil {
+					return src.OrganizationID
+				}
+				return ensureOrgByName(fe.Organisation)
+			}(),
 			Musicians:      musicianIDs,
 			Pricing:        parseFolkdancePrice(fe.Price),
 			Location: EventLocationRequest{

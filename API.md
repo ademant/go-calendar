@@ -1,6 +1,6 @@
 # dansal API
 
-RESTful calendar API backed by SQLite. All timestamps are RFC3339. Events use epoch integers internally; responses return local time (Europe/Berlin).
+RESTful calendar API backed by SQLite. All timestamps are RFC3339.
 
 ## Base URL
 ```
@@ -9,13 +9,15 @@ http://localhost:8000
 
 ## Authentication
 
-Protected endpoints require a Bearer token obtained from `/api/v1/login`, or an API key created via `/api/v1/apikeys`.
+Protected endpoints require a Bearer token obtained from `POST /api/v1/login`, or an API key created via `POST /api/v1/apikeys`.
 
 ```
 Authorization: Bearer <token-or-api-key>
 ```
 
-API keys begin with `ak_` and never expire.
+API keys begin with `ak_` and never expire. Session tokens expire after the configured duration (default 24 h).
+
+Public GET endpoints accept an optional `Authorization` header; an invalid or expired token is still rejected with 401.
 
 ## Roles
 
@@ -39,13 +41,15 @@ Returns server version and build time. Public.
 
 ---
 
-## Authentication
+## Authentication endpoints
 
 ### POST /api/v1/login
 
 ```json
 { "username": "admin", "password": "secret" }
 ```
+
+Also accepts `application/x-www-form-urlencoded`.
 
 Response `200`:
 ```json
@@ -56,11 +60,40 @@ Response `200`:
 }
 ```
 
+### DELETE /api/v1/login
+
+Revokes the current session token. No body required.
+
+Response `204`.
+
+### POST /api/v1/login/magic
+
+Sends a one-time magic-link login email.
+
+```json
+{ "email": "user@example.com" }
+```
+
+### GET /api/v1/login/magic/{token}
+
+Consumes a magic-link token and returns a session token (same shape as `POST /api/v1/login` response).
+
+---
+
+## Sessions
+
+Requires authentication.
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/api/v1/sessions` | List own active sessions |
+| DELETE | `/api/v1/sessions/{id}` | Revoke a session |
+
 ---
 
 ## Users
 
-All user endpoints require admin role.
+All user endpoints require admin role, except `PUT /api/v1/users/{id}` which also allows the user themselves.
 
 | Method | Path | Description |
 |--------|------|-------------|
@@ -68,14 +101,55 @@ All user endpoints require admin role.
 | POST | `/api/v1/users` | Create user |
 | GET | `/api/v1/users/{id}` | Get user |
 | PUT | `/api/v1/users/{id}` | Update user |
-| DELETE | `/api/v1/users/{id}` | Delete user |
+| DELETE | `/api/v1/users/{id}` | Delete user (non-admin only) |
+| POST | `/api/v1/users/{id}/verify` | Send verification message |
 
-**Create/Update body:**
+**User object:**
 ```json
-{ "username": "string", "email": "string", "password": "string", "role": "user" }
+{
+  "id": 1,
+  "username": "alice",
+  "email": "alice@example.com",
+  "role": "user",
+  "telegram": "@alice",
+  "matrix": "@alice:matrix.org",
+  "email_verified": false,
+  "telegram_verified": false,
+  "matrix_verified": false,
+  "disabled": false,
+  "created_at": "..."
+}
+```
+
+**Create body:**
+```json
+{ "username": "string", "email": "string", "password": "string", "role": "user",
+  "telegram": "string", "matrix": "string" }
+```
+
+**Update body** — all fields optional; only admin may change `role`, `*_verified`, `disabled`:
+```json
+{ "email": "string", "role": "user", "telegram": "string", "matrix": "string",
+  "email_verified": true, "telegram_verified": false, "disabled": false }
 ```
 
 Valid roles: `admin`, `user`, `publisher`, `viewer`.
+
+---
+
+## Invites
+
+| Method | Path | Description | Role |
+|--------|------|-------------|------|
+| GET | `/api/v1/invites` | List active invites | admin |
+| POST | `/api/v1/invites` | Create invite link | admin |
+| DELETE | `/api/v1/invites/{token}` | Revoke invite | admin |
+| POST | `/api/v1/invites/{token}` | Accept invite (register) | public |
+
+**Create body:**
+```json
+{ "role": "user", "max_uses": 1, "expires_in_hours": 48 }
+```
 
 ---
 
@@ -89,10 +163,7 @@ Requires authentication. Users manage their own keys; admins can manage any.
 | POST | `/api/v1/apikeys` | Create API key |
 | DELETE | `/api/v1/apikeys/{id}` | Delete API key |
 
-**Create body:**
-```json
-{ "name": "my-script" }
-```
+**Create body:** `{ "name": "my-script" }`
 
 **Create response `201`** — the `key` field is only returned once:
 ```json
@@ -105,9 +176,9 @@ Requires authentication. Users manage their own keys; admins can manage any.
 
 | Method | Path | Description | Role |
 |--------|------|-------------|------|
-| GET | `/api/v1/organizations` | List | any |
+| GET | `/api/v1/organizations` | List | public |
 | POST | `/api/v1/organizations` | Create | admin |
-| GET | `/api/v1/organizations/{id}` | Get | any |
+| GET | `/api/v1/organizations/{id}` | Get | public |
 | PUT | `/api/v1/organizations/{id}` | Update | admin |
 | DELETE | `/api/v1/organizations/{id}` | Delete | admin |
 | GET | `/api/v1/organizations/{id}/members` | List members | any |
@@ -125,6 +196,8 @@ Requires authentication. Users manage their own keys; admins can manage any.
 
 ## Locations
 
+GET endpoints are public (optional auth). Write endpoints require authentication.
+
 | Method | Path | Description |
 |--------|------|-------------|
 | GET | `/api/v1/locations` | List |
@@ -138,9 +211,11 @@ Requires authentication. Users manage their own keys; admins can manage any.
 {
   "id": 1,
   "location": "Kulturzentrum",
+  "short_name": "KZ",
   "address": "Hauptstr. 1",
   "zipcode": "10115",
   "town": "Berlin",
+  "country": "Germany",
   "latitude": "52.5200",
   "longitude": "13.4050",
   "internetsite": "https://example.com",
@@ -149,24 +224,24 @@ Requires authentication. Users manage their own keys; admins can manage any.
 }
 ```
 
-**Create body** — `organization_id` required for `user`/`publisher` (must be org member):
+**Create/Update body** — all fields optional except `location` on create:
 ```json
 {
-  "location": "string", "address": "string", "zipcode": "string",
-  "town": "string", "latitude": "string", "longitude": "string",
+  "location": "string", "short_name": "string",
+  "address": "string", "zipcode": "string",
+  "town": "string", "country": "string",
+  "latitude": "string", "longitude": "string",
   "internetsite": "string", "organization_id": 3
 }
 ```
 
-**Update body** — all fields optional:
-```json
-{ "address": "string", "zipcode": "string", "town": "string",
-  "latitude": "string", "longitude": "string", "internetsite": "string" }
-```
+`organization_id` is required for `user`/`publisher` (must be org member).
 
 ---
 
 ## Musicians
+
+GET endpoints are public (optional auth). Write endpoints require authentication.
 
 | Method | Path | Description |
 |--------|------|-------------|
@@ -178,7 +253,19 @@ Requires authentication. Users manage their own keys; admins can manage any.
 
 **Musician object:**
 ```json
-{ "id": 1, "bandname": "string", "internetsite": "string", "created_at": "..." }
+{
+  "id": 1,
+  "bandname": "La Troupe",
+  "short_name": "LT",
+  "internetsite": "https://latroupe.example.com",
+  "description": "string",
+  "created_at": "..."
+}
+```
+
+**Create/Update body:**
+```json
+{ "bandname": "string", "short_name": "string", "internetsite": "string", "description": "string" }
 ```
 
 ---
@@ -197,11 +284,17 @@ Requires authentication. Users manage their own keys; admins can manage any.
   "end_time": "2026-05-15T23:00:00+02:00",
   "has_ball": true,
   "has_workshop": false,
-  "tags": ["Bal Folk", "Köln"],
+  "is_cancelled": false,
+  "tags": ["bal-folk", "Köln"],
   "is_published": true,
   "short_code": "8b911390",
+  "url": "https://example.com/event/42",
   "image_url": "/api/v1/images/1",
   "organization_id": 3,
+  "location_id": 7,
+  "location": "Kulturzentrum",
+  "location_town": "Berlin",
+  "location_country": "Germany",
   "pricing": {
     "type": "multiple",
     "currency": "EUR",
@@ -210,6 +303,18 @@ Requires authentication. Users manage their own keys; admins can manage any.
       { "label": "student", "amount": 8 }
     ]
   },
+  "musicians": [
+    { "id": 2, "bandname": "La Troupe" }
+  ],
+  "timetable": [
+    {
+      "id": 1, "event_id": 1,
+      "start_time": "20:00", "end_time": "21:30",
+      "title": "Workshop", "description": "string", "room": "Hall A",
+      "location_id": 7, "location_name": "Kulturzentrum",
+      "created_at": "..."
+    }
+  ],
   "created_at": "..."
 }
 ```
@@ -220,28 +325,36 @@ The `pricing` field is optional. `type` must be one of:
 |-------|-------------|
 | `free` | No admission fee |
 | `donation` | Pay what you want |
-| `single` | One fixed price; set `amount` (and optionally `currency`) |
-| `multiple` | Tiered pricing; set `prices` as an array of `{label, amount}` objects (and optionally `currency`) |
+| `single` | One fixed price; set `amount` and optionally `currency` |
+| `multiple` | Tiered pricing; set `prices` as `[{label, amount}]` and optionally `currency` |
 
-`uid` is set from the iCal `UID` field when importing; used for deduplication on re-import. When `uid` is present, re-importing the same feed updates the event rather than creating a duplicate. Without `uid`, deduplication falls back to matching by title + location + start time (±3 hours).
+`uid` is set from the iCal `UID` field on import and used for deduplication: re-importing the same feed updates existing events. Without `uid`, deduplication falls back to title + location + start time (±3 h).
 
-### Protected endpoints
+`timetable` and `musicians` are only populated on `GET /api/v1/events/{id}`, not in the list endpoint.
+
+### Endpoints
+
+GET endpoints are public (optional auth). Write endpoints require authentication.
 
 | Method | Path | Description |
 |--------|------|-------------|
 | GET | `/api/v1/events` | List events |
 | POST | `/api/v1/events` | Create event(s) |
-| GET | `/api/v1/events/{id}` | Get event |
+| PATCH | `/api/v1/events` | Bulk-update events |
+| GET | `/api/v1/events/{id}` | Get event (includes timetable + musicians) |
 | DELETE | `/api/v1/events/{id}` | Delete event |
 | POST | `/api/v1/events/{id}/publish` | Publish event |
+| POST | `/api/v1/events/{id}/timetable` | Add timetable entries |
+| PUT | `/api/v1/events/{id}/timetable` | Replace timetable |
+| DELETE | `/api/v1/events/{id}/timetable/{entry_id}` | Delete timetable entry |
+| POST | `/api/v1/events/{id}/locations` | Attach location |
+| DELETE | `/api/v1/events/{id}/locations/{location_id}` | Detach location |
 
-**Write access:** `user`/`publisher` must be members of the event's `organization_id`. `admin` bypasses this.
+**Write access:** `user`/`publisher` must be members of the event's `organization_id`. `admin` bypasses this check.
 
 **Publication:** events created by `user` or `admin` are published immediately; `publisher` and `viewer` create unpublished events.
 
-### GET /api/v1/events
-
-Query parameters:
+### GET /api/v1/events — query parameters
 
 | Parameter | Description |
 |-----------|-------------|
@@ -251,15 +364,19 @@ Query parameters:
 | `start_time_before` | RFC3339 |
 | `end_time_after` | RFC3339 |
 | `end_time_before` | RFC3339 |
-| `location` | Partial match |
+| `location` | Partial match on location name |
+| `country` | Exact match on location country |
+| `lat`, `lon`, `radius_km` | Geo bounding box (all three required) |
 | `tag` | Partial match |
 | `has_ball` | `true`/`false` |
 | `has_workshop` | `true`/`false` |
-| `is_published` | `true`/`false` (admin/user only) |
+| `is_published` | `true`/`false` — admin/user only |
+| `include_past` | `true` to include past events (default: future only) |
 | `limit` | Default 100, max 1000 |
 | `offset` | Default 0 |
+| `code` | Short-code lookup (public, unauthenticated) |
 
-`viewer` role and the public endpoint only return published events.
+Unauthenticated requests and `viewer` role only see published events.
 
 ### POST /api/v1/events — JSON
 
@@ -273,11 +390,12 @@ Query parameters:
   "end_time": "2026-05-15T23:00:00",
   "has_ball": true,
   "has_workshop": false,
-  "tags": ["Bal Folk"],
+  "tags": ["bal-folk"],
   "organization_id": 3,
+  "musicians": [1, 2],
   "location": {
     "location": "Kulturzentrum", "address": "Hauptstr. 1",
-    "zipcode": "10115", "town": "Berlin",
+    "zipcode": "10115", "town": "Berlin", "country": "Germany",
     "latitude": "52.52", "longitude": "13.40",
     "eventsite": "https://example.com/event/42"
   },
@@ -290,7 +408,7 @@ Query parameters:
 {
   "title": "Weekly Dance",
   "has_ball": true,
-  "tags": ["Bal Folk"],
+  "tags": ["bal-folk"],
   "location": { "location": "Kulturzentrum" },
   "date": [
     { "description": "Week 1", "start_time": "2026-05-15T20:00:00", "end_time": "2026-05-15T23:00:00" },
@@ -303,7 +421,7 @@ Query parameters:
 
 Response `201`: array of created event objects.
 
-### POST /api/v1/events — iCal
+### POST /api/v1/events — iCal upload
 
 ```
 Content-Type: text/calendar
@@ -317,10 +435,25 @@ Send a `.ics` file body. Optional query parameter `organization_id` assigns all 
 | `SUMMARY` | `title` |
 | `DESCRIPTION` | `description` |
 | `DTSTART` / `DTEND` | `start_time` / `end_time` |
+| `DURATION` | used to derive `end_time` when `DTEND` absent |
 | `LOCATION` | location name |
+| `GEO` | location latitude/longitude |
 | `CATEGORIES` | `tags` |
-| `ORGANIZER` | organization (find or create by CN or email) |
+| `STATUS: CANCELLED` | `is_cancelled` |
+| `ORGANIZER` | organization (found or created by CN/email) |
 | `ATTACH` with `FMTTYPE=image/*` | event image |
+| `RRULE` | recurring events expanded into individual occurrences |
+
+### PATCH /api/v1/events
+
+Bulk-update multiple events. Body is an array of partial event objects each containing at minimum an `"id"` field.
+
+```json
+[
+  { "id": 1, "is_published": true },
+  { "id": 2, "tags": ["bal-folk", "Köln"] }
+]
+```
 
 ### POST /api/v1/events/{id}/publish
 
@@ -328,25 +461,40 @@ Publishes an unpublished event. Requires `user` or `admin` role and org membersh
 
 Response `200`: updated event object.
 
+### Timetable entries
+
+**Add (POST) / Replace (PUT) body** — array of:
+```json
+[
+  {
+    "start_time": "20:00", "end_time": "21:30",
+    "title": "Workshop", "description": "string",
+    "room": "Hall A", "location_id": 7
+  }
+]
+```
+
+`start_time` and `end_time` are `HH:MM` clock times relative to the event date.
+
 ---
 
 ## Images
 
 | Method | Path | Description |
 |--------|------|-------------|
-| GET | `/api/v1/images/{event_id}` | Get event image (AVIF) |
+| GET | `/api/v1/images/{event_id}` | Get event image (AVIF) — public |
 | POST | `/api/v1/images/{event_id}` | Upload event image |
 | DELETE | `/api/v1/images/{event_id}` | Delete event image |
 
-Upload accepts any common image format. The image is resized to fit within configured dimensions and stored as AVIF.
+Upload accepts any common image format. The image is resized to configured dimensions and stored as AVIF.
 
 ---
 
 ## Tags
 
-### GET /api/v1/tags
+### GET /api/v1/tags — public
 
-Returns all distinct tags across all events.
+Returns all distinct tags across published events.
 
 ```json
 ["Bal Folk", "Workshop", "Köln"]
@@ -354,14 +502,29 @@ Returns all distinct tags across all events.
 
 ---
 
-## Fetch Sources (iCal subscriptions)
+## iCal feeds — public
 
-Stores iCal URLs and imports events from them on demand.
+No authentication required.
+
+| Path | Description |
+|------|-------------|
+| `GET /api/v1/events.ics` | All published events |
+| `GET /api/v1/events/tag/{tag}.ics` | Published events for a specific tag |
+| `GET /api/v1/events/town/{town}.ics` | Published events for a specific town |
+
+Supports `Accept: text/calendar` on `GET /api/v1/events` as an alternative to the `.ics` paths.
+
+---
+
+## Fetch Sources
+
+Stores external calendar feeds and imports events from them on demand. All endpoints require at least `user` role.
 
 | Method | Path | Description |
 |--------|------|-------------|
 | GET | `/api/v1/fetchurl` | List sources |
-| POST | `/api/v1/fetchurl` | Add source and import |
+| POST | `/api/v1/fetchurl` | Add single source and import |
+| POST | `/api/v1/fetchurl/bulk` | Add multiple sources and import |
 | GET | `/api/v1/fetchurl/{id}` | Get source |
 | POST | `/api/v1/fetchurl/{id}/fetch` | Re-import from source |
 | POST | `/api/v1/fetchurl/fetch-all` | Re-import from all sources |
@@ -372,39 +535,66 @@ Stores iCal URLs and imports events from them on demand.
   "id": 1,
   "url": "https://example.com/calendar.ics",
   "type": "ical",
-  "tags": ["Bal Folk"],
+  "tags": ["bal-folk"],
+  "organization_id": 3,
   "last_fetched_at": "2026-05-15T10:00:00Z",
   "created_at": "..."
 }
 ```
 
-**Add source body:**
+`organization_id` — when set, all events imported from this source are assigned to that organization, overriding any organizer information in the feed itself.
+
+**Supported types:**
+
+| Type | Description |
+|------|-------------|
+| `ical` | Standard iCalendar feed |
+| `folkdance-json` | folkdance.page JSON API |
+
+Type is auto-detected via a HEAD request when omitted.
+
+### POST /api/v1/fetchurl
+
 ```json
-{ "url": "https://example.com/calendar.ics", "type": "ical", "tags": ["Bal Folk"] }
+{ "url": "https://example.com/calendar.ics", "type": "ical", "tags": ["bal-folk"], "organization_id": 3 }
 ```
 
-Tags listed here are merged with tags parsed from the iCal `CATEGORIES` field. Events are deduplicated by `uid`; re-fetching the same source updates existing events.
+`type` and `tags` are optional. `organization_id` is optional.
 
-**fetch-all response:**
+Re-POSTing the same URL updates its `type`, `tags`, and `organization_id` (upsert by URL).
+
+Response: array of imported event objects. `201` when all events were newly created; `200` if any were updates.
+
+### POST /api/v1/fetchurl/bulk
+
+Registers and imports multiple sources in one call. Entries that do not contain `://` are treated as tags applied to every source in the batch.
+
+```json
+{
+  "entries": [
+    "https://example.com/feed1.ics",
+    "https://example.com/feed2.ics",
+    "bal-folk"
+  ],
+  "tags": ["Germany"],
+  "organization_id": 3
+}
+```
+
+`type` — optional; auto-detected per URL when omitted. `organization_id` and `tags` are applied to all sources.
+
+Response: array of per-source results:
 ```json
 [
-  { "source_id": 1, "url": "...", "events": 12, "all_created": false },
-  { "source_id": 2, "url": "...", "events": 0, "error": "remote returned 404" }
+  { "url": "https://…/feed1.ics", "source_id": 1, "events": 12, "all_created": true },
+  { "url": "https://…/feed2.ics", "source_id": 2, "events": 3,  "all_created": false },
+  { "url": "https://…/feed3.ics", "source_id": 3, "events": 0,  "error": "remote returned 404" }
 ]
 ```
 
----
+### POST /api/v1/fetchurl/fetch-all
 
-## Public endpoints
-
-No authentication required.
-
-| Path | Description |
-|------|-------------|
-| `GET /events` | Published events (JSON); supports same query params as protected endpoint plus `code` for short-code lookup |
-| `GET /events.ics` | All published events as iCal feed |
-| `GET /events/tag/{tag}.ics` | Published events for a tag as iCal feed |
-| `GET /events/town/{town}.ics` | Published events for a town as iCal feed |
+Re-imports all stored sources in parallel. Same response shape as `/bulk`.
 
 ---
 
@@ -414,12 +604,12 @@ No authentication required.
 |------|---------|
 | 200 | OK |
 | 201 | Created |
-| 204 | No content (delete) |
+| 204 | No content (delete / logout) |
 | 400 | Bad request / invalid input |
 | 401 | Missing or invalid credentials |
 | 403 | Forbidden (wrong role or not org member) |
 | 404 | Not found |
 | 415 | Unsupported media type |
-| 429 | Rate limit exceeded |
+| 429 | Rate limit exceeded (login) |
 | 502 | Bad gateway (upstream fetch failed) |
 | 500 | Internal server error |
