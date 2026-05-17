@@ -282,6 +282,76 @@ func startTokenCleanup() {
 	}()
 }
 
+// migrateUsersRoles expands the users.role CHECK constraint to include
+// 'accountant' and 'visitor'. SQLite requires a full table recreation to
+// change a constraint; a dedicated connection pins the PRAGMA to that conn.
+func migrateUsersRoles() {
+	var schema string
+	if err := db.QueryRow(
+		"SELECT sql FROM sqlite_master WHERE type='table' AND name='users'",
+	).Scan(&schema); err != nil || strings.Contains(schema, "accountant") {
+		return
+	}
+
+	conn, err := db.Conn(context.Background())
+	if err != nil {
+		log.Printf("migrateUsersRoles: get conn: %v", err)
+		return
+	}
+	defer conn.Close()
+
+	if _, err = conn.ExecContext(context.Background(), "PRAGMA foreign_keys=OFF"); err != nil {
+		log.Printf("migrateUsersRoles: pragma off: %v", err)
+		return
+	}
+
+	tx, err := conn.BeginTx(context.Background(), nil)
+	if err != nil {
+		log.Printf("migrateUsersRoles: begin: %v", err)
+		conn.ExecContext(context.Background(), "PRAGMA foreign_keys=ON")
+		return
+	}
+
+	stmts := []string{
+		`CREATE TABLE users_v2 (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			username TEXT UNIQUE NOT NULL,
+			email TEXT UNIQUE NOT NULL,
+			password_hash TEXT NOT NULL,
+			role TEXT DEFAULT 'user' CHECK(role IN ('admin','user','publisher','viewer','accountant','visitor')),
+			telegram TEXT,
+			matrix TEXT,
+			email_verified INTEGER DEFAULT 0,
+			telegram_verified INTEGER DEFAULT 0,
+			matrix_verified INTEGER DEFAULT 0,
+			disabled INTEGER DEFAULT 0,
+			failed_login_count INTEGER DEFAULT 0,
+			failed_login_since DATETIME,
+			last_magic_sent_at DATETIME,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+		)`,
+		`INSERT INTO users_v2
+			SELECT id, username, email, password_hash, role, telegram, matrix,
+			       email_verified, telegram_verified, matrix_verified, disabled,
+			       failed_login_count, failed_login_since, last_magic_sent_at, created_at
+			FROM users`,
+		`DROP TABLE users`,
+		`ALTER TABLE users_v2 RENAME TO users`,
+	}
+	for _, stmt := range stmts {
+		if _, err := tx.ExecContext(context.Background(), stmt); err != nil {
+			tx.Rollback()
+			conn.ExecContext(context.Background(), "PRAGMA foreign_keys=ON")
+			log.Printf("migrateUsersRoles: %v", err)
+			return
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		log.Printf("migrateUsersRoles: commit: %v", err)
+	}
+	conn.ExecContext(context.Background(), "PRAGMA foreign_keys=ON")
+}
+
 func migrateDB() {
 	// Errors are silently ignored (column already exists).
 	db.Exec("ALTER TABLE events ADD COLUMN organization_id INTEGER")
@@ -329,6 +399,21 @@ func migrateDB() {
 		FOREIGN KEY (location_id) REFERENCES locations(id) ON DELETE CASCADE
 	)`)
 	db.Exec("CREATE INDEX IF NOT EXISTS idx_event_locations_event_id ON event_locations(event_id)")
+	db.Exec("ALTER TABLE events ADD COLUMN capacity INTEGER")
+	db.Exec(`CREATE TABLE IF NOT EXISTS bookings (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		event_id INTEGER NOT NULL,
+		visitor_id INTEGER NOT NULL,
+		status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','confirmed','cancelled')),
+		qr_token TEXT UNIQUE NOT NULL,
+		notes TEXT,
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE CASCADE,
+		FOREIGN KEY (visitor_id) REFERENCES users(id) ON DELETE CASCADE
+	)`)
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_bookings_event_id ON bookings(event_id)")
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_bookings_visitor_id ON bookings(visitor_id)")
+	migrateUsersRoles()
 	db.Exec(`CREATE TABLE IF NOT EXISTS verification_tokens (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		token TEXT UNIQUE NOT NULL,
@@ -348,7 +433,7 @@ func createTables() error {
 		username TEXT UNIQUE NOT NULL,
 		email TEXT UNIQUE NOT NULL,
 		password_hash TEXT NOT NULL,
-		role TEXT DEFAULT 'user' CHECK(role IN ('admin', 'user', 'publisher', 'viewer')),
+		role TEXT DEFAULT 'user' CHECK(role IN ('admin', 'user', 'publisher', 'viewer', 'accountant', 'visitor')),
 		telegram TEXT,
 		matrix TEXT,
 		email_verified INTEGER DEFAULT 0,
@@ -375,6 +460,7 @@ func createTables() error {
 		url TEXT,
 		source TEXT,
 		pricing TEXT,
+		capacity INTEGER,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		FOREIGN KEY (location_id) REFERENCES locations(id)
 	);
@@ -494,6 +580,19 @@ func createTables() error {
 		FOREIGN KEY (location_id) REFERENCES locations(id) ON DELETE CASCADE
 	);
 	CREATE INDEX IF NOT EXISTS idx_event_locations_event_id ON event_locations(event_id);
+	CREATE TABLE IF NOT EXISTS bookings (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		event_id INTEGER NOT NULL,
+		visitor_id INTEGER NOT NULL,
+		status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','confirmed','cancelled')),
+		qr_token TEXT UNIQUE NOT NULL,
+		notes TEXT,
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE CASCADE,
+		FOREIGN KEY (visitor_id) REFERENCES users(id) ON DELETE CASCADE
+	);
+	CREATE INDEX IF NOT EXISTS idx_bookings_event_id ON bookings(event_id);
+	CREATE INDEX IF NOT EXISTS idx_bookings_visitor_id ON bookings(visitor_id);
 	CREATE INDEX IF NOT EXISTS idx_events_url            ON events(url) WHERE url IS NOT NULL;
 	CREATE INDEX IF NOT EXISTS idx_events_published_start ON events(is_published, start_time);
 	CREATE INDEX IF NOT EXISTS idx_events_title_location  ON events(title, location_id);

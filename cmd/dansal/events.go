@@ -43,6 +43,7 @@ type Event struct {
 	OrganizationID *int             `json:"organization_id,omitempty"`
 	Editable       *bool            `json:"editable,omitempty"`
 	Timetable      []TimetableEntry `json:"timetable,omitempty"`
+	Capacity       *int             `json:"capacity,omitempty"`
 	Pricing        *Pricing         `json:"pricing,omitempty"`
 	Locations      []Location       `json:"locations,omitempty"`
 	Location       string           `json:"-"`
@@ -65,6 +66,7 @@ type EventPatchRequest struct {
 	HasBall        *bool    `json:"has_ball"`
 	HasWorkshop    *bool    `json:"has_workshop"`
 	Pricing        *Pricing `json:"pricing"`
+	Capacity       *int     `json:"capacity"`
 }
 
 type EventCreateRequest struct {
@@ -85,6 +87,7 @@ type EventCreateRequest struct {
 	OrganizationID     *int                 `json:"organization_id,omitempty"`
 	SourceLastModified int64                `json:"source_last_modified,omitempty"`
 	Pricing            *Pricing             `json:"pricing,omitempty"`
+	Capacity           *int                 `json:"capacity,omitempty"`
 }
 
 type EventLocationRequest struct {
@@ -125,7 +128,7 @@ var timeFormats = []string{
 }
 
 // SELECT used by all event list / single-event queries
-const eventListSelect = `SELECT e.id, e.uid, e.title, e.description, e.start_time, e.end_time, e.has_ball, e.has_workshop, e.is_cancelled, e.tags, e.is_published, e.short_code, COALESCE(e.url,''), COALESCE(e.source,''), e.created_at, COALESCE(l.location, ''), e.organization_id, COALESCE(e.pricing,'') FROM events e LEFT JOIN locations l ON e.location_id = l.id`
+const eventListSelect = `SELECT e.id, e.uid, e.title, e.description, e.start_time, e.end_time, e.has_ball, e.has_workshop, e.is_cancelled, e.tags, e.is_published, e.short_code, COALESCE(e.url,''), COALESCE(e.source,''), e.created_at, COALESCE(l.location, ''), e.organization_id, COALESCE(e.pricing,''), e.capacity FROM events e LEFT JOIN locations l ON e.location_id = l.id`
 
 // ── low-level helpers ──────────────────────────────────────────────────────
 
@@ -169,11 +172,12 @@ func scanEventRow(s scanner) (Event, error) {
 	var hasBallInt, hasWorkshopInt, isCancelledInt, isPublishedInt int
 	var startEpoch, endEpoch int64
 	var orgID sql.NullInt64
+	var capacity sql.NullInt64
 	var uid sql.NullString
 	if err := s.Scan(&event.ID, &uid, &event.Title, &event.Description, &startEpoch, &endEpoch,
 		&hasBallInt, &hasWorkshopInt, &isCancelledInt, &event.TagsJSON, &isPublishedInt,
 		&event.ShortCode, &event.URL, &event.Source, &event.CreatedAt, &event.Location, &orgID,
-		&event.PricingJSON); err != nil {
+		&event.PricingJSON, &capacity); err != nil {
 		return Event{}, err
 	}
 	if uid.Valid {
@@ -189,6 +193,10 @@ func scanEventRow(s scanner) (Event, error) {
 	if orgID.Valid {
 		v := int(orgID.Int64)
 		event.OrganizationID = &v
+	}
+	if capacity.Valid {
+		v := int(capacity.Int64)
+		event.Capacity = &v
 	}
 	if event.TagsJSON != "" {
 		json.Unmarshal([]byte(event.TagsJSON), &event.Tags)
@@ -209,11 +217,12 @@ func fetchEventByID(q querier, id int) (Event, error) {
 	var startEpoch, endEpoch int64
 	var orgID sql.NullInt64
 	var uid sql.NullString
+	var capacity sql.NullInt64
 	err := q.QueryRow(
-		"SELECT id, uid, title, description, start_time, end_time, has_ball, has_workshop, is_cancelled, tags, is_published, short_code, COALESCE(url,''), COALESCE(source,''), created_at, organization_id, COALESCE(pricing,'') FROM events WHERE id = ?", id,
+		"SELECT id, uid, title, description, start_time, end_time, has_ball, has_workshop, is_cancelled, tags, is_published, short_code, COALESCE(url,''), COALESCE(source,''), created_at, organization_id, COALESCE(pricing,''), capacity FROM events WHERE id = ?", id,
 	).Scan(&event.ID, &uid, &event.Title, &event.Description, &startEpoch, &endEpoch,
 		&hasBallInt, &hasWorkshopInt, &isCancelledInt, &event.TagsJSON, &isPublishedInt,
-		&event.ShortCode, &event.URL, &event.Source, &event.CreatedAt, &orgID, &event.PricingJSON)
+		&event.ShortCode, &event.URL, &event.Source, &event.CreatedAt, &orgID, &event.PricingJSON, &capacity)
 	if uid.Valid {
 		event.UID = uid.String
 	}
@@ -230,6 +239,10 @@ func fetchEventByID(q querier, id int) (Event, error) {
 	if orgID.Valid {
 		v := int(orgID.Int64)
 		event.OrganizationID = &v
+	}
+	if capacity.Valid {
+		v := int(capacity.Int64)
+		event.Capacity = &v
 	}
 	if event.TagsJSON != "" {
 		json.Unmarshal([]byte(event.TagsJSON), &event.Tags)
@@ -363,7 +376,7 @@ func urlVal(s string) interface{} {
 // Deduplication order: UID exact match → URL exact match → title+location+time fuzzy match (±3 h).
 // The URL and fuzzy tiers run whenever the previous tier misses, so two feeds that
 // publish the same event with different UIDs (or none) converge to a single row.
-func insertEvent(q querier, title, description string, startTime, endTime int64, locationID int64, hasBall, hasWorkshop, isCancelled bool, tags []string, isPublished bool, organizationID *int, uid, url, source string, sourceLastModified int64, pricing *Pricing) (int, string, bool, error) {
+func insertEvent(q querier, title, description string, startTime, endTime int64, locationID int64, hasBall, hasWorkshop, isCancelled bool, tags []string, isPublished bool, organizationID *int, uid, url, source string, sourceLastModified int64, pricing *Pricing, capacity *int) (int, string, bool, error) {
 	var existingID int
 	var existingShortCode string
 	var existingSourceLastModified int64
@@ -409,6 +422,10 @@ func insertEvent(q querier, title, description string, startTime, endTime int64,
 			pricingArg = string(b)
 		}
 	}
+	var capacityArg interface{}
+	if capacity != nil {
+		capacityArg = *capacity
+	}
 
 	if lookupErr == nil {
 		// Skip update when the source tells us nothing has changed since last import.
@@ -420,8 +437,8 @@ func insertEvent(q querier, title, description string, startTime, endTime int64,
 			slmArg = sourceLastModified
 		}
 		_, err := q.Exec(
-			"UPDATE events SET description=?, start_time=?, end_time=?, location_id=?, has_ball=?, has_workshop=?, is_cancelled=?, tags=?, is_published=?, url=?, source_last_modified=?, pricing=? WHERE id=?",
-			description, startTime, endTime, locationID, hasBall, hasWorkshop, isCancelled, string(tagsJSON), isPublished, urlVal(url), slmArg, pricingArg, existingID,
+			"UPDATE events SET description=?, start_time=?, end_time=?, location_id=?, has_ball=?, has_workshop=?, is_cancelled=?, tags=?, is_published=?, url=?, source_last_modified=?, pricing=?, capacity=? WHERE id=?",
+			description, startTime, endTime, locationID, hasBall, hasWorkshop, isCancelled, string(tagsJSON), isPublished, urlVal(url), slmArg, pricingArg, capacityArg, existingID,
 		)
 		if err != nil {
 			return 0, "", false, err
@@ -453,8 +470,8 @@ func insertEvent(q querier, title, description string, startTime, endTime int64,
 			sourceArg = source
 		}
 		result, err = q.Exec(
-			"INSERT INTO events (uid, title, description, start_time, end_time, location_id, has_ball, has_workshop, is_cancelled, tags, is_published, organization_id, short_code, url, source, source_last_modified, pricing) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-			uidArg, title, description, startTime, endTime, locationID, hasBall, hasWorkshop, isCancelled, string(tagsJSON), isPublished, orgIDArg, shortCode, urlVal(url), sourceArg, slmArg, pricingArg,
+			"INSERT INTO events (uid, title, description, start_time, end_time, location_id, has_ball, has_workshop, is_cancelled, tags, is_published, organization_id, short_code, url, source, source_last_modified, pricing, capacity) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+			uidArg, title, description, startTime, endTime, locationID, hasBall, hasWorkshop, isCancelled, string(tagsJSON), isPublished, orgIDArg, shortCode, urlVal(url), sourceArg, slmArg, pricingArg, capacityArg,
 		)
 		if err == nil {
 			break
@@ -503,7 +520,7 @@ func createEventFromRequest(q querier, req EventCreateRequest, locationID int64,
 			return nil, false, fmt.Errorf("end_time: %w", err)
 		}
 
-		id, shortCode, created, err := insertEvent(q, req.Title, entry.description, startTime, endTime, locationID, req.HasBall, req.HasWorkshop, req.IsCancelled, req.Tags, isPublished, req.OrganizationID, req.UID, req.URL, req.Source, req.SourceLastModified, req.Pricing)
+		id, shortCode, created, err := insertEvent(q, req.Title, entry.description, startTime, endTime, locationID, req.HasBall, req.HasWorkshop, req.IsCancelled, req.Tags, isPublished, req.OrganizationID, req.UID, req.URL, req.Source, req.SourceLastModified, req.Pricing, req.Capacity)
 		if err != nil {
 			return nil, false, err
 		}
@@ -766,6 +783,10 @@ func patchEvents(w http.ResponseWriter, r *http.Request) {
 		pricingJSON, _ := json.Marshal(req.Pricing)
 		setClauses = append(setClauses, "pricing = ?")
 		setArgs = append(setArgs, string(pricingJSON))
+	}
+	if req.Capacity != nil {
+		setClauses = append(setClauses, "capacity = ?")
+		setArgs = append(setArgs, *req.Capacity)
 	}
 	if len(setClauses) == 0 {
 		http.Error(w, "no fields to update", http.StatusBadRequest)

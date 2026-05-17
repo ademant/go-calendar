@@ -14,10 +14,12 @@ import (
 )
 
 const (
-	RoleAdmin     = "admin"
-	RoleUser      = "user"
-	RolePublisher = "publisher"
-	RoleViewer    = "viewer"
+	RoleAdmin      = "admin"
+	RoleUser       = "user"
+	RolePublisher  = "publisher"
+	RoleViewer     = "viewer"
+	RoleAccountant = "accountant" // org member who can manage bookings
+	RoleVisitor    = "visitor"    // can book events and access public endpoints
 )
 
 type User struct {
@@ -106,7 +108,8 @@ func checkPassword(password, stored string) (ok, migrate bool) {
 
 // validateRole checks if the role is valid
 func validateRole(role string) bool {
-	return role == RoleAdmin || role == RoleUser || role == RolePublisher || role == RoleViewer
+	return role == RoleAdmin || role == RoleUser || role == RolePublisher ||
+		role == RoleViewer || role == RoleAccountant || role == RoleVisitor
 }
 
 
