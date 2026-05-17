@@ -2,41 +2,157 @@
 {{define "content"}}
 {{with .Data}}
 {{with .Event}}
-<h1>{{.Title}}</h1>
 
-{{if .IsCancelled}}<p><span class="badge cancelled">{{$.Strings.T "evt_cancelled"}}</span></p>{{end}}
+{{if .ImageURL}}
+<div class="evt-hero">
+  <img src="{{.ImageURL}}" alt="{{.Title}}">
+</div>
+{{end}}
 
-<div class="detail-section">
-  {{if .StartTime}}<div class="detail-row"><span class="detail-label">{{$.Strings.T "evt_starts"}}</span> {{formatTime .StartTime}}</div>{{end}}
-  {{if .EndTime}}<div class="detail-row"><span class="detail-label">{{$.Strings.T "evt_ends"}}</span> {{formatTime .EndTime}}</div>{{end}}
-  {{if .Location}}<div class="detail-row"><span class="detail-label">{{$.Strings.T "evt_venue"}}</span> {{.Location}}</div>{{end}}
-  {{if .LocationTown}}<div class="detail-row"><span class="detail-label">{{$.Strings.T "evt_town"}}</span> {{.LocationTown}}{{if .LocationCountry}}, {{.LocationCountry}}{{end}}</div>{{end}}
-  {{if .Description}}<div class="detail-row"><span class="detail-label">{{$.Strings.T "evt_description"}}</span><br>{{.Description}}</div>{{end}}
-  {{if .URL}}<div class="detail-row"><span class="detail-label">{{$.Strings.T "evt_website"}}</span> <a href="{{.URL}}" rel="noopener">{{.URL}}</a></div>{{end}}
-  {{if .Tags}}<div class="detail-row"><span class="detail-label">{{$.Strings.T "evt_tags"}}</span> {{range .Tags}}<span class="tag">#{{.}}</span>{{end}}</div>{{end}}
-  {{if .HasBall}}<div class="detail-row"><span class="badge">{{$.Strings.T "filter_type_ball"}}</span></div>{{end}}
-  {{if .HasWorkshop}}<div class="detail-row"><span class="badge">{{$.Strings.T "filter_type_workshop"}}</span></div>{{end}}
-  {{with .Pricing}}
-  <div class="detail-row"><span class="detail-label">{{$.Strings.T "evt_admission"}}</span>
-    {{if eq .Type "free"}}{{$.Strings.T "evt_free"}}{{end}}
-    {{if eq .Type "donation"}}{{$.Strings.T "evt_donation"}}{{end}}
-    {{if eq .Type "single"}}{{.Amount}}{{if .Currency}} {{.Currency}}{{end}}{{end}}
-    {{if eq .Type "multiple"}}{{range .Prices}}<span>{{.Label}}: {{.Amount}}</span> {{end}}{{end}}
+<div class="evt-header">
+  <h1>{{.Title}}</h1>
+  {{if .IsCancelled}}<p><span class="badge cancelled">{{$.Strings.T "evt_cancelled"}}</span></p>{{end}}
+  <div class="evt-header-meta">
+    {{if .StartTime}}<span class="evt-time">{{formatTime .StartTime}}{{if .EndTime}} – {{formatTime .EndTime}}{{end}}</span>{{end}}
+    {{if .Location}}<span class="evt-sep">·</span><span>{{.Location}}</span>{{end}}
+    {{if .LocationTown}}<span class="evt-sep">·</span><span>{{.LocationTown}}{{if .LocationCountry}}, {{.LocationCountry}}{{end}}</span>{{end}}
   </div>
-  {{end}}
-  {{if .Musicians}}<div class="detail-row"><span class="detail-label">{{$.Strings.T "evt_music"}}</span>
-    {{range .Musicians}}<span>{{.Bandname}}</span> {{end}}
-  </div>{{end}}
+</div>
+
+<div class="evt-layout">
+  <div class="evt-main">
+
+    {{if .Musicians}}
+    <section class="evt-section">
+      <h2>{{$.Strings.T "evt_musicians"}}</h2>
+      <div class="evt-musician-tiles">
+        {{range .Musicians}}
+        <a href="/musicians/{{.ID}}" class="evt-musician-tile">
+          <span class="evt-musician-name">{{.Bandname}}</span>
+          {{with .ShortName}}<span class="evt-musician-short">({{.}})</span>{{end}}
+        </a>
+        {{end}}
+      </div>
+    </section>
+    {{end}}
+
+    {{if .Description}}
+    <section class="evt-section">
+      <h2>{{$.Strings.T "evt_description"}}</h2>
+      <div class="evt-description">{{.Description}}</div>
+    </section>
+    {{end}}
+
+    {{if .Timetable}}
+    <section class="evt-section">
+      <h2>{{$.Strings.T "evt_timetable"}}</h2>
+      <div class="evt-timetable">
+        {{range .Timetable}}
+        <div class="tt-row">
+          <div class="tt-time">{{.StartTime}}{{if .EndTime}} – {{.EndTime}}{{end}}</div>
+          <div class="tt-body">
+            <div class="tt-title">{{.Title}}</div>
+            {{if .Room}}<div class="tt-meta">{{.Room}}</div>{{end}}
+            {{if .LocationName}}<div class="tt-meta">{{.LocationName}}</div>{{end}}
+            {{if .Description}}<div class="tt-desc">{{.Description}}</div>{{end}}
+          </div>
+        </div>
+        {{end}}
+      </div>
+    </section>
+    {{end}}
+
+  </div>
+
+  <aside class="evt-sidebar">
+    {{if or .HasBall .HasWorkshop}}
+    <div class="sidebar-block">
+      {{if .HasBall}}<span class="badge">{{$.Strings.T "filter_type_ball"}}</span>{{end}}
+      {{if .HasWorkshop}}<span class="badge">{{$.Strings.T "filter_type_workshop"}}</span>{{end}}
+    </div>
+    {{end}}
+
+    {{with .Pricing}}
+    <div class="sidebar-block">
+      <div class="sidebar-label">{{$.Strings.T "evt_admission"}}</div>
+      {{if eq .Type "free"}}<div>{{$.Strings.T "evt_free"}}</div>{{end}}
+      {{if eq .Type "donation"}}<div>{{$.Strings.T "evt_donation"}}</div>{{end}}
+      {{if eq .Type "single"}}<div>{{.Amount}}{{if .Currency}} {{.Currency}}{{end}}</div>{{end}}
+      {{if eq .Type "multiple"}}
+        {{range .Prices}}<div>{{.Label}}: {{.Amount}}</div>{{end}}
+      {{end}}
+    </div>
+    {{end}}
+
+    {{if .URL}}
+    <div class="sidebar-block">
+      <div class="sidebar-label">{{$.Strings.T "evt_links"}}</div>
+      <a href="{{.URL}}" target="_blank" rel="noopener" class="sidebar-link">{{$.Strings.T "evt_website"}}</a>
+    </div>
+    {{end}}
+
+    {{if .Tags}}
+    <div class="sidebar-block">
+      <div class="sidebar-label">{{$.Strings.T "evt_tags"}}</div>
+      <div>{{range .Tags}}<span class="tag">#{{.}}</span>{{end}}</div>
+    </div>
+    {{end}}
+  </aside>
 </div>
 
 {{end}}{{/* .Event */}}
 
 {{with .Org}}
-<div class="detail-section">
+<div class="evt-org">
   <h2>{{$.Strings.T "evt_organised_by"}} <a href="/org/{{$.Data.OrgSlug}}">{{.Name}}</a></h2>
   {{if .Description}}<p>{{.Description}}</p>{{end}}
+  <div class="org-links">
+    {{with .Website}}<a href="{{.}}" class="m-link m-link-web" target="_blank" rel="noopener">{{$.Strings.T "musician_website"}}</a>{{end}}
+    {{with .Mastodon}}<a href="{{mastodonURL .}}" class="m-link m-link-mastodon" target="_blank" rel="noopener me">Mastodon</a>{{end}}
+    {{with .Instagram}}<a href="https://instagram.com/{{.}}" class="m-link m-link-instagram" target="_blank" rel="noopener">Instagram</a>{{end}}
+    {{with .Facebook}}<a href="https://facebook.com/{{.}}" class="m-link m-link-facebook" target="_blank" rel="noopener">Facebook</a>{{end}}
+  </div>
 </div>
 {{end}}
 
 {{end}}{{/* .Data */}}
+
+<style>
+.evt-hero{margin:0 -1rem 0;background:#111;max-height:420px;overflow:hidden}
+.evt-hero img{width:100%;height:auto;max-height:420px;object-fit:cover;display:block;opacity:.95}
+.evt-header{padding:1.25rem 0 .75rem}
+.evt-header h1{margin-bottom:.35rem}
+.evt-header-meta{display:flex;flex-wrap:wrap;align-items:center;gap:.35rem;color:#555;font-size:.95rem}
+.evt-sep{color:#bbb}
+.evt-time{font-weight:600;color:#1a1a2e}
+.evt-layout{display:grid;grid-template-columns:1fr 260px;gap:2rem;align-items:start}
+@media(max-width:680px){.evt-layout{grid-template-columns:1fr}}
+.evt-section{margin-bottom:1.75rem}
+.evt-section h2{font-size:1.05rem;font-weight:700;color:#1a1a2e;margin-bottom:.6rem;text-transform:uppercase;letter-spacing:.04em}
+.evt-description{white-space:pre-wrap;color:#333;line-height:1.7}
+.evt-musician-tiles{display:flex;flex-wrap:wrap;gap:.6rem}
+.evt-musician-tile{display:inline-flex;flex-direction:column;background:#f0f4ff;border:1px solid #c8d4f5;border-radius:8px;padding:.5rem .9rem;text-decoration:none;color:#1a1a2e;transition:background .15s}
+.evt-musician-tile:hover{background:#dce6ff;border-color:#9ab0e8}
+.evt-musician-name{font-weight:600;font-size:.95rem}
+.evt-musician-short{color:#888;font-size:.8rem}
+.evt-timetable{display:flex;flex-direction:column;gap:.5rem}
+.tt-row{display:grid;grid-template-columns:90px 1fr;gap:.5rem 1rem;padding:.6rem .8rem;background:#fff;border:1px solid #e4e4e4;border-radius:6px}
+.tt-time{font-size:.85rem;font-weight:600;color:#555;padding-top:.1rem}
+.tt-title{font-weight:600;font-size:.95rem;color:#1a1a2e}
+.tt-meta{font-size:.82rem;color:#888;margin-top:.15rem}
+.tt-desc{font-size:.88rem;color:#555;margin-top:.25rem}
+.evt-sidebar{display:flex;flex-direction:column;gap:.1rem}
+.sidebar-block{background:#fff;border:1px solid #e4e4e4;border-radius:6px;padding:.8rem 1rem;margin-bottom:.6rem}
+.sidebar-label{font-size:.78rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#888;margin-bottom:.4rem}
+.sidebar-link{display:inline-block;color:#1a6eb5;font-size:.9rem;text-decoration:none}
+.sidebar-link:hover{text-decoration:underline}
+.evt-org{background:#fff;border:1px solid #ddd;border-radius:6px;padding:1.1rem 1.25rem;margin-top:.5rem}
+.evt-org h2{font-size:1rem;margin-bottom:.35rem}
+.org-links{display:flex;flex-wrap:wrap;gap:.4rem;margin-top:.6rem}
+.m-link{display:inline-block;padding:.25rem .7rem;border-radius:20px;font-size:.82rem;font-weight:600;text-decoration:none;color:#fff}
+.m-link-web{background:#1a6eb5}.m-link-web:hover{background:#0d4a80}
+.m-link-mastodon{background:#563acc}.m-link-mastodon:hover{background:#3c278e}
+.m-link-instagram{background:#c13584}.m-link-instagram:hover{background:#8a255e}
+.m-link-facebook{background:#1877f2}.m-link-facebook:hover{background:#0d5ab5}
+</style>
 {{end}}

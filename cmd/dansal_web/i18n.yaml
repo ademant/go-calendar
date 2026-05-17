@@ -60,6 +60,10 @@ languages:
       evt_music: "Musik:"
       evt_organised_by: "Veranstaltet von"
       evt_cancelled: "Diese Veranstaltung wurde abgesagt"
+      evt_timetable: "Programm"
+      evt_musicians: "Musiker"
+      evt_links: "Links"
+      evt_info: "Details"
       # Organisation page
       org_follow_fediverse: "Im Fediverse folgen:"
       org_fediverse_hint: "Suche nach %s in Mastodon oder einer anderen Fediverse-App, um Veranstaltungsankündigungen zu erhalten."
@@ -240,6 +244,10 @@ languages:
       evt_music: "Music:"
       evt_organised_by: "Organised by"
       evt_cancelled: "This event has been cancelled"
+      evt_timetable: "Programme"
+      evt_musicians: "Musicians"
+      evt_links: "Links"
+      evt_info: "Details"
       # Organisation page
       org_follow_fediverse: "Follow on the Fediverse:"
       org_fediverse_hint: "Search for %s in Mastodon or another Fediverse app to follow and receive event announcements."
@@ -420,6 +428,10 @@ languages:
       evt_music: "Musique :"
       evt_organised_by: "Organisé par"
       evt_cancelled: "Cet événement a été annulé"
+      evt_timetable: "Programme"
+      evt_musicians: "Musiciens"
+      evt_links: "Liens"
+      evt_info: "Détails"
       # Organisation page
       org_follow_fediverse: "Suivre sur le Fediverse :"
       org_fediverse_hint: "Recherchez %s dans Mastodon ou une autre application Fediverse pour suivre et recevoir les annonces d'événements."

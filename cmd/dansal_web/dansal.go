@@ -32,9 +32,20 @@ type Event struct {
 	Location        string     `json:"location,omitempty"`
 	LocationTown    string     `json:"location_town,omitempty"`
 	LocationCountry string     `json:"location_country,omitempty"`
-	Pricing         *Pricing   `json:"pricing,omitempty"`
-	Musicians       []Musician `json:"musicians,omitempty"`
-	CreatedAt       string     `json:"created_at"`
+	Pricing         *Pricing         `json:"pricing,omitempty"`
+	Musicians       []Musician       `json:"musicians,omitempty"`
+	Timetable       []TimetableEntry `json:"timetable,omitempty"`
+	CreatedAt       string           `json:"created_at"`
+}
+
+type TimetableEntry struct {
+	ID           int    `json:"id"`
+	StartTime    string `json:"start_time"`
+	EndTime      string `json:"end_time"`
+	Title        string `json:"title"`
+	Description  string `json:"description,omitempty"`
+	Room         string `json:"room,omitempty"`
+	LocationName string `json:"location_name,omitempty"`
 }
 
 type Organization struct {
