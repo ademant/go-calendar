@@ -1,0 +1,65 @@
+# Docker Compose example with Traefik as reverse proxy.
+# Adjust image names, volumes, and domain to match your setup.
+
+services:
+  traefik:
+    image: traefik:v3
+    command:
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.websecure.address=:443"
+      - "--certificatesresolvers.letsencrypt.acme.email=admin@example.com"
+      - "--certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json"
+      - "--certificatesresolvers.letsencrypt.acme.tlschallenge=true"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - traefik-letsencrypt:/letsencrypt
+    restart: unless-stopped
+
+  dansal:
+    image: ghcr.io/ademant/dansal:latest
+    volumes:
+      - dansal-data:/var/lib/dansal
+      - ./config.yaml:/etc/dansal/config.yaml:ro
+    environment:
+      - TZ=Europe/Berlin
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.dansal-api.rule=Host(`events.example.com`) && PathPrefix(`/api/`)"
+      - "traefik.http.routers.dansal-api.entrypoints=websecure"
+      - "traefik.http.routers.dansal-api.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.dansal-api.priority=20"
+      - "traefik.http.services.dansal-api.loadbalancer.server.port=8000"
+    restart: unless-stopped
+
+  dansal-web:
+    image: ghcr.io/ademant/dansal-web:latest
+    volumes:
+      - dansal-web-data:/var/lib/dansal-web
+      - ./web.yaml:/etc/dansal/web.yaml:ro
+    environment:
+      - DANSAL_DOMAIN=events.example.com
+      - DANSAL_URL=http://dansal:8000
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.dansal-web.rule=Host(`events.example.com`)"
+      - "traefik.http.routers.dansal-web.entrypoints=websecure"
+      - "traefik.http.routers.dansal-web.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.dansal-web.priority=10"
+      - "traefik.http.services.dansal-web.loadbalancer.server.port=8080"
+      # HTTP → HTTPS redirect
+      - "traefik.http.routers.dansal-web-http.rule=Host(`events.example.com`)"
+      - "traefik.http.routers.dansal-web-http.entrypoints=web"
+      - "traefik.http.routers.dansal-web-http.middlewares=https-redirect"
+      - "traefik.http.middlewares.https-redirect.redirectscheme.scheme=https"
+      - "traefik.http.middlewares.https-redirect.redirectscheme.permanent=true"
+    restart: unless-stopped
+
+volumes:
+  traefik-letsencrypt:
+  dansal-data:
+  dansal-web-data:

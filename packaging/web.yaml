@@ -1,0 +1,19 @@
+# dansal-web configuration
+# Install to /etc/dansal/web.yaml
+
+# Address and port the web frontend listens on (loopback only; nginx/traefik terminate TLS).
+listen: "127.0.0.1:8080"
+
+# Public domain name used to construct ActivityPub actor URLs.
+# Must match the domain served by your reverse proxy.
+domain: "events.example.com"
+
+# Internal URL of the dansal REST API.
+dansal_url: "http://127.0.0.1:8000"
+
+# Path to the SQLite database used to store AP keys and followers.
+db_path: /var/lib/dansal-web/web.db
+
+# How often (seconds) the delivery worker polls the dansal API for new
+# published events and pushes them to follower inboxes.
+poll_secs: 300

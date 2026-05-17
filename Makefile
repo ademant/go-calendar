@@ -8,7 +8,7 @@ SYSCONFDIR := /etc/dansal
 STATEDIR   := /var/lib/dansal
 SYSTEMDDIR := /lib/systemd/system
 
-.PHONY: build build-dansal build-web build-dansal_admin run clean install update deb
+.PHONY: build build-dansal build-web build-dansal_admin run clean install install-web update deb
 
 build: build-dansal build-web build-dansal_admin
 
@@ -60,10 +60,25 @@ install: build
 		echo "fail2ban not found — skipping (templates in deploy/fail2ban/)"; \
 	fi
 
+install-web: build-web
+	install -d -m 750 -o $(SERVICE) -g $(SERVICE) /var/lib/dansal-web
+	@if [ ! -f $(SYSCONFDIR)/web.yaml ]; then \
+		install -m 640 -o root -g $(SERVICE) packaging/web.yaml $(SYSCONFDIR)/web.yaml; \
+		echo "Installed $(SYSCONFDIR)/web.yaml — edit domain and dansal_url before starting"; \
+	else \
+		echo "$(SYSCONFDIR)/web.yaml already exists — not overwriting"; \
+	fi
+	install -m 755 web $(BINDIR)/dansal-web
+	install -m 644 dansal-web.service $(SYSTEMDDIR)/dansal-web.service
+	systemctl daemon-reload
+	systemctl enable --now dansal-web.service
+
 update: build
 	install -m 755 dansal        $(BINDIR)/dansal
 	install -m 755 dansal_admin  $(BINDIR)/dansal_admin
+	install -m 755 web           $(BINDIR)/dansal-web
 	systemctl restart $(SERVICE)
+	systemctl try-restart dansal-web.service || true
 
 # Build a .deb package. VERSION may be overridden by the CI pipeline
 # (e.g.  make deb DEB_VERSION=0.1.0).
@@ -73,7 +88,7 @@ DEB_VERSION ?= $(shell git describe --tags --always 2>/dev/null | \
 DEB_ARCH    ?= amd64
 DEB_DIR     := /tmp/dansal-deb-$(shell date +%s%N)
 
-deb: build-dansal build-dansal_admin
+deb: build-dansal build-web build-dansal_admin
 	# Package tree
 	mkdir -p $(DEB_DIR)/DEBIAN
 	mkdir -p $(DEB_DIR)/usr/bin
@@ -91,11 +106,14 @@ deb: build-dansal build-dansal_admin
 	install -m 755 packaging/postrm                  $(DEB_DIR)/DEBIAN/postrm
 	# Binaries
 	install -m 755 dansal                            $(DEB_DIR)/usr/bin/dansal
+	install -m 755 web                               $(DEB_DIR)/usr/bin/dansal-web
 	install -m 755 dansal_admin                      $(DEB_DIR)/usr/bin/dansal_admin
-	# Systemd unit
+	# Systemd units
 	install -m 644 dansal.service                    $(DEB_DIR)/$(SYSTEMDDIR)/dansal.service
-	# Default config (with Debian-friendly paths)
+	install -m 644 dansal-web.service                $(DEB_DIR)/$(SYSTEMDDIR)/dansal-web.service
+	# Default configs (with Debian-friendly paths)
 	install -m 644 packaging/config.yaml             $(DEB_DIR)/etc/dansal/config.yaml
+	install -m 644 packaging/web.yaml                $(DEB_DIR)/etc/dansal/web.yaml
 	# fail2ban (optional — installed but only activated when fail2ban is present)
 	install -m 644 deploy/fail2ban/filter.d/dansal.conf $(DEB_DIR)/etc/fail2ban/filter.d/dansal.conf
 	install -m 644 deploy/fail2ban/jail.d/dansal.conf   $(DEB_DIR)/etc/fail2ban/jail.d/dansal.conf

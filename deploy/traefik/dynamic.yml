@@ -1,0 +1,57 @@
+# Traefik dynamic configuration (file provider)
+# Place this file in your Traefik watched directory, e.g.:
+#   /etc/traefik/dynamic/dansal.yml
+#
+# Assumes Traefik is configured with:
+#   - A Let's Encrypt certificate resolver named "letsencrypt"
+#   - entryPoints named "web" (80) and "websecure" (443)
+#
+# dansal REST API  listens on 127.0.0.1:8000
+# dansal-web       listens on 127.0.0.1:8080
+# Both exposed on https://events.example.com
+
+http:
+  routers:
+    # REST API — matched by path prefix, higher priority
+    dansal-api:
+      rule: "Host(`events.example.com`) && PathPrefix(`/api/`)"
+      entryPoints: ["websecure"]
+      service: dansal-api
+      tls:
+        certResolver: letsencrypt
+      priority: 20
+
+    # Web frontend — catch-all for the domain
+    dansal-web:
+      rule: "Host(`events.example.com`)"
+      entryPoints: ["websecure"]
+      service: dansal-web
+      tls:
+        certResolver: letsencrypt
+      priority: 10
+
+    # HTTP → HTTPS redirect
+    dansal-redirect:
+      rule: "Host(`events.example.com`)"
+      entryPoints: ["web"]
+      middlewares: ["https-redirect"]
+      service: dansal-web
+
+  middlewares:
+    https-redirect:
+      redirectScheme:
+        scheme: https
+        permanent: true
+
+  services:
+    dansal-api:
+      loadBalancer:
+        servers:
+          - url: "http://127.0.0.1:8000"
+        passHostHeader: true
+
+    dansal-web:
+      loadBalancer:
+        servers:
+          - url: "http://127.0.0.1:8080"
+        passHostHeader: true

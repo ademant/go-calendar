@@ -1,0 +1,22 @@
+[Unit]
+Description=Dansal Web Frontend
+After=network.target dansal.service
+Wants=dansal.service
+
+[Service]
+Type=simple
+User=dansal
+Group=dansal
+ExecStart=/usr/bin/dansal-web --config /etc/dansal/web.yaml
+ExecReload=/bin/kill -HUP $MAINPID
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=35
+
+RuntimeDirectory=dansal-web
+RuntimeDirectoryMode=0750
+StateDirectory=dansal-web
+StateDirectoryMode=0750
+
+[Install]
+WantedBy=multi-user.target
