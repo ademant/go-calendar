@@ -84,6 +84,9 @@ languages:
       fetch_org: "Organisation"
       fetch_last_fetched: "Zuletzt abgerufen"
       fetch_never: "Nie"
+      # View toggle
+      view_list: "Liste"
+      view_week: "Woche"
       # Locations
       nav_admin_locations: "Veranstaltungsorte"
       admin_locations_title: "Veranstaltungsorte"
@@ -181,6 +184,9 @@ languages:
       fetch_org: "Organization"
       fetch_last_fetched: "Last fetched"
       fetch_never: "Never"
+      # View toggle
+      view_list: "List"
+      view_week: "Week"
       # Locations
       nav_admin_locations: "Venues"
       admin_locations_title: "Venues"
@@ -278,6 +284,9 @@ languages:
       fetch_org: "Organisation"
       fetch_last_fetched: "Dernière récupération"
       fetch_never: "Jamais"
+      # View toggle
+      view_list: "Liste"
+      view_week: "Semaine"
       # Locations
       nav_admin_locations: "Lieux"
       admin_locations_title: "Lieux"
