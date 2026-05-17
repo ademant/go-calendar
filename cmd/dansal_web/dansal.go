@@ -32,6 +32,8 @@ type Event struct {
 	Location        string     `json:"location,omitempty"`
 	LocationTown    string     `json:"location_town,omitempty"`
 	LocationCountry string     `json:"location_country,omitempty"`
+	LocationLat     string     `json:"location_lat,omitempty"`
+	LocationLng     string     `json:"location_lng,omitempty"`
 	Pricing         *Pricing         `json:"pricing,omitempty"`
 	Musicians       []Musician       `json:"musicians,omitempty"`
 	Timetable       []TimetableEntry `json:"timetable,omitempty"`

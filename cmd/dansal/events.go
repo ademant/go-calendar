@@ -51,6 +51,8 @@ type Event struct {
 	Location        string           `json:"location,omitempty"`
 	LocationTown    string           `json:"location_town,omitempty"`
 	LocationCountry string           `json:"location_country,omitempty"`
+	LocationLat     string           `json:"location_lat,omitempty"`
+	LocationLng     string           `json:"location_lng,omitempty"`
 	TagsJSON        string           `json:"-"`
 	PricingJSON     string           `json:"-"`
 }
@@ -131,7 +133,7 @@ var timeFormats = []string{
 }
 
 // SELECT used by all event list / single-event queries
-const eventListSelect = `SELECT e.id, e.uid, e.title, e.description, e.start_time, e.end_time, e.has_ball, e.has_workshop, e.is_cancelled, e.tags, e.is_published, e.short_code, COALESCE(e.url,''), COALESCE(e.source,''), e.created_at, COALESCE(l.location,''), e.organization_id, COALESCE(e.pricing,''), e.location_id, COALESCE(l.town,''), COALESCE(l.country,'') FROM events e LEFT JOIN locations l ON e.location_id = l.id`
+const eventListSelect = `SELECT e.id, e.uid, e.title, e.description, e.start_time, e.end_time, e.has_ball, e.has_workshop, e.is_cancelled, e.tags, e.is_published, e.short_code, COALESCE(e.url,''), COALESCE(e.source,''), e.created_at, COALESCE(l.location,''), e.organization_id, COALESCE(e.pricing,''), e.location_id, COALESCE(l.town,''), COALESCE(l.country,''), COALESCE(l.latitude,''), COALESCE(l.longitude,'') FROM events e LEFT JOIN locations l ON e.location_id = l.id`
 
 // ── low-level helpers ──────────────────────────────────────────────────────
 
@@ -179,7 +181,8 @@ func scanEventRow(s scanner) (Event, error) {
 	if err := s.Scan(&event.ID, &uid, &event.Title, &event.Description, &startEpoch, &endEpoch,
 		&hasBallInt, &hasWorkshopInt, &isCancelledInt, &event.TagsJSON, &isPublishedInt,
 		&event.ShortCode, &event.URL, &event.Source, &event.CreatedAt, &event.Location, &orgID,
-		&event.PricingJSON, &locID, &event.LocationTown, &event.LocationCountry); err != nil {
+		&event.PricingJSON, &locID, &event.LocationTown, &event.LocationCountry,
+		&event.LocationLat, &event.LocationLng); err != nil {
 		return Event{}, err
 	}
 	if uid.Valid {

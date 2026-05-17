@@ -3,6 +3,7 @@ package main
 import (
 	"database/sql"
 	"embed"
+	"encoding/json"
 	"html/template"
 	"log"
 	"net/http"
@@ -119,6 +120,41 @@ var tmplFuncMap = template.FuncMap{
 			return "https://" + parts[1] + "/@" + parts[0]
 		}
 		return handle
+	},
+	"eventsGeoJSON": func(events []Event) template.JS {
+		type geoEvent struct {
+			ID        int     `json:"id"`
+			Title     string  `json:"t"`
+			Start     string  `json:"s"`
+			Location  string  `json:"loc,omitempty"`
+			Town      string  `json:"town,omitempty"`
+			Country   string  `json:"c,omitempty"`
+			Lat       float64 `json:"lat"`
+			Lng       float64 `json:"lng"`
+			URL       string  `json:"url,omitempty"`
+			Ball      bool    `json:"ball,omitempty"`
+			Workshop  bool    `json:"ws,omitempty"`
+			Cancelled bool    `json:"x,omitempty"`
+		}
+		var geo []geoEvent
+		for _, e := range events {
+			lat, errLat := strconv.ParseFloat(e.LocationLat, 64)
+			lng, errLng := strconv.ParseFloat(e.LocationLng, 64)
+			if errLat != nil || errLng != nil || (lat == 0 && lng == 0) {
+				continue
+			}
+			geo = append(geo, geoEvent{
+				ID: e.ID, Title: e.Title, Start: e.StartTime,
+				Location: e.Location, Town: e.LocationTown, Country: e.LocationCountry,
+				Lat: lat, Lng: lng, URL: e.URL,
+				Ball: e.HasBall, Workshop: e.HasWorkshop, Cancelled: e.IsCancelled,
+			})
+		}
+		if geo == nil {
+			return template.JS("[]")
+		}
+		b, _ := json.Marshal(geo)
+		return template.JS(b)
 	},
 	"orgName": func(orgMap map[int]Organization, id *int) string {
 		if id == nil {

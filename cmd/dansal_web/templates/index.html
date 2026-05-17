@@ -9,6 +9,7 @@
 <div class="view-toggle">
   <button type="button" id="view-list-btn" class="view-active">{{$.Strings.T "view_list"}}</button>
   <button type="button" id="view-week-btn">{{$.Strings.T "view_week"}}</button>
+  <button type="button" id="view-map-btn">{{$.Strings.T "view_map"}}</button>
 </div>
 
 <!-- Filters -->
@@ -98,6 +99,14 @@
 </p>
 
 <div id="week-view" hidden></div>
+<div id="map-view" hidden>
+  <div id="map-container"></div>
+  <div class="map-toolbar">
+    <button type="button" id="map-locate-btn">{{$.Strings.T "map_locate"}}</button>
+    <span id="map-no-coords" hidden>{{$.Strings.T "map_no_coords"}}</span>
+  </div>
+</div>
+<script type="application/json" id="events-geo">{{eventsGeoJSON .Events}}</script>
 
 {{end}}
 
@@ -139,6 +148,11 @@ th.sorted-desc::after{content:" ↓";color:#1a6eb5}
 .view-toggle{display:flex;gap:.5rem;margin-bottom:.75rem}
 .view-toggle button{padding:.3rem .8rem;border:1px solid #ccc;border-radius:4px;background:#f5f5f5;cursor:pointer;font-size:.9rem;color:#333}
 .view-toggle button.view-active{background:#1a6eb5;color:#fff;border-color:#1a6eb5}
+#map-container{height:520px;border-radius:6px;overflow:hidden;border:1px solid #ddd}
+.map-toolbar{display:flex;align-items:center;gap:1rem;margin-top:.5rem}
+.map-toolbar button{padding:.3rem .9rem;border:1px solid #1a6eb5;border-radius:4px;background:#fff;color:#1a6eb5;cursor:pointer;font-size:.85rem}
+.map-toolbar button:hover{background:#1a6eb5;color:#fff}
+#map-no-coords{color:#888;font-size:.85rem}
 .week-nav{display:flex;align-items:center;gap:.75rem;margin-bottom:.75rem}
 .week-nav button{padding:.25rem .75rem;border:1px solid #ccc;border-radius:4px;background:#f5f5f5;cursor:pointer;font-size:1.1rem;line-height:1}
 .week-nav button:hover{background:#e8e8e8}
@@ -235,17 +249,112 @@ th.sorted-desc::after{content:" ↓";color:#1a6eb5}
     document.getElementById('week-next').addEventListener('click',function(){ weekOffset++; renderWeek(); });
   }
 
+  // ── Map view ──────────────────────────────────────────────────────────────
+  var eventsGeo = JSON.parse(document.getElementById('events-geo').textContent);
+  var map = null, clusterGroup = null, allMarkers = {};
+  var leafletLoaded = false;
+
+  function loadLeaflet(cb){
+    if(leafletLoaded){ cb(); return; }
+    var lcss = document.createElement('link');
+    lcss.rel='stylesheet';
+    lcss.href='https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
+    document.head.appendChild(lcss);
+    var mcss = document.createElement('link');
+    mcss.rel='stylesheet';
+    mcss.href='https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css';
+    document.head.appendChild(mcss);
+    var ljs = document.createElement('script');
+    ljs.src='https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+    ljs.onload=function(){
+      var mjs=document.createElement('script');
+      mjs.src='https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js';
+      mjs.onload=function(){ leafletLoaded=true; cb(); };
+      document.head.appendChild(mjs);
+    };
+    document.head.appendChild(ljs);
+  }
+
+  function buildPopup(e){
+    var start=e.s||'';
+    var time=start.length>=16?start.slice(0,10)+' '+start.slice(11,16):start.slice(0,10);
+    var place=[e.loc,e.town,e.c].filter(Boolean).join(', ');
+    var badges='';
+    if(e.ball) badges+='<span class="badge" style="margin-right:.2rem">Ball</span>';
+    if(e.ws)   badges+='<span class="badge" style="background:#fff3cd;color:#856404">Workshop</span>';
+    if(e.x)    badges+='<span class="badge cancelled">abgesagt</span>';
+    return '<div style="min-width:200px;max-width:280px">'+
+      '<strong style="font-size:.95rem;display:block;margin-bottom:.25rem">'+escHtml(e.t)+'</strong>'+
+      (time?'<div style="font-size:.82rem;color:#555;margin-bottom:.2rem">'+escHtml(time)+'</div>':'')+
+      (place?'<div style="font-size:.82rem;color:#555;margin-bottom:.35rem">'+escHtml(place)+'</div>':'')+
+      (badges?'<div style="margin-bottom:.35rem">'+badges+'</div>':'')+
+      '<div style="display:flex;gap:.4rem;flex-wrap:wrap;margin-top:.3rem">'+
+        '<a href="/events/'+e.id+'" style="font-size:.82rem;color:#1a6eb5">Details</a>'+
+        (e.url?'<a href="'+escHtml(e.url)+'" target="_blank" rel="noopener" style="font-size:.82rem;color:#1a6eb5">Website ↗</a>':'')+
+      '</div>'+
+      '</div>';
+  }
+
+  function initMap(){
+    if(map) return;
+    map = L.map('map-container').setView([50,10],5);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
+      attribution:'© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+      maxZoom:18
+    }).addTo(map);
+    clusterGroup = L.markerClusterGroup({maxClusterRadius:40});
+    map.addLayer(clusterGroup);
+    eventsGeo.forEach(function(e){
+      var m = L.marker([e.lat, e.lng]);
+      m.bindPopup(buildPopup(e),{maxWidth:300});
+      allMarkers[e.id] = m;
+    });
+    document.getElementById('map-locate-btn').addEventListener('click',function(){
+      if(!navigator.geolocation) return;
+      navigator.geolocation.getCurrentPosition(function(pos){
+        map.setView([pos.coords.latitude, pos.coords.longitude], 10);
+      });
+    });
+    updateMapMarkers();
+  }
+
+  function updateMapMarkers(){
+    if(!map) return;
+    clusterGroup.clearLayers();
+    var visIds={};
+    visible.forEach(function(r){ visIds[parseInt(r.dataset.id)]=true; });
+    var layers=[];
+    eventsGeo.forEach(function(e){
+      if(allMarkers[e.id] && visIds[e.id]) layers.push(allMarkers[e.id]);
+    });
+    var noCoords = document.getElementById('map-no-coords');
+    if(layers.length===0){
+      noCoords.hidden=false;
+    } else {
+      noCoords.hidden=true;
+      layers.forEach(function(m){ clusterGroup.addLayer(m); });
+      try{ map.fitBounds(clusterGroup.getBounds(),{padding:[30,30],maxZoom:12}); }catch(e){}
+    }
+  }
+
   function setView(v){
     currentView = v;
-    var isWeek = v==='week';
+    var isWeek = v==='week', isMap = v==='map', isList = v==='list';
     document.getElementById('week-view').hidden = !isWeek;
-    document.getElementById('view-list-btn').classList.toggle('view-active',!isWeek);
-    document.getElementById('view-week-btn').classList.toggle('view-active',isWeek);
+    document.getElementById('map-view').hidden  = !isMap;
+    document.getElementById('view-list-btn').classList.toggle('view-active', isList);
+    document.getElementById('view-week-btn').classList.toggle('view-active', isWeek);
+    document.getElementById('view-map-btn').classList.toggle('view-active',  isMap);
     if(isWeek){
       document.getElementById('event-table').hidden = true;
       document.getElementById('pagination-bar').hidden = true;
       document.getElementById('empty-state').hidden = true;
       renderWeek();
+    } else if(isMap){
+      document.getElementById('event-table').hidden = true;
+      document.getElementById('pagination-bar').hidden = true;
+      document.getElementById('empty-state').hidden = true;
+      loadLeaflet(function(){ initMap(); updateMapMarkers(); setTimeout(function(){ map.invalidateSize(); },100); });
     } else {
       document.getElementById('event-table').hidden = visible.length===0;
       document.getElementById('pagination-bar').hidden = visible.length===0;
@@ -304,6 +413,15 @@ th.sorted-desc::after{content:" ↓";color:#1a6eb5}
       renderWeek();
       return;
     }
+    if(currentView==='map'){
+      document.getElementById('event-table').hidden = true;
+      document.getElementById('pagination-bar').hidden = true;
+      document.getElementById('empty-state').hidden = true;
+      document.getElementById('f-info').textContent =
+        visible.length+' '+(visible.length!==1?I18N.events:I18N.event);
+      updateMapMarkers();
+      return;
+    }
     rows.forEach(function(r){ r.classList.add('row-filtered'); });
     shown = Math.min(shown+PAGE, visible.length);
     visible.slice(0,shown).forEach(function(r){ r.classList.remove('row-filtered'); });
@@ -319,6 +437,7 @@ th.sorted-desc::after{content:" ↓";color:#1a6eb5}
 
   document.getElementById('view-list-btn').addEventListener('click',function(){ setView('list'); });
   document.getElementById('view-week-btn').addEventListener('click',function(){ setView('week'); });
+  document.getElementById('view-map-btn').addEventListener('click',function(){ setView('map'); });
 
   document.querySelectorAll('th.sortable').forEach(function(th){
     function doSort(){

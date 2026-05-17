@@ -112,6 +112,9 @@ languages:
       # View toggle
       view_list: "Liste"
       view_week: "Woche"
+      view_map: "Karte"
+      map_locate: "Meinen Standort verwenden"
+      map_no_coords: "Keine Kartenposition für diese Veranstaltungen."
       # Locations
       nav_admin_musicians: "Musiker"
       admin_musicians_title: "Musiker"
@@ -296,6 +299,9 @@ languages:
       # View toggle
       view_list: "List"
       view_week: "Week"
+      view_map: "Map"
+      map_locate: "Use my location"
+      map_no_coords: "No map coordinates for these events."
       # Locations
       nav_admin_musicians: "Musicians"
       admin_musicians_title: "Musicians"
@@ -480,6 +486,9 @@ languages:
       # View toggle
       view_list: "Liste"
       view_week: "Semaine"
+      view_map: "Carte"
+      map_locate: "Utiliser ma position"
+      map_no_coords: "Pas de coordonnées cartographiques pour ces événements."
       # Locations
       nav_admin_musicians: "Musiciens"
       admin_musicians_title: "Musiciens"
