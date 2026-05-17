@@ -707,6 +707,8 @@ func main() {
 	router.Handle("/api/v1/events/{id}", optAuth(http.HandlerFunc(getEvent))).Methods("GET")
 	router.Handle("/api/v1/locations", optAuth(http.HandlerFunc(getLocations))).Methods("GET")
 	router.Handle("/api/v1/locations/{id}", optAuth(http.HandlerFunc(getLocation))).Methods("GET")
+	router.Handle("/api/v1/organizations", optAuth(http.HandlerFunc(getOrganizations))).Methods("GET")
+	router.Handle("/api/v1/organizations/{id}", optAuth(http.HandlerFunc(getOrganization))).Methods("GET")
 	router.Handle("/api/v1/musicians", optAuth(http.HandlerFunc(getMusicians))).Methods("GET")
 	router.Handle("/api/v1/musicians/{id}", optAuth(http.HandlerFunc(getMusician))).Methods("GET")
 	router.Handle("/api/v1/tags", optAuth(http.HandlerFunc(getTags))).Methods("GET")
