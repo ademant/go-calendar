@@ -402,3 +402,46 @@ func TokenMiddleware(next http.Handler) http.Handler {
 		next.ServeHTTP(w, r)
 	})
 }
+
+// OptionalTokenMiddleware validates the token when present but allows
+// unauthenticated requests through with an empty X-User-Role header.
+// Handlers use the empty role to restrict responses to published data only.
+// An invalid/expired token is still rejected with 401.
+func OptionalTokenMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "OPTIONS" {
+			next.ServeHTTP(w, r)
+			return
+		}
+		authHeader := r.Header.Get("Authorization")
+		if authHeader == "" {
+			next.ServeHTTP(w, r)
+			return
+		}
+		parts := strings.Split(authHeader, " ")
+		if len(parts) != 2 || parts[0] != "Bearer" {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusUnauthorized)
+			json.NewEncoder(w).Encode(TokenError{Error: "Invalid authorization header format. Use 'Bearer <token>'"})
+			return
+		}
+		token := parts[1]
+		userID, userRole, tokenID, err := validateToken(token)
+		if err != nil {
+			var apiErr error
+			userID, userRole, apiErr = validateAPIKey(token)
+			if apiErr != nil {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusUnauthorized)
+				json.NewEncoder(w).Encode(TokenError{Error: "Invalid or expired credentials"})
+				return
+			}
+		} else {
+			updateLastSeen(token)
+			r.Header.Set("X-Session-ID", fmt.Sprintf("%d", tokenID))
+		}
+		r.Header.Set("X-User-ID", fmt.Sprintf("%d", userID))
+		r.Header.Set("X-User-Role", userRole)
+		next.ServeHTTP(w, r)
+	})
+}

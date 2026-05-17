@@ -282,15 +282,16 @@ func startTokenCleanup() {
 	}()
 }
 
-// migrateUsersRoles expands the users.role CHECK constraint to include
-// 'accountant' and 'visitor'. SQLite requires a full table recreation to
-// change a constraint; a dedicated connection pins the PRAGMA to that conn.
+// migrateUsersRoles trims the users.role CHECK constraint back to the four
+// active roles (admin, user, publisher, viewer), removing accountant and visitor
+// which were prepared for a booking system that has since been removed.
+// SQLite requires full table recreation to change a constraint.
 func migrateUsersRoles() {
 	var schema string
 	if err := db.QueryRow(
 		"SELECT sql FROM sqlite_master WHERE type='table' AND name='users'",
-	).Scan(&schema); err != nil || strings.Contains(schema, "accountant") {
-		return
+	).Scan(&schema); err != nil || !strings.Contains(schema, "accountant") {
+		return // already up to date
 	}
 
 	conn, err := db.Conn(context.Background())
@@ -318,7 +319,7 @@ func migrateUsersRoles() {
 			username TEXT UNIQUE NOT NULL,
 			email TEXT UNIQUE NOT NULL,
 			password_hash TEXT NOT NULL,
-			role TEXT DEFAULT 'user' CHECK(role IN ('admin','user','publisher','viewer','accountant','visitor')),
+			role TEXT DEFAULT 'user' CHECK(role IN ('admin','user','publisher','viewer')),
 			telegram TEXT,
 			matrix TEXT,
 			email_verified INTEGER DEFAULT 0,
@@ -331,7 +332,9 @@ func migrateUsersRoles() {
 			created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 		)`,
 		`INSERT INTO users_v2
-			SELECT id, username, email, password_hash, role, telegram, matrix,
+			SELECT id, username, email, password_hash,
+			       CASE WHEN role IN ('admin','user','publisher','viewer') THEN role ELSE 'user' END,
+			       telegram, matrix,
 			       email_verified, telegram_verified, matrix_verified, disabled,
 			       failed_login_count, failed_login_since, last_magic_sent_at, created_at
 			FROM users`,
@@ -408,45 +411,11 @@ func migrateDB() {
 		FOREIGN KEY (musician_id) REFERENCES musicians(id) ON DELETE CASCADE
 	)`)
 	db.Exec("CREATE INDEX IF NOT EXISTS idx_event_musicians_event_id ON event_musicians(event_id)")
-	db.Exec("ALTER TABLE events ADD COLUMN capacity INTEGER")
-	db.Exec(`CREATE TABLE IF NOT EXISTS bookings (
-		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		event_id INTEGER NOT NULL,
-		visitor_id INTEGER NOT NULL,
-		status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','confirmed','cancelled')),
-		qr_token TEXT UNIQUE NOT NULL,
-		notes TEXT,
-		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-		FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE CASCADE,
-		FOREIGN KEY (visitor_id) REFERENCES users(id) ON DELETE CASCADE
-	)`)
-	db.Exec("CREATE INDEX IF NOT EXISTS idx_bookings_event_id ON bookings(event_id)")
-	db.Exec("CREATE INDEX IF NOT EXISTS idx_bookings_visitor_id ON bookings(visitor_id)")
-	db.Exec(`CREATE TABLE IF NOT EXISTS threads (
-		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		event_id INTEGER NOT NULL,
-		type TEXT NOT NULL DEFAULT 'discussion' CHECK(type IN ('discussion','ridesharing')),
-		title TEXT NOT NULL,
-		author_id INTEGER,
-		is_closed INTEGER NOT NULL DEFAULT 0,
-		departure_location TEXT,
-		departure_time TEXT,
-		available_seats INTEGER,
-		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-		FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE CASCADE,
-		FOREIGN KEY (author_id) REFERENCES users(id) ON DELETE SET NULL
-	)`)
-	db.Exec("CREATE INDEX IF NOT EXISTS idx_threads_event_id ON threads(event_id)")
-	db.Exec(`CREATE TABLE IF NOT EXISTS posts (
-		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		thread_id INTEGER NOT NULL,
-		author_id INTEGER,
-		body TEXT NOT NULL,
-		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-		FOREIGN KEY (thread_id) REFERENCES threads(id) ON DELETE CASCADE,
-		FOREIGN KEY (author_id) REFERENCES users(id) ON DELETE SET NULL
-	)`)
-	db.Exec("CREATE INDEX IF NOT EXISTS idx_posts_thread_id ON posts(thread_id)")
+	// Remove tables and columns that are no longer part of the schema.
+	db.Exec("DROP TABLE IF EXISTS posts")
+	db.Exec("DROP TABLE IF EXISTS threads")
+	db.Exec("DROP TABLE IF EXISTS bookings")
+	db.Exec("ALTER TABLE events DROP COLUMN capacity") // no-op if already absent
 	migrateUsersRoles()
 	db.Exec(`CREATE TABLE IF NOT EXISTS verification_tokens (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -467,7 +436,7 @@ func createTables() error {
 		username TEXT UNIQUE NOT NULL,
 		email TEXT UNIQUE NOT NULL,
 		password_hash TEXT NOT NULL,
-		role TEXT DEFAULT 'user' CHECK(role IN ('admin', 'user', 'publisher', 'viewer', 'accountant', 'visitor')),
+		role TEXT DEFAULT 'user' CHECK(role IN ('admin', 'user', 'publisher', 'viewer')),
 		telegram TEXT,
 		matrix TEXT,
 		email_verified INTEGER DEFAULT 0,
@@ -494,7 +463,6 @@ func createTables() error {
 		url TEXT,
 		source TEXT,
 		pricing TEXT,
-		capacity INTEGER,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		FOREIGN KEY (location_id) REFERENCES locations(id)
 	);
@@ -623,44 +591,6 @@ func createTables() error {
 		FOREIGN KEY (musician_id) REFERENCES musicians(id) ON DELETE CASCADE
 	);
 	CREATE INDEX IF NOT EXISTS idx_event_musicians_event_id ON event_musicians(event_id);
-	CREATE TABLE IF NOT EXISTS bookings (
-		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		event_id INTEGER NOT NULL,
-		visitor_id INTEGER NOT NULL,
-		status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','confirmed','cancelled')),
-		qr_token TEXT UNIQUE NOT NULL,
-		notes TEXT,
-		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-		FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE CASCADE,
-		FOREIGN KEY (visitor_id) REFERENCES users(id) ON DELETE CASCADE
-	);
-	CREATE INDEX IF NOT EXISTS idx_bookings_event_id ON bookings(event_id);
-	CREATE INDEX IF NOT EXISTS idx_bookings_visitor_id ON bookings(visitor_id);
-	CREATE TABLE IF NOT EXISTS threads (
-		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		event_id INTEGER NOT NULL,
-		type TEXT NOT NULL DEFAULT 'discussion' CHECK(type IN ('discussion','ridesharing')),
-		title TEXT NOT NULL,
-		author_id INTEGER,
-		is_closed INTEGER NOT NULL DEFAULT 0,
-		departure_location TEXT,
-		departure_time TEXT,
-		available_seats INTEGER,
-		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-		FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE CASCADE,
-		FOREIGN KEY (author_id) REFERENCES users(id) ON DELETE SET NULL
-	);
-	CREATE INDEX IF NOT EXISTS idx_threads_event_id ON threads(event_id);
-	CREATE TABLE IF NOT EXISTS posts (
-		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		thread_id INTEGER NOT NULL,
-		author_id INTEGER,
-		body TEXT NOT NULL,
-		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-		FOREIGN KEY (thread_id) REFERENCES threads(id) ON DELETE CASCADE,
-		FOREIGN KEY (author_id) REFERENCES users(id) ON DELETE SET NULL
-	);
-	CREATE INDEX IF NOT EXISTS idx_posts_thread_id ON posts(thread_id);
 	CREATE INDEX IF NOT EXISTS idx_events_url            ON events(url) WHERE url IS NOT NULL;
 	CREATE INDEX IF NOT EXISTS idx_events_published_start ON events(is_published, start_time);
 	CREATE INDEX IF NOT EXISTS idx_events_title_location  ON events(title, location_id);
@@ -746,12 +676,6 @@ func main() {
 	router.Use(ConnLimitMiddleware)
 	router.Use(RateLimitMiddleware)
 
-	// Public endpoints (no authentication required)
-	router.HandleFunc("/events", publicGetEvents).Methods("GET")
-	router.HandleFunc("/events.ics", publicGetEventsICS).Methods("GET")
-	router.HandleFunc("/events/tag/{tag}.ics", publicGetEventsByTagICS).Methods("GET")
-	router.HandleFunc("/events/town/{town}.ics", publicGetEventsByTownICS).Methods("GET")
-
 	// Info endpoint (public)
 	router.HandleFunc("/api/v1/info", getInfo).Methods("GET")
 
@@ -761,6 +685,60 @@ func main() {
 	router.HandleFunc("/api/v1/login/magic", requestMagicLogin).Methods("POST")
 	router.HandleFunc("/api/v1/login/magic/{token}", useMagicLogin).Methods("GET")
 
+	// Verification endpoints (public)
+	router.HandleFunc("/api/v1/verify/{token}", consumeVerification).Methods("GET")
+	router.HandleFunc("/api/v1/invites/{token}", useInvite).Methods("POST")
+
+	// iCal feeds (public, no auth)
+	router.HandleFunc("/api/v1/events.ics", getEventsICS).Methods("GET")
+	router.HandleFunc("/api/v1/events/tag/{tag}.ics", getEventsByTagICS).Methods("GET")
+	router.HandleFunc("/api/v1/events/town/{town}.ics", getEventsByTownICS).Methods("GET")
+
+	// Public reads — no auth required; OptionalTokenMiddleware enriches the
+	// response when a valid token is present (e.g. editable flag, unpublished events).
+	optAuth := OptionalTokenMiddleware
+	router.Handle("/api/v1/events", optAuth(http.HandlerFunc(getEvents))).Methods("GET")
+	router.Handle("/api/v1/events/{id}", optAuth(http.HandlerFunc(getEvent))).Methods("GET")
+	router.Handle("/api/v1/locations", optAuth(http.HandlerFunc(getLocations))).Methods("GET")
+	router.Handle("/api/v1/locations/{id}", optAuth(http.HandlerFunc(getLocation))).Methods("GET")
+	router.Handle("/api/v1/musicians", optAuth(http.HandlerFunc(getMusicians))).Methods("GET")
+	router.Handle("/api/v1/musicians/{id}", optAuth(http.HandlerFunc(getMusician))).Methods("GET")
+	router.Handle("/api/v1/tags", optAuth(http.HandlerFunc(getTags))).Methods("GET")
+	router.Handle("/api/v1/images/{event_id}", optAuth(http.HandlerFunc(getEventImage))).Methods("GET")
+
+	// Protected event writes
+	eventRoutes := router.PathPrefix("/api/v1/events").Subrouter()
+	eventRoutes.Use(TokenMiddleware)
+	eventRoutes.HandleFunc("", createEvent).Methods("POST")
+	eventRoutes.HandleFunc("", patchEvents).Methods("PATCH")
+	eventRoutes.HandleFunc("/{id}", deleteEvent).Methods("DELETE")
+	eventRoutes.HandleFunc("/{id}/publish", publishEvent).Methods("POST")
+	eventRoutes.HandleFunc("/{id}/timetable", addTimetableEntries).Methods("POST")
+	eventRoutes.HandleFunc("/{id}/timetable", replaceTimetable).Methods("PUT")
+	eventRoutes.HandleFunc("/{id}/timetable/{entry_id}", deleteTimetableEntry).Methods("DELETE")
+	eventRoutes.HandleFunc("/{id}/locations", addEventLocation).Methods("POST")
+	eventRoutes.HandleFunc("/{id}/locations/{location_id}", removeEventLocation).Methods("DELETE")
+
+	// Protected location writes
+	locationRoutes := router.PathPrefix("/api/v1/locations").Subrouter()
+	locationRoutes.Use(TokenMiddleware)
+	locationRoutes.HandleFunc("", createLocation).Methods("POST")
+	locationRoutes.HandleFunc("/{id}", updateLocation).Methods("PUT")
+	locationRoutes.HandleFunc("/{id}", deleteLocation).Methods("DELETE")
+
+	// Protected musician writes
+	musicianRoutes := router.PathPrefix("/api/v1/musicians").Subrouter()
+	musicianRoutes.Use(TokenMiddleware)
+	musicianRoutes.HandleFunc("", createMusician).Methods("POST")
+	musicianRoutes.HandleFunc("/{id}", updateMusician).Methods("PUT")
+	musicianRoutes.HandleFunc("/{id}", deleteMusician).Methods("DELETE")
+
+	// Protected image writes
+	imageRoutes := router.PathPrefix("/api/v1/images").Subrouter()
+	imageRoutes.Use(TokenMiddleware)
+	imageRoutes.HandleFunc("/{event_id}", uploadEventImage).Methods("POST")
+	imageRoutes.HandleFunc("/{event_id}", deleteEventImage).Methods("DELETE")
+
 	// User endpoints (protected)
 	userRoutes := router.PathPrefix("/api/v1/users").Subrouter()
 	userRoutes.Use(TokenMiddleware)
@@ -769,67 +747,7 @@ func main() {
 	userRoutes.HandleFunc("/{id}", getUser).Methods("GET")
 	userRoutes.HandleFunc("/{id}", updateUser).Methods("PUT")
 	userRoutes.HandleFunc("/{id}", deleteUser).Methods("DELETE")
-
-	// Location endpoints (protected)
-	locationRoutes := router.PathPrefix("/api/v1/locations").Subrouter()
-	locationRoutes.Use(TokenMiddleware)
-	locationRoutes.HandleFunc("", getLocations).Methods("GET")
-	locationRoutes.HandleFunc("", createLocation).Methods("POST")
-	locationRoutes.HandleFunc("/{id}", getLocation).Methods("GET")
-	locationRoutes.HandleFunc("/{id}", updateLocation).Methods("PUT")
-	locationRoutes.HandleFunc("/{id}", deleteLocation).Methods("DELETE")
-
-	// Musician endpoints (protected)
-	musicianRoutes := router.PathPrefix("/api/v1/musicians").Subrouter()
-	musicianRoutes.Use(TokenMiddleware)
-	musicianRoutes.HandleFunc("", getMusicians).Methods("GET")
-	musicianRoutes.HandleFunc("", createMusician).Methods("POST")
-	musicianRoutes.HandleFunc("/{id}", getMusician).Methods("GET")
-	musicianRoutes.HandleFunc("/{id}", updateMusician).Methods("PUT")
-	musicianRoutes.HandleFunc("/{id}", deleteMusician).Methods("DELETE")
-
-	// Event endpoints (protected)
-	eventRoutes := router.PathPrefix("/api/v1/events").Subrouter()
-	eventRoutes.Use(TokenMiddleware)
-	eventRoutes.HandleFunc("", getEvents).Methods("GET")
-	eventRoutes.HandleFunc("", createEvent).Methods("POST")
-	eventRoutes.HandleFunc("", patchEvents).Methods("PATCH")
-	eventRoutes.HandleFunc("/{id}", getEvent).Methods("GET")
-	eventRoutes.HandleFunc("/{id}", deleteEvent).Methods("DELETE")
-	eventRoutes.HandleFunc("/{id}/publish", publishEvent).Methods("POST")
-	eventRoutes.HandleFunc("/{id}/timetable", addTimetableEntries).Methods("POST")
-	eventRoutes.HandleFunc("/{id}/timetable", replaceTimetable).Methods("PUT")
-	eventRoutes.HandleFunc("/{id}/timetable/{entry_id}", deleteTimetableEntry).Methods("DELETE")
-	eventRoutes.HandleFunc("/{id}/locations", addEventLocation).Methods("POST")
-	eventRoutes.HandleFunc("/{id}/locations/{location_id}", removeEventLocation).Methods("DELETE")
-	eventRoutes.HandleFunc("/{id}/threads", getThreads).Methods("GET")
-	eventRoutes.HandleFunc("/{id}/threads", createThread).Methods("POST")
-	eventRoutes.HandleFunc("/{id}/threads/{thread_id}", getThread).Methods("GET")
-	eventRoutes.HandleFunc("/{id}/threads/{thread_id}", patchThread).Methods("PATCH")
-	eventRoutes.HandleFunc("/{id}/threads/{thread_id}", deleteThread).Methods("DELETE")
-	eventRoutes.HandleFunc("/{id}/threads/{thread_id}/posts", createPost).Methods("POST")
-	eventRoutes.HandleFunc("/{id}/threads/{thread_id}/posts/{post_id}", deletePost).Methods("DELETE")
-
-	// Image upload (protected)
-	imageRoutes := router.PathPrefix("/api/v1/images").Subrouter()
-	imageRoutes.Use(TokenMiddleware)
-	imageRoutes.HandleFunc("/{event_id}", getEventImage).Methods("GET")
-	imageRoutes.HandleFunc("/{event_id}", uploadEventImage).Methods("POST")
-	imageRoutes.HandleFunc("/{event_id}", deleteEventImage).Methods("DELETE")
-
-	// Fetch URL endpoints (protected)
-	fetchRoutes := router.PathPrefix("/api/v1/fetchurl").Subrouter()
-	fetchRoutes.Use(TokenMiddleware)
-	fetchRoutes.HandleFunc("", getFetchSources).Methods("GET")
-	fetchRoutes.HandleFunc("", fetchURL).Methods("POST")
-	fetchRoutes.HandleFunc("/fetch-all", fetchAllURLs).Methods("POST")
-	fetchRoutes.HandleFunc("/{id}", getFetchSource).Methods("GET")
-	fetchRoutes.HandleFunc("/{id}/fetch", fetchURLByID).Methods("POST")
-
-	// Tags endpoint (protected)
-	tagsRoutes := router.PathPrefix("/api/v1/tags").Subrouter()
-	tagsRoutes.Use(TokenMiddleware)
-	tagsRoutes.HandleFunc("", getTags).Methods("GET")
+	userRoutes.HandleFunc("/{id}/verify", sendVerification).Methods("POST")
 
 	// Organization endpoints (protected)
 	orgRoutes := router.PathPrefix("/api/v1/organizations").Subrouter()
@@ -843,6 +761,15 @@ func main() {
 	orgRoutes.HandleFunc("/{id}/members", addOrganizationMember).Methods("POST")
 	orgRoutes.HandleFunc("/{id}/members/{user_id}", removeOrganizationMember).Methods("DELETE")
 
+	// Fetch URL endpoints (protected)
+	fetchRoutes := router.PathPrefix("/api/v1/fetchurl").Subrouter()
+	fetchRoutes.Use(TokenMiddleware)
+	fetchRoutes.HandleFunc("", getFetchSources).Methods("GET")
+	fetchRoutes.HandleFunc("", fetchURL).Methods("POST")
+	fetchRoutes.HandleFunc("/fetch-all", fetchAllURLs).Methods("POST")
+	fetchRoutes.HandleFunc("/{id}", getFetchSource).Methods("GET")
+	fetchRoutes.HandleFunc("/{id}/fetch", fetchURLByID).Methods("POST")
+
 	// API key endpoints (protected)
 	apiKeyRoutes := router.PathPrefix("/api/v1/apikeys").Subrouter()
 	apiKeyRoutes.Use(TokenMiddleware)
@@ -850,14 +777,7 @@ func main() {
 	apiKeyRoutes.HandleFunc("", createAPIKey).Methods("POST")
 	apiKeyRoutes.HandleFunc("/{id}", deleteAPIKey).Methods("DELETE")
 
-	// Verification endpoints
-	router.HandleFunc("/api/v1/verify/{token}", consumeVerification).Methods("GET") // public
-	verifyRoutes := router.PathPrefix("/api/v1/users").Subrouter()
-	verifyRoutes.Use(TokenMiddleware)
-	verifyRoutes.HandleFunc("/{id}/verify", sendVerification).Methods("POST")
-
-	// Invite endpoints
-	router.HandleFunc("/api/v1/invites/{token}", useInvite).Methods("POST") // public
+	// Invite management (protected)
 	inviteRoutes := router.PathPrefix("/api/v1/invites").Subrouter()
 	inviteRoutes.Use(TokenMiddleware)
 	inviteRoutes.HandleFunc("", listInvites).Methods("GET")

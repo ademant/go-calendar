@@ -44,7 +44,6 @@ type Event struct {
 	OrganizationID *int             `json:"organization_id,omitempty"`
 	Editable       *bool            `json:"editable,omitempty"`
 	Timetable      []TimetableEntry `json:"timetable,omitempty"`
-	Capacity       *int             `json:"capacity,omitempty"`
 	Pricing        *Pricing         `json:"pricing,omitempty"`
 	Locations       []Location       `json:"locations,omitempty"`
 	Musicians       []Musician       `json:"musicians,omitempty"`
@@ -71,7 +70,6 @@ type EventPatchRequest struct {
 	HasBall        *bool    `json:"has_ball"`
 	HasWorkshop    *bool    `json:"has_workshop"`
 	Pricing        *Pricing `json:"pricing"`
-	Capacity       *int     `json:"capacity"`
 }
 
 type EventCreateRequest struct {
@@ -92,7 +90,6 @@ type EventCreateRequest struct {
 	OrganizationID     *int                 `json:"organization_id,omitempty"`
 	SourceLastModified int64                `json:"source_last_modified,omitempty"`
 	Pricing            *Pricing             `json:"pricing,omitempty"`
-	Capacity           *int                 `json:"capacity,omitempty"`
 }
 
 type EventLocationRequest struct {
@@ -134,7 +131,7 @@ var timeFormats = []string{
 }
 
 // SELECT used by all event list / single-event queries
-const eventListSelect = `SELECT e.id, e.uid, e.title, e.description, e.start_time, e.end_time, e.has_ball, e.has_workshop, e.is_cancelled, e.tags, e.is_published, e.short_code, COALESCE(e.url,''), COALESCE(e.source,''), e.created_at, COALESCE(l.location,''), e.organization_id, COALESCE(e.pricing,''), e.capacity, e.location_id, COALESCE(l.town,''), COALESCE(l.country,'') FROM events e LEFT JOIN locations l ON e.location_id = l.id`
+const eventListSelect = `SELECT e.id, e.uid, e.title, e.description, e.start_time, e.end_time, e.has_ball, e.has_workshop, e.is_cancelled, e.tags, e.is_published, e.short_code, COALESCE(e.url,''), COALESCE(e.source,''), e.created_at, COALESCE(l.location,''), e.organization_id, COALESCE(e.pricing,''), e.location_id, COALESCE(l.town,''), COALESCE(l.country,'') FROM events e LEFT JOIN locations l ON e.location_id = l.id`
 
 // ── low-level helpers ──────────────────────────────────────────────────────
 
@@ -177,12 +174,12 @@ func scanEventRow(s scanner) (Event, error) {
 	var event Event
 	var hasBallInt, hasWorkshopInt, isCancelledInt, isPublishedInt int
 	var startEpoch, endEpoch int64
-	var orgID, locID, capacity sql.NullInt64
+	var orgID, locID sql.NullInt64
 	var uid sql.NullString
 	if err := s.Scan(&event.ID, &uid, &event.Title, &event.Description, &startEpoch, &endEpoch,
 		&hasBallInt, &hasWorkshopInt, &isCancelledInt, &event.TagsJSON, &isPublishedInt,
 		&event.ShortCode, &event.URL, &event.Source, &event.CreatedAt, &event.Location, &orgID,
-		&event.PricingJSON, &capacity, &locID, &event.LocationTown, &event.LocationCountry); err != nil {
+		&event.PricingJSON, &locID, &event.LocationTown, &event.LocationCountry); err != nil {
 		return Event{}, err
 	}
 	if uid.Valid {
@@ -203,10 +200,6 @@ func scanEventRow(s scanner) (Event, error) {
 		v := int(locID.Int64)
 		event.LocationID = &v
 	}
-	if capacity.Valid {
-		v := int(capacity.Int64)
-		event.Capacity = &v
-	}
 	if event.TagsJSON != "" {
 		json.Unmarshal([]byte(event.TagsJSON), &event.Tags)
 	}
@@ -224,18 +217,18 @@ func fetchEventByID(q querier, id int) (Event, error) {
 	var event Event
 	var hasBallInt, hasWorkshopInt, isCancelledInt, isPublishedInt int
 	var startEpoch, endEpoch int64
-	var orgID, locID, capacity sql.NullInt64
+	var orgID, locID sql.NullInt64
 	var uid sql.NullString
 	err := q.QueryRow(
 		`SELECT e.id, e.uid, e.title, e.description, e.start_time, e.end_time, e.has_ball, e.has_workshop,
 		 e.is_cancelled, e.tags, e.is_published, e.short_code, COALESCE(e.url,''), COALESCE(e.source,''),
-		 e.created_at, e.organization_id, COALESCE(e.pricing,''), e.capacity, e.location_id,
+		 e.created_at, e.organization_id, COALESCE(e.pricing,''), e.location_id,
 		 COALESCE(l.location,''), COALESCE(l.town,''), COALESCE(l.country,'')
 		 FROM events e LEFT JOIN locations l ON e.location_id = l.id WHERE e.id = ?`, id,
 	).Scan(&event.ID, &uid, &event.Title, &event.Description, &startEpoch, &endEpoch,
 		&hasBallInt, &hasWorkshopInt, &isCancelledInt, &event.TagsJSON, &isPublishedInt,
 		&event.ShortCode, &event.URL, &event.Source, &event.CreatedAt, &orgID, &event.PricingJSON,
-		&capacity, &locID, &event.Location, &event.LocationTown, &event.LocationCountry)
+		&locID, &event.Location, &event.LocationTown, &event.LocationCountry)
 	if uid.Valid {
 		event.UID = uid.String
 	}
@@ -256,10 +249,6 @@ func fetchEventByID(q querier, id int) (Event, error) {
 	if locID.Valid {
 		v := int(locID.Int64)
 		event.LocationID = &v
-	}
-	if capacity.Valid {
-		v := int(capacity.Int64)
-		event.Capacity = &v
 	}
 	if event.TagsJSON != "" {
 		json.Unmarshal([]byte(event.TagsJSON), &event.Tags)
@@ -408,7 +397,7 @@ func urlVal(s string) interface{} {
 // Deduplication order: UID exact match → URL exact match → title+location+time fuzzy match (±3 h).
 // The URL and fuzzy tiers run whenever the previous tier misses, so two feeds that
 // publish the same event with different UIDs (or none) converge to a single row.
-func insertEvent(q querier, title, description string, startTime, endTime int64, locationID int64, hasBall, hasWorkshop, isCancelled bool, tags []string, isPublished bool, organizationID *int, uid, url, source string, sourceLastModified int64, pricing *Pricing, capacity *int) (int, string, bool, error) {
+func insertEvent(q querier, title, description string, startTime, endTime int64, locationID int64, hasBall, hasWorkshop, isCancelled bool, tags []string, isPublished bool, organizationID *int, uid, url, source string, sourceLastModified int64, pricing *Pricing) (int, string, bool, error) {
 	var existingID int
 	var existingShortCode string
 	var existingSourceLastModified int64
@@ -454,10 +443,6 @@ func insertEvent(q querier, title, description string, startTime, endTime int64,
 			pricingArg = string(b)
 		}
 	}
-	var capacityArg interface{}
-	if capacity != nil {
-		capacityArg = *capacity
-	}
 
 	if lookupErr == nil {
 		// Skip update when the source tells us nothing has changed since last import.
@@ -469,8 +454,8 @@ func insertEvent(q querier, title, description string, startTime, endTime int64,
 			slmArg = sourceLastModified
 		}
 		_, err := q.Exec(
-			"UPDATE events SET description=?, start_time=?, end_time=?, location_id=?, has_ball=?, has_workshop=?, is_cancelled=?, tags=?, is_published=?, url=?, source_last_modified=?, pricing=?, capacity=? WHERE id=?",
-			description, startTime, endTime, locationID, hasBall, hasWorkshop, isCancelled, string(tagsJSON), isPublished, urlVal(url), slmArg, pricingArg, capacityArg, existingID,
+			"UPDATE events SET description=?, start_time=?, end_time=?, location_id=?, has_ball=?, has_workshop=?, is_cancelled=?, tags=?, is_published=?, url=?, source_last_modified=?, pricing=? WHERE id=?",
+			description, startTime, endTime, locationID, hasBall, hasWorkshop, isCancelled, string(tagsJSON), isPublished, urlVal(url), slmArg, pricingArg, existingID,
 		)
 		if err != nil {
 			return 0, "", false, err
@@ -502,8 +487,8 @@ func insertEvent(q querier, title, description string, startTime, endTime int64,
 			sourceArg = source
 		}
 		result, err = q.Exec(
-			"INSERT INTO events (uid, title, description, start_time, end_time, location_id, has_ball, has_workshop, is_cancelled, tags, is_published, organization_id, short_code, url, source, source_last_modified, pricing, capacity) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-			uidArg, title, description, startTime, endTime, locationID, hasBall, hasWorkshop, isCancelled, string(tagsJSON), isPublished, orgIDArg, shortCode, urlVal(url), sourceArg, slmArg, pricingArg, capacityArg,
+			"INSERT INTO events (uid, title, description, start_time, end_time, location_id, has_ball, has_workshop, is_cancelled, tags, is_published, organization_id, short_code, url, source, source_last_modified, pricing) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+			uidArg, title, description, startTime, endTime, locationID, hasBall, hasWorkshop, isCancelled, string(tagsJSON), isPublished, orgIDArg, shortCode, urlVal(url), sourceArg, slmArg, pricingArg,
 		)
 		if err == nil {
 			break
@@ -552,7 +537,7 @@ func createEventFromRequest(q querier, req EventCreateRequest, locationID int64,
 			return nil, false, fmt.Errorf("end_time: %w", err)
 		}
 
-		id, shortCode, created, err := insertEvent(q, req.Title, entry.description, startTime, endTime, locationID, req.HasBall, req.HasWorkshop, req.IsCancelled, req.Tags, isPublished, req.OrganizationID, req.UID, req.URL, req.Source, req.SourceLastModified, req.Pricing, req.Capacity)
+		id, shortCode, created, err := insertEvent(q, req.Title, entry.description, startTime, endTime, locationID, req.HasBall, req.HasWorkshop, req.IsCancelled, req.Tags, isPublished, req.OrganizationID, req.UID, req.URL, req.Source, req.SourceLastModified, req.Pricing)
 		if err != nil {
 			return nil, false, err
 		}
@@ -847,10 +832,6 @@ func patchEvents(w http.ResponseWriter, r *http.Request) {
 		setClauses = append(setClauses, "pricing = ?")
 		setArgs = append(setArgs, string(pricingJSON))
 	}
-	if req.Capacity != nil {
-		setClauses = append(setClauses, "capacity = ?")
-		setArgs = append(setArgs, *req.Capacity)
-	}
 	if len(setClauses) == 0 {
 		http.Error(w, "no fields to update", http.StatusBadRequest)
 		return
@@ -908,23 +889,47 @@ func getEvents(w http.ResponseWriter, r *http.Request) {
 	callerID, _ := strconv.Atoi(r.Header.Get("X-User-ID"))
 	isAuthorizedAdmin := userRole == RoleUser || userRole == RoleAdmin || userRole == RolePublisher
 
+	// Short-code lookup for public clients (e.g. ?code=a1b2c3d4).
+	if !isAuthorizedAdmin {
+		if shortCode := r.URL.Query().Get("code"); shortCode != "" {
+			w.Header().Set("Content-Type", "application/json")
+			event, err := scanEventRow(db.QueryRow(
+				eventListSelect+" WHERE e.short_code = ? AND e.is_published = 1", shortCode,
+			))
+			if err == sql.ErrNoRows {
+				http.Error(w, "Event not found", http.StatusNotFound)
+				return
+			} else if err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			json.NewEncoder(w).Encode(event)
+			return
+		}
+	}
+
 	query := eventListSelect + " WHERE 1=1"
 	args := []interface{}{}
 
 	if !isAuthorizedAdmin {
 		query += " AND e.is_published = 1"
+		// Cache fingerprint for public clients: count + latest creation time.
+		if !strings.Contains(accept, "text/calendar") {
+			if checkPublicCacheHeaders(w, r, "SELECT COUNT(*), MAX(created_at) FROM events WHERE is_published = 1") {
+				return
+			}
+		}
 	} else if v := r.URL.Query().Get("is_published"); v != "" {
 		query += " AND e.is_published = ?"
 		args = append(args, boolParam(v))
 	}
 
-	// Exclude past events by default; authorized users can opt in with include_past=true
+	// Exclude past events by default; authorized users can opt in with include_past=true.
 	if r.URL.Query().Get("include_past") != "true" {
 		query += " AND e.end_time >= ?"
 		args = append(args, time.Now().Unix())
 	}
 
-	// end_time filters (not exposed on public endpoint)
 	if v := r.URL.Query().Get("end_time_after"); v != "" {
 		if n, err := strconv.ParseInt(v, 10, 64); err == nil {
 			query += " AND e.end_time > ?"
@@ -1183,6 +1188,12 @@ func getEvent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Unauthenticated callers may only view published events.
+	if userRole == "" && !event.IsPublished {
+		http.Error(w, "Event not found", http.StatusNotFound)
+		return
+	}
+
 	editable := userRole == RoleAdmin || (userRole == RoleUser && event.OrganizationID != nil && isOrgMember(callerID, *event.OrganizationID))
 	event.Editable = &editable
 
@@ -1274,59 +1285,8 @@ func deleteEvent(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// GET /events — public endpoint: resolve short code or list published events
-func publicGetEvents(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-
-	if shortCode := r.URL.Query().Get("code"); shortCode != "" {
-		// short-code lookup — no cache headers, events can be updated
-		event, err := scanEventRow(db.QueryRow(
-			eventListSelect+" WHERE e.short_code = ? AND e.is_published = 1", shortCode,
-		))
-		if err == sql.ErrNoRows {
-			http.Error(w, "Event not found", http.StatusNotFound)
-			return
-		} else if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		json.NewEncoder(w).Encode(event)
-		return
-	}
-
-	// Cache fingerprint: total published event count + latest insertion time.
-	// Filters are not reflected in the ETag, so clients may over-fetch — never under-fetch.
-	if checkPublicCacheHeaders(w, r,
-		"SELECT COUNT(*), MAX(created_at) FROM events WHERE is_published = 1") {
-		return
-	}
-
-	query := eventListSelect + " WHERE e.is_published = 1"
-	args := []interface{}{}
-	applyEventFilters(r, &query, &args)
-	applyPagination(r, &query, &args)
-
-	rows, err := db.Query(query, args...)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	defer rows.Close()
-
-	var events []Event
-	for rows.Next() {
-		event, err := scanEventRow(rows)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		events = append(events, event)
-	}
-	json.NewEncoder(w).Encode(events)
-}
-
-// GET /events.ics — public iCal feed of future published events, filterable by tag and location
-func publicGetEventsICS(w http.ResponseWriter, r *http.Request) {
+// GET /api/v1/events.ics — public iCal feed of future published events, filterable by tag and location
+func getEventsICS(w http.ResponseWriter, r *http.Request) {
 	now := time.Now().Unix()
 	tag := r.URL.Query().Get("tag")
 	loc := r.URL.Query().Get("location")
@@ -1382,8 +1342,8 @@ func publicGetEventsICS(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte(cal.Serialize()))
 }
 
-// GET /events/tag/{tag}.ics — public iCal feed of future published events for a specific tag
-func publicGetEventsByTagICS(w http.ResponseWriter, r *http.Request) {
+// GET /api/v1/events/tag/{tag}.ics — public iCal feed of future published events for a specific tag
+func getEventsByTagICS(w http.ResponseWriter, r *http.Request) {
 	tag := mux.Vars(r)["tag"]
 	now := time.Now().Unix()
 	if checkPublicCacheHeaders(w, r,
@@ -1415,8 +1375,8 @@ func publicGetEventsByTagICS(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte(cal.Serialize()))
 }
 
-// GET /events/town/{town}.ics — public iCal feed of future published events for a specific town
-func publicGetEventsByTownICS(w http.ResponseWriter, r *http.Request) {
+// GET /api/v1/events/town/{town}.ics — public iCal feed of future published events for a specific town
+func getEventsByTownICS(w http.ResponseWriter, r *http.Request) {
 	town := mux.Vars(r)["town"]
 	now := time.Now().Unix()
 	if checkPublicCacheHeaders(w, r,
