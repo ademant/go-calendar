@@ -1,0 +1,21 @@
+{{template "base" .}}
+{{define "content"}}
+<h1>Upcoming Events</h1>
+{{with .Data}}{{with .Events}}
+<ul class="event-list">
+{{range .}}
+<li class="event-item">
+  <h3><a href="/events/{{.ID}}">{{.Title}}</a></h3>
+  <div class="event-meta">
+    {{if .StartTime}}<span>{{formatTime .StartTime}}</span>{{end}}
+    {{if .Location}} &mdash; {{.Location}}{{else if .LocationTown}} &mdash; {{.LocationTown}}{{end}}
+    {{if .IsCancelled}}<span class="badge cancelled">Cancelled</span>{{end}}
+    {{if .HasBall}}<span class="badge">Ball</span>{{end}}
+    {{if .HasWorkshop}}<span class="badge">Workshop</span>{{end}}
+  </div>
+  {{if .Tags}}<div>{{range .Tags}}<span class="tag">#{{.}}</span>{{end}}</div>{{end}}
+</li>
+{{end}}
+</ul>
+{{else}}<p>No upcoming events found.</p>{{end}}{{end}}
+{{end}}

@@ -1,0 +1,33 @@
+{{template "base" .}}
+{{define "content"}}
+{{with .Data}}
+<h1>{{.Org.Name}}</h1>
+
+{{with .Org.Description}}<p>{{.}}</p>{{end}}
+
+<div class="fediverse">
+  <strong>Follow on the Fediverse:</strong> <code>{{.Handle}}</code>
+  <p style="margin-top:.5rem;font-size:.9rem">Search for <code>{{.Handle}}</code> in Mastodon or another Fediverse app to follow and receive event announcements.</p>
+</div>
+
+<h2>Events</h2>
+{{if .Events}}
+<ul class="event-list">
+{{range .Events}}
+<li class="event-item">
+  <h3><a href="/events/{{.ID}}">{{.Title}}</a></h3>
+  <div class="event-meta">
+    {{if .StartTime}}<span>{{formatTime .StartTime}}</span>{{end}}
+    {{if .Location}} &mdash; {{.Location}}{{else if .LocationTown}} &mdash; {{.LocationTown}}{{end}}
+    {{if .IsCancelled}}<span class="badge cancelled">Cancelled</span>{{end}}
+    {{if .HasBall}}<span class="badge">Ball</span>{{end}}
+    {{if .HasWorkshop}}<span class="badge">Workshop</span>{{end}}
+  </div>
+  {{if .Tags}}<div>{{range .Tags}}<span class="tag">#{{.}}</span>{{end}}</div>{{end}}
+</li>
+{{end}}
+</ul>
+{{else}}<p>No events found for this organisation.</p>{{end}}
+
+{{end}}{{/* .Data */}}
+{{end}}

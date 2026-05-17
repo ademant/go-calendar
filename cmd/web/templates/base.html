@@ -1,0 +1,42 @@
+{{define "base"}}<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{.Title}} — {{.Domain}}</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:system-ui,sans-serif;line-height:1.6;color:#222;background:#fafafa;padding:0 1rem}
+nav{background:#1a1a2e;color:#fff;padding:.75rem 1rem;margin:0 -1rem 1.5rem}
+nav a{color:#e0e0ff;text-decoration:none;font-weight:bold;font-size:1.1rem}
+nav a:hover{text-decoration:underline}
+main{max-width:900px;margin:0 auto;padding-bottom:3rem}
+h1{font-size:1.6rem;margin-bottom:1rem;color:#1a1a2e}
+h2{font-size:1.2rem;margin:1.5rem 0 .5rem;color:#333}
+a{color:#1a6eb5}
+a:hover{color:#0d4a80}
+.event-list{list-style:none;padding:0}
+.event-item{background:#fff;border:1px solid #ddd;border-radius:6px;padding:1rem;margin-bottom:.75rem}
+.event-item h3{font-size:1rem;margin-bottom:.25rem}
+.event-item h3 a{color:#1a1a2e;text-decoration:none}
+.event-item h3 a:hover{text-decoration:underline}
+.event-meta{font-size:.85rem;color:#666;margin-top:.25rem}
+.tag{display:inline-block;background:#e8f0fe;color:#1a6eb5;border-radius:3px;padding:.1rem .4rem;font-size:.8rem;margin:.1rem .1rem 0 0}
+.badge{display:inline-block;background:#d4edda;color:#155724;border-radius:3px;padding:.1rem .4rem;font-size:.8rem;margin:.1rem .1rem 0 0}
+.badge.cancelled{background:#f8d7da;color:#721c24}
+.detail-section{background:#fff;border:1px solid #ddd;border-radius:6px;padding:1.25rem;margin-bottom:1rem}
+.detail-row{margin-bottom:.5rem}
+.detail-label{font-weight:600;min-width:120px;display:inline-block;color:#555}
+.fediverse{background:#e8f4ff;border:1px solid #b3d4f5;border-radius:6px;padding:1rem;margin-bottom:1rem}
+.fediverse code{font-size:.95rem;background:#dbeeff;padding:.1rem .3rem;border-radius:3px}
+footer{text-align:center;color:#999;font-size:.8rem;margin-top:2rem;padding-top:1rem;border-top:1px solid #eee}
+</style>
+</head>
+<body>
+<nav><a href="/">{{.Domain}}</a></nav>
+<main>
+{{block "content" .}}{{end}}
+</main>
+<footer>Powered by dansal</footer>
+</body>
+</html>{{end}}
