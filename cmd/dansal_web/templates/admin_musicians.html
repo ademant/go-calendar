@@ -1,0 +1,61 @@
+{{template "base" .}}
+{{define "content"}}
+<div class="page-header">
+  <h1>{{.Strings.T "admin_musicians_title"}}</h1>
+  <a href="/admin/musicians/new" class="btn-sm">{{.Strings.T "admin_new"}}</a>
+</div>
+
+{{with .Data}}
+<div class="table-wrap">
+<table class="event-table">
+  <thead>
+    <tr>
+      <th>{{$.Strings.T "musician_bandname"}}</th>
+      <th>{{$.Strings.T "musician_short_name"}}</th>
+      <th>{{$.Strings.T "musician_mbid"}}</th>
+      <th>{{$.Strings.T "musician_website"}}</th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+  {{range .Musicians}}
+  <tr>
+    <td>{{.Bandname}}</td>
+    <td class="muted">{{.ShortName}}</td>
+    <td class="mbid-cell">
+      {{if .MBID}}<a href="https://musicbrainz.org/artist/{{.MBID}}" target="_blank" rel="noopener" title="{{.MBID}}">MB ↗</a>{{end}}
+    </td>
+    <td class="url-cell">
+      {{if .Internetsite}}<a href="{{.Internetsite}}" target="_blank" rel="noopener">↗</a>{{end}}
+    </td>
+    <td class="col-actions">
+      <a href="/admin/musicians/{{.ID}}/edit" class="btn-sm">{{$.Strings.T "admin_edit"}}</a>
+      <button type="button" class="btn-sm btn-del"
+              onclick="if(confirm('{{$.Strings.T "musician_confirm_delete"}}'))delMusician({{.ID}})">{{$.Strings.T "admin_delete"}}</button>
+    </td>
+  </tr>
+  {{end}}
+  </tbody>
+</table>
+</div>
+{{end}}
+
+<script>
+function delMusician(id) {
+  var f = document.createElement('form');
+  f.method = 'post'; f.action = '/admin/musicians/' + id + '/delete';
+  document.body.appendChild(f); f.submit();
+}
+</script>
+
+<style>
+.page-header{display:flex;align-items:center;gap:1rem;margin-bottom:.5rem}
+.page-header h1{margin:0}
+.muted{color:#888;font-size:.9rem}
+.mbid-cell{font-size:.85rem}
+.url-cell{font-size:.9rem}
+.col-actions{display:flex;gap:.3rem;align-items:center;white-space:nowrap}
+.btn-del{background:#b00020;color:#fff;border:none}
+.btn-del:hover{background:#800016}
+</style>
+{{end}}

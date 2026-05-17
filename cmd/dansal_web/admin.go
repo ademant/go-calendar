@@ -165,6 +165,141 @@ func adminOrgSaveHandler(cfg *Config, tmpls *Templates, client *DansalClient, i1
 	}
 }
 
+// ── Musicians ─────────────────────────────────────────────────────────────────
+
+type AdminMusiciansData struct {
+	Musicians []Musician
+}
+
+type AdminMusicianEditData struct {
+	Musician Musician
+	IsNew    bool
+	ErrorKey string
+}
+
+func musicianFromForm(r *http.Request) Musician {
+	return Musician{
+		Bandname:     strings.TrimSpace(r.FormValue("bandname")),
+		ShortName:    strings.TrimSpace(r.FormValue("short_name")),
+		Internetsite: strings.TrimSpace(r.FormValue("internetsite")),
+		Description:  strings.TrimSpace(r.FormValue("description")),
+		MBID:         strings.TrimSpace(r.FormValue("mbid")),
+	}
+}
+
+func adminMusiciansHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		_, ok := requireLogin(w, r)
+		if !ok {
+			return
+		}
+		musicians, err := client.GetMusicians(r.Context())
+		if err != nil {
+			http.Error(w, "could not load musicians", http.StatusBadGateway)
+			return
+		}
+		title := i18n.T(r, "admin_musicians_title")
+		renderTemplate(w, tmpls.adminMusicians, tmplData(r, cfg, i18n, title, AdminMusiciansData{Musicians: musicians}))
+	}
+}
+
+func adminMusicianNewPageHandler(cfg *Config, tmpls *Templates, i18n *I18n) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		_, ok := requireLogin(w, r)
+		if !ok {
+			return
+		}
+		title := i18n.T(r, "admin_new")
+		renderTemplate(w, tmpls.adminMusicianEdit, tmplData(r, cfg, i18n, title, AdminMusicianEditData{IsNew: true}))
+	}
+}
+
+func adminMusicianCreateHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		_, ok := requireLogin(w, r)
+		if !ok {
+			return
+		}
+		if err := r.ParseForm(); err != nil {
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+		m := musicianFromForm(r)
+		if _, err := client.CreateMusician(r.Context(), m, getSessionToken(r)); err != nil {
+			title := i18n.T(r, "admin_new")
+			renderTemplate(w, tmpls.adminMusicianEdit, tmplData(r, cfg, i18n, title, AdminMusicianEditData{
+				Musician: m, IsNew: true, ErrorKey: "admin_save_error",
+			}))
+			return
+		}
+		http.Redirect(w, r, "/admin/musicians", http.StatusSeeOther)
+	}
+}
+
+func adminMusicianEditPageHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		_, ok := requireLogin(w, r)
+		if !ok {
+			return
+		}
+		id, err := strconv.Atoi(mux.Vars(r)["id"])
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		musician, err := client.GetMusician(r.Context(), id)
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		title := i18n.T(r, "admin_edit")
+		renderTemplate(w, tmpls.adminMusicianEdit, tmplData(r, cfg, i18n, title, AdminMusicianEditData{Musician: musician}))
+	}
+}
+
+func adminMusicianSaveHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		_, ok := requireLogin(w, r)
+		if !ok {
+			return
+		}
+		id, err := strconv.Atoi(mux.Vars(r)["id"])
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		if err := r.ParseForm(); err != nil {
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+		m := musicianFromForm(r)
+		if err := client.UpdateMusician(r.Context(), id, m, getSessionToken(r)); err != nil {
+			title := i18n.T(r, "admin_edit")
+			renderTemplate(w, tmpls.adminMusicianEdit, tmplData(r, cfg, i18n, title, AdminMusicianEditData{
+				Musician: m, ErrorKey: "admin_save_error",
+			}))
+			return
+		}
+		http.Redirect(w, r, "/admin/musicians", http.StatusSeeOther)
+	}
+}
+
+func adminMusicianDeleteHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		_, ok := requireLogin(w, r)
+		if !ok {
+			return
+		}
+		id, err := strconv.Atoi(mux.Vars(r)["id"])
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		_ = client.DeleteMusician(r.Context(), id, getSessionToken(r))
+		http.Redirect(w, r, "/admin/musicians", http.StatusSeeOther)
+	}
+}
+
 // ── Fetch sources ─────────────────────────────────────────────────────────────
 
 type AdminFetchurlsData struct {

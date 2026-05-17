@@ -59,6 +59,13 @@ func main() {
 	r.HandleFunc("/admin/fetchurls/{id}/delete", adminFetchurlDeleteHandler(cfg, client)).Methods("POST")
 	r.HandleFunc("/admin/fetchurls/{id}/run", adminFetchurlRunHandler(cfg, client)).Methods("POST")
 
+	r.HandleFunc("/admin/musicians", adminMusiciansHandler(cfg, tmpls, client, i18n)).Methods("GET")
+	r.HandleFunc("/admin/musicians/new", adminMusicianNewPageHandler(cfg, tmpls, i18n)).Methods("GET")
+	r.HandleFunc("/admin/musicians/new", adminMusicianCreateHandler(cfg, tmpls, client, i18n)).Methods("POST")
+	r.HandleFunc("/admin/musicians/{id}/edit", adminMusicianEditPageHandler(cfg, tmpls, client, i18n)).Methods("GET")
+	r.HandleFunc("/admin/musicians/{id}/edit", adminMusicianSaveHandler(cfg, tmpls, client, i18n)).Methods("POST")
+	r.HandleFunc("/admin/musicians/{id}/delete", adminMusicianDeleteHandler(cfg, client)).Methods("POST")
+
 	r.HandleFunc("/admin/locations", adminLocationsHandler(cfg, tmpls, client, i18n)).Methods("GET")
 	r.HandleFunc("/admin/locations/new", adminLocationNewPageHandler(cfg, tmpls, client, i18n)).Methods("GET")
 	r.HandleFunc("/admin/locations/new", adminLocationCreateHandler(cfg, tmpls, client, i18n)).Methods("POST")

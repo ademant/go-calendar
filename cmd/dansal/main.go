@@ -396,6 +396,7 @@ func migrateDB() {
 	db.Exec("CREATE INDEX IF NOT EXISTS idx_magic_login_tokens_token ON magic_login_tokens(token)")
 	db.Exec("ALTER TABLE events ADD COLUMN pricing TEXT")
 	db.Exec("ALTER TABLE musicians ADD COLUMN description TEXT")
+	db.Exec("ALTER TABLE musicians ADD COLUMN mbid TEXT")
 	db.Exec("ALTER TABLE timetable_entries ADD COLUMN description TEXT")
 	db.Exec(`CREATE TABLE IF NOT EXISTS event_locations (
 		event_id INTEGER NOT NULL,

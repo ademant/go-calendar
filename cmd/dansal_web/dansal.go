@@ -63,8 +63,13 @@ type Price struct {
 }
 
 type Musician struct {
-	ID       int    `json:"id"`
-	Bandname string `json:"bandname"`
+	ID           int    `json:"id"`
+	Bandname     string `json:"bandname"`
+	ShortName    string `json:"short_name,omitempty"`
+	Internetsite string `json:"internetsite,omitempty"`
+	Description  string `json:"description,omitempty"`
+	MBID         string `json:"mbid,omitempty"`
+	CreatedAt    string `json:"created_at,omitempty"`
 }
 
 type Location struct {
@@ -209,6 +214,58 @@ func (c *DansalClient) GetOrganization(ctx context.Context, id int) (Organizatio
 		return Organization{}, err
 	}
 	return org, nil
+}
+
+func (c *DansalClient) GetMusicians(ctx context.Context) ([]Musician, error) {
+	var ms []Musician
+	return ms, c.get(ctx, "/api/v1/musicians", &ms)
+}
+
+func (c *DansalClient) GetMusician(ctx context.Context, id int) (Musician, error) {
+	var m Musician
+	return m, c.get(ctx, fmt.Sprintf("/api/v1/musicians/%d", id), &m)
+}
+
+func (c *DansalClient) CreateMusician(ctx context.Context, m Musician, token string) (Musician, error) {
+	body, _ := json.Marshal(m)
+	resp, err := c.authed(ctx, http.MethodPost, "/api/v1/musicians", token, body)
+	if err != nil {
+		return Musician{}, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusCreated {
+		return Musician{}, fmt.Errorf("dansal API: %s", resp.Status)
+	}
+	var out []Musician
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil || len(out) == 0 {
+		return Musician{}, err
+	}
+	return out[0], nil
+}
+
+func (c *DansalClient) UpdateMusician(ctx context.Context, id int, m Musician, token string) error {
+	body, _ := json.Marshal(m)
+	resp, err := c.authed(ctx, http.MethodPut, fmt.Sprintf("/api/v1/musicians/%d", id), token, body)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("dansal API: %s", resp.Status)
+	}
+	return nil
+}
+
+func (c *DansalClient) DeleteMusician(ctx context.Context, id int, token string) error {
+	resp, err := c.authed(ctx, http.MethodDelete, fmt.Sprintf("/api/v1/musicians/%d", id), token, nil)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusNoContent {
+		return fmt.Errorf("dansal API: %s", resp.Status)
+	}
+	return nil
 }
 
 func (c *DansalClient) authed(ctx context.Context, method, path, token string, body []byte) (*http.Response, error) {

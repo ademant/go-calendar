@@ -1,0 +1,151 @@
+{{template "base" .}}
+{{define "content"}}
+<h1>{{if .Data.IsNew}}{{.Strings.T "admin_new"}}{{else}}{{.Strings.T "admin_edit"}}{{with .Data.Musician.Bandname}} — {{.}}{{end}}{{end}}</h1>
+
+<div class="edit-wrap">
+{{with .Data}}
+{{if .ErrorKey}}<p class="form-error" role="alert">{{$.Strings.T .ErrorKey}}</p>{{end}}
+
+<!-- MusicBrainz search widget -->
+<div class="mb-widget">
+  <label for="mb-search">{{$.Strings.T "musician_mb_search"}}</label>
+  <div class="mb-row">
+    <input id="mb-search" type="text" placeholder="{{.Musician.Bandname}}" autocomplete="off">
+    <button type="button" id="mb-btn">{{$.Strings.T "musician_mb_btn"}}</button>
+  </div>
+  {{if .Musician.MBID}}
+  <p class="mb-current">
+    {{$.Strings.T "musician_mb_linked"}}:
+    <a href="https://musicbrainz.org/artist/{{.Musician.MBID}}" target="_blank" rel="noopener"><code>{{.Musician.MBID}}</code></a>
+  </p>
+  {{end}}
+  <ul id="mb-results" class="mb-results"></ul>
+</div>
+
+<form method="post" class="edit-form">
+  <label for="bandname">{{$.Strings.T "musician_bandname"}}</label>
+  <input id="bandname" type="text" name="bandname" value="{{.Musician.Bandname}}" required>
+
+  <label for="short_name">{{$.Strings.T "musician_short_name"}}</label>
+  <input id="short_name" type="text" name="short_name" value="{{.Musician.ShortName}}">
+
+  <label for="description">{{$.Strings.T "musician_description"}}</label>
+  <textarea id="description" name="description" rows="4">{{.Musician.Description}}</textarea>
+
+  <label for="internetsite">{{$.Strings.T "musician_website"}}</label>
+  <input id="internetsite" type="url" name="internetsite" value="{{.Musician.Internetsite}}" placeholder="https://…">
+
+  <label for="mbid">{{$.Strings.T "musician_mbid"}}</label>
+  <div class="mbid-row">
+    <input id="mbid" type="text" name="mbid" value="{{.Musician.MBID}}"
+           placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" pattern="[0-9a-f\-]*">
+    {{if .Musician.MBID}}
+    <a href="https://musicbrainz.org/artist/{{.Musician.MBID}}" target="_blank" rel="noopener" class="btn-sm mb-open">↗ MusicBrainz</a>
+    {{end}}
+  </div>
+
+  <div class="form-actions">
+    <button type="submit" class="btn-primary">{{$.Strings.T "admin_save"}}</button>
+    <a href="/admin/musicians" class="btn-secondary">{{$.Strings.T "admin_cancel"}}</a>
+  </div>
+</form>
+{{end}}
+</div>
+
+<style>
+.edit-wrap{max-width:560px}
+.form-error{background:#f8d7da;color:#721c24;border:1px solid #f5c6cb;border-radius:4px;padding:.6rem .9rem;margin-bottom:1rem;font-size:.9rem}
+.mb-widget{background:#f0f7ff;border:1px solid #b3d4f5;border-radius:6px;padding:1rem;margin-bottom:1.25rem}
+.mb-widget label{font-weight:600;font-size:.9rem;color:#444;display:block;margin-bottom:.4rem}
+.mb-row{display:flex;gap:.5rem}
+.mb-row input{flex:1;padding:.4rem .6rem;border:1px solid #ccc;border-radius:4px;font-size:.9rem}
+.mb-row button{padding:.4rem .9rem;background:#ba2025;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:.9rem;white-space:nowrap}
+.mb-row button:hover{background:#8a1519}
+.mb-current{font-size:.85rem;color:#555;margin-top:.5rem}
+.mb-results{list-style:none;padding:0;margin-top:.5rem}
+.mb-results li{padding:.4rem .5rem;border-bottom:1px solid #ddeeff;font-size:.85rem;cursor:pointer;display:flex;justify-content:space-between;align-items:flex-start;gap:.5rem}
+.mb-results li:hover{background:#ddeeff}
+.mb-results li .mb-meta{color:#666;font-size:.8rem;white-space:nowrap;text-align:right;flex-shrink:0}
+.mb-results li button{background:#ba2025;color:#fff;border:none;border-radius:3px;padding:.15rem .5rem;font-size:.8rem;cursor:pointer;flex-shrink:0}
+.edit-form{display:flex;flex-direction:column;gap:.5rem;background:#fff;border:1px solid #ddd;border-radius:6px;padding:1.5rem}
+.edit-form label{font-weight:600;font-size:.9rem;color:#444;margin-top:.2rem}
+.edit-form input,.edit-form textarea{padding:.45rem .6rem;border:1px solid #ccc;border-radius:4px;font-size:1rem;width:100%;resize:vertical}
+.edit-form input:focus,.edit-form textarea:focus{outline:2px solid #1a6eb5;border-color:#1a6eb5}
+.mbid-row{display:flex;gap:.5rem;align-items:center}
+.mbid-row input{flex:1}
+.mb-open{flex-shrink:0}
+.form-actions{display:flex;gap:.75rem;margin-top:.75rem}
+.btn-primary{padding:.45rem 1.2rem;background:#1a6eb5;color:#fff;border:none;border-radius:4px;font-size:.95rem;cursor:pointer}
+.btn-primary:hover{background:#0d4a80}
+.btn-secondary{padding:.45rem 1.2rem;background:#f5f5f5;color:#333;border:1px solid #ccc;border-radius:4px;font-size:.95rem;text-decoration:none;cursor:pointer}
+.btn-secondary:hover{background:#e8e8e8}
+</style>
+
+<script>
+(function(){
+  var btn     = document.getElementById('mb-btn');
+  var input   = document.getElementById('mb-search');
+  var results = document.getElementById('mb-results');
+  var mbidInp = document.getElementById('mbid');
+  var nameInp = document.getElementById('bandname');
+
+  btn.addEventListener('click', function(){
+    var q = input.value.trim() || nameInp.value.trim();
+    if (!q) return;
+    btn.disabled = true;
+    results.innerHTML = '<li style="color:#666">…</li>';
+    fetch('https://musicbrainz.org/ws/2/artist?query=' + encodeURIComponent(q) + '&fmt=json&limit=8', {
+      headers: {'Accept': 'application/json'}
+    })
+    .then(function(r){ return r.json(); })
+    .then(function(data){
+      results.innerHTML = '';
+      var artists = data.artists || [];
+      if (!artists.length) {
+        results.innerHTML = '<li style="color:#999">{{.Strings.T "musician_mb_no_results"}}</li>';
+        return;
+      }
+      artists.forEach(function(a){
+        var li = document.createElement('li');
+
+        var info = document.createElement('span');
+        var label = a.name;
+        if (a.disambiguation) label += ' (' + a.disambiguation + ')';
+        info.textContent = label;
+
+        var meta = document.createElement('span');
+        meta.className = 'mb-meta';
+        var parts = [];
+        if (a['life-span'] && a['life-span'].begin) parts.push(a['life-span'].begin.slice(0,4));
+        if (a.country) parts.push(a.country);
+        if (a.type) parts.push(a.type);
+        meta.textContent = parts.join(' · ');
+
+        var pickBtn = document.createElement('button');
+        pickBtn.type = 'button';
+        pickBtn.textContent = '↙';
+        pickBtn.title = a.id;
+        pickBtn.addEventListener('click', function(e){
+          e.stopPropagation();
+          mbidInp.value = a.id;
+          if (!nameInp.value.trim()) nameInp.value = a.name;
+          results.innerHTML = '';
+          mbidInp.focus();
+        });
+
+        li.appendChild(info);
+        li.appendChild(meta);
+        li.appendChild(pickBtn);
+        results.appendChild(li);
+      });
+    })
+    .catch(function(){ results.innerHTML = '<li style="color:#c00">{{.Strings.T "musician_mb_error"}}</li>'; })
+    .finally(function(){ btn.disabled = false; });
+  });
+
+  input.addEventListener('keydown', function(e){
+    if (e.key === 'Enter'){ e.preventDefault(); btn.click(); }
+  });
+})();
+</script>
+{{end}}

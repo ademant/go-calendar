@@ -157,6 +157,8 @@ type Templates struct {
 	adminFetchurlEdit  *template.Template
 	adminLocations     *template.Template
 	adminLocationEdit  *template.Template
+	adminMusicians     *template.Template
+	adminMusicianEdit  *template.Template
 }
 
 func loadTemplates() *Templates {
@@ -181,6 +183,8 @@ func loadTemplates() *Templates {
 		adminFetchurlEdit: load("admin_fetchurl_edit"),
 		adminLocations:    load("admin_locations"),
 		adminLocationEdit: load("admin_location_edit"),
+		adminMusicians:    load("admin_musicians"),
+		adminMusicianEdit: load("admin_musician_edit"),
 	}
 }
 
