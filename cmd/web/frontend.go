@@ -6,6 +6,7 @@ import (
 	"html/template"
 	"log"
 	"net/http"
+	"sort"
 	"strconv"
 	"time"
 
@@ -20,6 +21,7 @@ type TemplateData struct {
 
 type IndexData struct {
 	Events []Event
+	OrgMap map[int]Organization
 }
 
 type EventData struct {
@@ -55,11 +57,41 @@ var tmplFuncMap = template.FuncMap{
 		}
 		return s
 	},
+	"isoDate": func(s string) string {
+		for _, layout := range []string{time.RFC3339, "2006-01-02T15:04:05", "2006-01-02 15:04:05"} {
+			if t, err := time.Parse(layout, s); err == nil {
+				return t.Format("2006-01-02")
+			}
+		}
+		return s
+	},
 	"derefInt": func(p *int) int {
 		if p == nil {
 			return 0
 		}
 		return *p
+	},
+	"orgName": func(orgMap map[int]Organization, id *int) string {
+		if id == nil {
+			return ""
+		}
+		if o, ok := orgMap[*id]; ok {
+			return o.Name
+		}
+		return ""
+	},
+	"orgSlug": orgSlug,
+	"countryList": func(events []Event) []string {
+		seen := make(map[string]bool)
+		var out []string
+		for _, e := range events {
+			if e.LocationCountry != "" && !seen[e.LocationCountry] {
+				seen[e.LocationCountry] = true
+				out = append(out, e.LocationCountry)
+			}
+		}
+		sort.Strings(out)
+		return out
 	},
 }
 
@@ -100,10 +132,16 @@ func indexHandler(cfg *Config, tmpls *Templates, client *DansalClient) http.Hand
 			http.Error(w, "could not load events", http.StatusBadGateway)
 			return
 		}
+		orgMap := make(map[int]Organization)
+		if orgs, err := client.GetOrganizations(r.Context()); err == nil {
+			for _, o := range orgs {
+				orgMap[o.ID] = o
+			}
+		}
 		renderTemplate(w, tmpls.index, TemplateData{
 			Title:  "Upcoming Events",
 			Domain: cfg.Domain,
-			Data:   IndexData{Events: events},
+			Data:   IndexData{Events: events, OrgMap: orgMap},
 		})
 	}
 }

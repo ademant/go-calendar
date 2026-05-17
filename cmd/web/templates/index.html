@@ -1,21 +1,240 @@
 {{template "base" .}}
 {{define "content"}}
 <h1>Upcoming Events</h1>
-{{with .Data}}{{with .Events}}
-<ul class="event-list">
-{{range .}}
-<li class="event-item">
-  <h3><a href="/events/{{.ID}}">{{.Title}}</a></h3>
-  <div class="event-meta">
-    {{if .StartTime}}<span>{{formatTime .StartTime}}</span>{{end}}
-    {{if .Location}} &mdash; {{.Location}}{{else if .LocationTown}} &mdash; {{.LocationTown}}{{end}}
-    {{if .IsCancelled}}<span class="badge cancelled">Cancelled</span>{{end}}
-    {{if .HasBall}}<span class="badge">Ball</span>{{end}}
-    {{if .HasWorkshop}}<span class="badge">Workshop</span>{{end}}
+
+{{with .Data}}
+{{$orgMap := .OrgMap}}
+
+<!-- Filters -->
+<div class="filters">
+  <div class="filter-row">
+    <input type="search" id="f-search" placeholder="Search title, location…" aria-label="Search events">
+    <input type="date"   id="f-from"   aria-label="From date">
+    <input type="date"   id="f-to"     aria-label="To date">
+    <select id="f-country" aria-label="Filter by country">
+      <option value="">All countries</option>
+      {{range countryList .Events}}<option value="{{.}}">{{.}}</option>{{end}}
+    </select>
+    <select id="f-type" aria-label="Filter by type">
+      <option value="">All types</option>
+      <option value="ball">Ball</option>
+      <option value="workshop">Workshop</option>
+    </select>
+    <button type="button" id="f-clear">Clear</button>
   </div>
-  {{if .Tags}}<div>{{range .Tags}}<span class="tag">#{{.}}</span>{{end}}</div>{{end}}
-</li>
+  <div class="filter-info" id="f-info" aria-live="polite"></div>
+</div>
+
+<!-- Table -->
+<div class="table-wrap">
+<table class="event-table" id="event-table" aria-label="Event list">
+  <thead>
+    <tr>
+      <th data-col="date"      class="sortable sorted-asc" tabindex="0" aria-sort="ascending">Date</th>
+      <th data-col="title"     class="sortable" tabindex="0" aria-sort="none">Title</th>
+      <th data-col="location"  class="sortable" tabindex="0" aria-sort="none">Location</th>
+      <th data-col="country"   class="sortable" tabindex="0" aria-sort="none">Country</th>
+      <th class="col-type">Type</th>
+      <th data-col="organizer" class="sortable col-org" tabindex="0" aria-sort="none">Organizer</th>
+      <th class="col-actions">Links</th>
+    </tr>
+  </thead>
+  <tbody id="event-tbody">
+  {{range .Events}}
+  {{$org := orgName $orgMap .OrganizationID}}
+  <tr class="event-row"
+      data-date="{{isoDate .StartTime}}"
+      data-title="{{.Title}}"
+      data-location="{{if .Location}}{{.Location}}{{else}}{{.LocationTown}}{{end}}"
+      data-country="{{.LocationCountry}}"
+      data-ball="{{if .HasBall}}1{{else}}0{{end}}"
+      data-workshop="{{if .HasWorkshop}}1{{else}}0{{end}}"
+      data-organizer="{{$org}}"
+      data-tags="{{range .Tags}}{{.}} {{end}}">
+    <td class="col-date">
+      <span class="date-main">{{formatDate .StartTime}}</span>
+      {{if .IsCancelled}}<span class="badge cancelled">Cancelled</span>{{end}}
+    </td>
+    <td><a href="/events/{{.ID}}">{{.Title}}</a></td>
+    <td class="col-venue">
+      {{if .Location}}<span class="venue">{{.Location}}</span>{{end}}
+      {{if .LocationTown}}<span class="town">{{.LocationTown}}</span>{{end}}
+    </td>
+    <td>{{.LocationCountry}}</td>
+    <td class="col-type">
+      {{if .HasBall}}<span class="badge">Ball</span>{{end}}
+      {{if .HasWorkshop}}<span class="badge workshop">Workshop</span>{{end}}
+      {{range .Tags}}<span class="tag">{{.}}</span>{{end}}
+    </td>
+    <td class="col-org">
+      {{if $org}}<a href="/org/{{orgSlug $org}}">{{$org}}</a>{{end}}
+    </td>
+    <td class="col-actions">
+      <a href="/events/{{.ID}}" class="btn-sm">Details</a>
+      {{if .URL}}<a href="{{.URL}}" class="btn-sm" target="_blank" rel="noopener">Website</a>{{end}}
+    </td>
+  </tr>
+  {{end}}
+  </tbody>
+</table>
+</div>
+
+<div class="pagination-bar" id="pagination-bar">
+  <span id="page-info"></span>
+  <button type="button" id="load-more">Load more</button>
+</div>
+
+<p id="empty-state" class="empty-state" hidden>
+  No events match your filters.
+  <button type="button" id="clear-filters-empty">Clear filters</button>
+</p>
+
 {{end}}
-</ul>
-{{else}}<p>No upcoming events found.</p>{{end}}{{end}}
+
+<style>
+.filters{background:#fff;border:1px solid #ddd;border-radius:6px;padding:.75rem 1rem;margin-bottom:1rem}
+.filter-row{display:flex;flex-wrap:wrap;gap:.5rem;align-items:center}
+.filter-row input,.filter-row select{padding:.35rem .5rem;border:1px solid #ccc;border-radius:4px;font-size:.9rem}
+.filter-row input[type=search]{flex:1 1 180px}
+.filter-row input[type=date]{flex:0 1 140px}
+.filter-row select{flex:0 1 150px}
+.filter-row button{padding:.35rem .8rem;border:1px solid #ccc;border-radius:4px;background:#f5f5f5;cursor:pointer;font-size:.9rem}
+.filter-row button:hover{background:#e8e8e8}
+.filter-info{font-size:.85rem;color:#666;margin-top:.4rem}
+.table-wrap{overflow-x:auto}
+.event-table{width:100%;border-collapse:collapse;font-size:.9rem}
+.event-table th,.event-table td{padding:.5rem .65rem;text-align:left;border-bottom:1px solid #eee;vertical-align:top}
+.event-table thead th{background:#f4f6fb;font-weight:600;color:#333;white-space:nowrap;position:sticky;top:0;z-index:1}
+.event-table tbody tr:hover{background:#f9f9ff}
+.event-table tbody tr.row-filtered{display:none}
+th.sortable{cursor:pointer;user-select:none}
+th.sortable::after{content:" ↕";color:#bbb;font-size:.8em}
+th.sorted-asc::after{content:" ↑";color:#1a6eb5}
+th.sorted-desc::after{content:" ↓";color:#1a6eb5}
+.col-date{white-space:nowrap;min-width:110px}
+.col-venue .venue{display:block}
+.col-venue .town{display:block;color:#666;font-size:.85em}
+.col-type{min-width:90px}
+.col-actions{white-space:nowrap}
+.btn-sm{display:inline-block;padding:.2rem .5rem;border:1px solid #ccc;border-radius:3px;font-size:.8rem;text-decoration:none;color:#333;margin-right:.2rem}
+.btn-sm:hover{background:#f0f0f0;color:#000}
+.badge.workshop{background:#fff3cd;color:#856404}
+.date-main{display:block}
+.pagination-bar{display:flex;align-items:center;gap:1rem;margin-top:1rem}
+#page-info{color:#666;font-size:.9rem}
+#load-more{padding:.4rem 1rem;border:1px solid #1a6eb5;border-radius:4px;background:#fff;color:#1a6eb5;cursor:pointer;font-size:.9rem}
+#load-more[disabled]{display:none}
+.empty-state{text-align:center;padding:2rem;color:#666}
+.empty-state button{margin-left:.75rem;padding:.3rem .8rem;border:1px solid #ccc;border-radius:4px;background:#f5f5f5;cursor:pointer}
+@media(max-width:640px){
+  .col-org,.col-actions{display:none}
+  .event-table td:nth-child(6),.event-table td:nth-child(7){display:none}
+  .filter-row input[type=date]{display:none}
+}
+</style>
+
+<script>
+(function(){
+  var PAGE = 25;
+  var rows = Array.from(document.querySelectorAll('#event-tbody .event-row'));
+  var visible = [];
+  var shown = 0;
+  var sortCol = 'date', sortDir = 1;
+
+  function clear(){
+    document.getElementById('f-search').value  = '';
+    document.getElementById('f-from').value    = '';
+    document.getElementById('f-to').value      = '';
+    document.getElementById('f-country').value = '';
+    document.getElementById('f-type').value    = '';
+    applyFilters();
+  }
+
+  function applyFilters(){
+    var search  = document.getElementById('f-search').value.trim().toLowerCase();
+    var from    = document.getElementById('f-from').value;
+    var to      = document.getElementById('f-to').value;
+    var country = document.getElementById('f-country').value.toLowerCase();
+    var type    = document.getElementById('f-type').value;
+
+    visible = rows.filter(function(r){
+      if(search){
+        var hay = (r.dataset.title+' '+r.dataset.location+' '+r.dataset.tags+' '+r.dataset.organizer).toLowerCase();
+        if(hay.indexOf(search) < 0) return false;
+      }
+      if(from && r.dataset.date < from) return false;
+      if(to   && r.dataset.date > to)   return false;
+      if(country && r.dataset.country.toLowerCase() !== country) return false;
+      if(type === 'ball'     && r.dataset.ball     !== '1') return false;
+      if(type === 'workshop' && r.dataset.workshop !== '1') return false;
+      return true;
+    });
+
+    shown = 0;
+    applySort();
+  }
+
+  function applySort(){
+    visible.sort(function(a,b){
+      var av = a.dataset[sortCol] || '', bv = b.dataset[sortCol] || '';
+      return av < bv ? -sortDir : av > bv ? sortDir : 0;
+    });
+    render();
+  }
+
+  function render(){
+    rows.forEach(function(r){ r.classList.add('row-filtered'); });
+    shown = Math.min(shown + PAGE, visible.length);
+    visible.slice(0, shown).forEach(function(r){ r.classList.remove('row-filtered'); });
+
+    document.getElementById('f-info').textContent =
+      visible.length + ' event' + (visible.length !== 1 ? 's' : '');
+    document.getElementById('page-info').textContent =
+      'Showing ' + shown + ' of ' + visible.length;
+    document.getElementById('load-more').disabled = shown >= visible.length;
+    document.getElementById('empty-state').hidden  = visible.length > 0;
+    document.getElementById('event-table').hidden  = visible.length === 0;
+    document.getElementById('pagination-bar').hidden = visible.length === 0;
+  }
+
+  document.querySelectorAll('th.sortable').forEach(function(th){
+    function doSort(){
+      var col = th.dataset.col;
+      sortDir = (sortCol === col) ? -sortDir : 1;
+      sortCol = col;
+      document.querySelectorAll('th.sortable').forEach(function(t){
+        t.classList.remove('sorted-asc','sorted-desc');
+        t.setAttribute('aria-sort','none');
+      });
+      th.classList.add(sortDir===1?'sorted-asc':'sorted-desc');
+      th.setAttribute('aria-sort', sortDir===1?'ascending':'descending');
+      shown = 0;
+      applySort();
+    }
+    th.addEventListener('click', doSort);
+    th.addEventListener('keydown', function(e){
+      if(e.key==='Enter'||e.key===' '){ e.preventDefault(); doSort(); }
+    });
+  });
+
+  ['f-search','f-from','f-to','f-country','f-type'].forEach(function(id){
+    var el = document.getElementById(id);
+    el.addEventListener('input',  applyFilters);
+    el.addEventListener('change', applyFilters);
+  });
+
+  document.getElementById('f-clear').addEventListener('click', clear);
+  document.getElementById('clear-filters-empty').addEventListener('click', clear);
+
+  document.getElementById('load-more').addEventListener('click', function(){
+    var prev = shown;
+    shown = Math.min(shown + PAGE, visible.length);
+    visible.slice(prev, shown).forEach(function(r){ r.classList.remove('row-filtered'); });
+    document.getElementById('page-info').textContent = 'Showing ' + shown + ' of ' + visible.length;
+    this.disabled = shown >= visible.length;
+  });
+
+  applyFilters();
+})();
+</script>
 {{end}}
