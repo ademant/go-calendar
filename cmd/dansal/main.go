@@ -397,6 +397,10 @@ func migrateDB() {
 	db.Exec("ALTER TABLE events ADD COLUMN pricing TEXT")
 	db.Exec("ALTER TABLE musicians ADD COLUMN description TEXT")
 	db.Exec("ALTER TABLE musicians ADD COLUMN mbid TEXT")
+	db.Exec("ALTER TABLE musicians ADD COLUMN mastodon TEXT")
+	db.Exec("ALTER TABLE musicians ADD COLUMN instagram TEXT")
+	db.Exec("ALTER TABLE musicians ADD COLUMN facebook TEXT")
+	db.Exec("ALTER TABLE musicians ADD COLUMN soundcloud TEXT")
 	db.Exec("ALTER TABLE timetable_entries ADD COLUMN description TEXT")
 	db.Exec(`CREATE TABLE IF NOT EXISTS event_locations (
 		event_id INTEGER NOT NULL,

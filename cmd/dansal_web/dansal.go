@@ -69,6 +69,10 @@ type Musician struct {
 	Internetsite string `json:"internetsite,omitempty"`
 	Description  string `json:"description,omitempty"`
 	MBID         string `json:"mbid,omitempty"`
+	Mastodon     string `json:"mastodon,omitempty"`
+	Instagram    string `json:"instagram,omitempty"`
+	Facebook     string `json:"facebook,omitempty"`
+	Soundcloud   string `json:"soundcloud,omitempty"`
 	CreatedAt    string `json:"created_at,omitempty"`
 }
 

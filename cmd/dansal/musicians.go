@@ -14,9 +14,13 @@ type Musician struct {
 	ID           int    `json:"id"`
 	Bandname     string `json:"bandname"`
 	ShortName    string `json:"short_name,omitempty"`
-	Internetsite string `json:"internetsite"`
+	Internetsite string `json:"internetsite,omitempty"`
 	Description  string `json:"description,omitempty"`
 	MBID         string `json:"mbid,omitempty"`
+	Mastodon     string `json:"mastodon,omitempty"`
+	Instagram    string `json:"instagram,omitempty"`
+	Facebook     string `json:"facebook,omitempty"`
+	Soundcloud   string `json:"soundcloud,omitempty"`
 	CreatedAt    string `json:"created_at"`
 }
 
@@ -26,6 +30,10 @@ type MusicianCreateRequest struct {
 	Internetsite string `json:"internetsite"`
 	Description  string `json:"description"`
 	MBID         string `json:"mbid"`
+	Mastodon     string `json:"mastodon"`
+	Instagram    string `json:"instagram"`
+	Facebook     string `json:"facebook"`
+	Soundcloud   string `json:"soundcloud"`
 }
 
 type MusicianUpdateRequest struct {
@@ -34,13 +42,28 @@ type MusicianUpdateRequest struct {
 	Internetsite string `json:"internetsite"`
 	Description  string `json:"description"`
 	MBID         string `json:"mbid"`
+	Mastodon     string `json:"mastodon"`
+	Instagram    string `json:"instagram"`
+	Facebook     string `json:"facebook"`
+	Soundcloud   string `json:"soundcloud"`
+}
+
+const musicianCols = `id, bandname,
+	COALESCE(short_name,''), COALESCE(internetsite,''), COALESCE(description,''),
+	COALESCE(mbid,''), COALESCE(mastodon,''), COALESCE(instagram,''),
+	COALESCE(facebook,''), COALESCE(soundcloud,''), created_at`
+
+func scanMusician(row interface{ Scan(...any) error }) (Musician, error) {
+	var m Musician
+	return m, row.Scan(&m.ID, &m.Bandname, &m.ShortName, &m.Internetsite, &m.Description,
+		&m.MBID, &m.Mastodon, &m.Instagram, &m.Facebook, &m.Soundcloud, &m.CreatedAt)
 }
 
 // GET /api/v1/musicians - List all musicians
 func getMusicians(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
-	rows, err := db.Query("SELECT id, bandname, COALESCE(short_name,''), COALESCE(internetsite,''), COALESCE(description,''), COALESCE(mbid,''), created_at FROM musicians")
+	rows, err := db.Query("SELECT " + musicianCols + " FROM musicians ORDER BY bandname")
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -49,12 +72,12 @@ func getMusicians(w http.ResponseWriter, r *http.Request) {
 
 	musicians := []Musician{}
 	for rows.Next() {
-		var musician Musician
-		if err := rows.Scan(&musician.ID, &musician.Bandname, &musician.ShortName, &musician.Internetsite, &musician.Description, &musician.MBID, &musician.CreatedAt); err != nil {
+		m, err := scanMusician(rows)
+		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		musicians = append(musicians, musician)
+		musicians = append(musicians, m)
 	}
 
 	json.NewEncoder(w).Encode(musicians)
@@ -64,15 +87,8 @@ func getMusicians(w http.ResponseWriter, r *http.Request) {
 func getMusician(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
-	vars := mux.Vars(r)
-	id := vars["id"]
-
-	var musician Musician
-	err := db.QueryRow(
-		"SELECT id, bandname, COALESCE(short_name,''), COALESCE(internetsite,''), COALESCE(description,''), COALESCE(mbid,''), created_at FROM musicians WHERE id = ?",
-		id,
-	).Scan(&musician.ID, &musician.Bandname, &musician.ShortName, &musician.Internetsite, &musician.Description, &musician.MBID, &musician.CreatedAt)
-
+	id := mux.Vars(r)["id"]
+	musician, err := scanMusician(db.QueryRow("SELECT "+musicianCols+" FROM musicians WHERE id = ?", id))
 	if err == sql.ErrNoRows {
 		http.Error(w, "Musician not found", http.StatusNotFound)
 		return
@@ -116,11 +132,13 @@ func createMusician(w http.ResponseWriter, r *http.Request) {
 
 	musicians := make([]Musician, 0, len(reqs))
 	for _, req := range reqs {
-		var m Musician
-		if err := db.QueryRow(
-			"INSERT INTO musicians (bandname, short_name, internetsite, description, mbid) VALUES (?, ?, ?, ?, ?) RETURNING id, bandname, COALESCE(short_name,''), COALESCE(internetsite,''), COALESCE(description,''), COALESCE(mbid,''), created_at",
+		m, err := scanMusician(db.QueryRow(
+			`INSERT INTO musicians (bandname, short_name, internetsite, description, mbid, mastodon, instagram, facebook, soundcloud)
+			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING `+musicianCols,
 			req.Bandname, req.ShortName, req.Internetsite, req.Description, req.MBID,
-		).Scan(&m.ID, &m.Bandname, &m.ShortName, &m.Internetsite, &m.Description, &m.MBID, &m.CreatedAt); err != nil {
+			req.Mastodon, req.Instagram, req.Facebook, req.Soundcloud,
+		))
+		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
@@ -141,8 +159,7 @@ func updateMusician(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	vars := mux.Vars(r)
-	id := vars["id"]
+	id := mux.Vars(r)["id"]
 
 	var req MusicianUpdateRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -151,8 +168,10 @@ func updateMusician(w http.ResponseWriter, r *http.Request) {
 	}
 
 	result, err := db.Exec(
-		"UPDATE musicians SET bandname = ?, short_name = ?, internetsite = ?, description = ?, mbid = ? WHERE id = ?",
-		req.Bandname, req.ShortName, req.Internetsite, req.Description, req.MBID, id,
+		`UPDATE musicians SET bandname=?, short_name=?, internetsite=?, description=?, mbid=?,
+		 mastodon=?, instagram=?, facebook=?, soundcloud=? WHERE id=?`,
+		req.Bandname, req.ShortName, req.Internetsite, req.Description, req.MBID,
+		req.Mastodon, req.Instagram, req.Facebook, req.Soundcloud, id,
 	)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -165,11 +184,7 @@ func updateMusician(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var musician Musician
-	err = db.QueryRow(
-		"SELECT id, bandname, COALESCE(short_name,''), COALESCE(internetsite,''), COALESCE(description,''), COALESCE(mbid,''), created_at FROM musicians WHERE id = ?",
-		id,
-	).Scan(&musician.ID, &musician.Bandname, &musician.ShortName, &musician.Internetsite, &musician.Description, &musician.MBID, &musician.CreatedAt)
+	musician, err := scanMusician(db.QueryRow("SELECT "+musicianCols+" FROM musicians WHERE id = ?", id))
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -186,8 +201,7 @@ func deleteMusician(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	vars := mux.Vars(r)
-	id := vars["id"]
+	id := mux.Vars(r)["id"]
 
 	result, err := db.Exec("DELETE FROM musicians WHERE id = ?", id)
 	if err != nil {

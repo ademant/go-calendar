@@ -184,6 +184,10 @@ func musicianFromForm(r *http.Request) Musician {
 		Internetsite: strings.TrimSpace(r.FormValue("internetsite")),
 		Description:  strings.TrimSpace(r.FormValue("description")),
 		MBID:         strings.TrimSpace(r.FormValue("mbid")),
+		Mastodon:     strings.TrimSpace(r.FormValue("mastodon")),
+		Instagram:    strings.TrimSpace(r.FormValue("instagram")),
+		Facebook:     strings.TrimSpace(r.FormValue("facebook")),
+		Soundcloud:   strings.TrimSpace(r.FormValue("soundcloud")),
 	}
 }
 

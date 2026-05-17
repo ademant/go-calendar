@@ -44,6 +44,22 @@
     {{end}}
   </div>
 
+  <fieldset class="social-fieldset">
+    <legend>{{$.Strings.T "musician_social"}}</legend>
+
+    <label for="mastodon">{{$.Strings.T "musician_mastodon"}}</label>
+    <input id="mastodon" type="text" name="mastodon" value="{{.Musician.Mastodon}}" placeholder="@band@mastodon.social">
+
+    <label for="instagram">{{$.Strings.T "musician_instagram"}}</label>
+    <input id="instagram" type="text" name="instagram" value="{{.Musician.Instagram}}" placeholder="bandname">
+
+    <label for="facebook">{{$.Strings.T "musician_facebook"}}</label>
+    <input id="facebook" type="text" name="facebook" value="{{.Musician.Facebook}}" placeholder="bandname">
+
+    <label for="soundcloud">{{$.Strings.T "musician_soundcloud"}}</label>
+    <input id="soundcloud" type="text" name="soundcloud" value="{{.Musician.Soundcloud}}" placeholder="bandname">
+  </fieldset>
+
   <div class="form-actions">
     <button type="submit" class="btn-primary">{{$.Strings.T "admin_save"}}</button>
     <a href="/admin/musicians" class="btn-secondary">{{$.Strings.T "admin_cancel"}}</a>
@@ -74,6 +90,8 @@
 .mbid-row{display:flex;gap:.5rem;align-items:center}
 .mbid-row input{flex:1}
 .mb-open{flex-shrink:0}
+.social-fieldset{border:1px solid #ddd;border-radius:4px;padding:.75rem 1rem;display:flex;flex-direction:column;gap:.5rem;margin-top:.25rem}
+.social-fieldset legend{font-weight:600;font-size:.9rem;color:#444;padding:0 .25rem}
 .form-actions{display:flex;gap:.75rem;margin-top:.75rem}
 .btn-primary{padding:.45rem 1.2rem;background:#1a6eb5;color:#fff;border:none;border-radius:4px;font-size:.95rem;cursor:pointer}
 .btn-primary:hover{background:#0d4a80}
@@ -102,7 +120,7 @@
       results.innerHTML = '';
       var artists = data.artists || [];
       if (!artists.length) {
-        results.innerHTML = '<li style="color:#999">{{.Strings.T "musician_mb_no_results"}}</li>';
+        results.innerHTML = '<li style="color:#999">{{$.Strings.T "musician_mb_no_results"}}</li>';
         return;
       }
       artists.forEach(function(a){
@@ -139,7 +157,7 @@
         results.appendChild(li);
       });
     })
-    .catch(function(){ results.innerHTML = '<li style="color:#c00">{{.Strings.T "musician_mb_error"}}</li>'; })
+    .catch(function(){ results.innerHTML = '<li style="color:#c00">{{$.Strings.T "musician_mb_error"}}</li>'; })
     .finally(function(){ btn.disabled = false; });
   });
 
