@@ -20,6 +20,7 @@ type Location struct {
 	Address        string `json:"address"`
 	Zipcode        string `json:"zipcode"`
 	Town           string `json:"town"`
+	Country        string `json:"country,omitempty"`
 	Latitude       string `json:"latitude"`
 	Longitude      string `json:"longitude"`
 	Internetsite   string `json:"internetsite"`
@@ -33,6 +34,7 @@ type LocationCreateRequest struct {
 	Address        string `json:"address"`
 	Zipcode        string `json:"zipcode"`
 	Town           string `json:"town"`
+	Country        string `json:"country"`
 	Latitude       string `json:"latitude"`
 	Longitude      string `json:"longitude"`
 	Internetsite   string `json:"internetsite"`
@@ -83,7 +85,7 @@ func similarLocations(name, street, town string) []Location {
 	if base != "" {
 		rows, err = db.Query(`
 			SELECT id, location, COALESCE(short_name,''), address, COALESCE(zipcode,''), town,
-			       COALESCE(latitude,''), COALESCE(longitude,''), COALESCE(internetsite,''),
+			       COALESCE(country,''), COALESCE(latitude,''), COALESCE(longitude,''), COALESCE(internetsite,''),
 			       created_at, organization_id
 			FROM locations
 			WHERE town = ?
@@ -95,7 +97,7 @@ func similarLocations(name, street, town string) []Location {
 	} else {
 		rows, err = db.Query(`
 			SELECT id, location, COALESCE(short_name,''), address, COALESCE(zipcode,''), town,
-			       COALESCE(latitude,''), COALESCE(longitude,''), COALESCE(internetsite,''),
+			       COALESCE(country,''), COALESCE(latitude,''), COALESCE(longitude,''), COALESCE(internetsite,''),
 			       created_at, organization_id
 			FROM locations
 			WHERE town = ?
@@ -112,7 +114,7 @@ func similarLocations(name, street, town string) []Location {
 		var loc Location
 		var orgID sql.NullInt64
 		if err := rows.Scan(&loc.ID, &loc.Location, &loc.ShortName, &loc.Address,
-			&loc.Zipcode, &loc.Town, &loc.Latitude, &loc.Longitude,
+			&loc.Zipcode, &loc.Town, &loc.Country, &loc.Latitude, &loc.Longitude,
 			&loc.Internetsite, &loc.CreatedAt, &orgID); err != nil {
 			continue
 		}
@@ -130,6 +132,7 @@ type LocationUpdateRequest struct {
 	Address      string `json:"address"`
 	Zipcode      string `json:"zipcode"`
 	Town         string `json:"town"`
+	Country      string `json:"country"`
 	Latitude     string `json:"latitude"`
 	Longitude    string `json:"longitude"`
 	Internetsite string `json:"internetsite"`
@@ -139,7 +142,7 @@ type LocationUpdateRequest struct {
 func getLocations(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
-	rows, err := db.Query("SELECT id, location, short_name, address, zipcode, town, latitude, longitude, internetsite, created_at, organization_id FROM locations")
+	rows, err := db.Query("SELECT id, location, COALESCE(short_name,''), address, COALESCE(zipcode,''), town, COALESCE(country,''), COALESCE(latitude,''), COALESCE(longitude,''), COALESCE(internetsite,''), created_at, organization_id FROM locations")
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -150,7 +153,7 @@ func getLocations(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		var location Location
 		var orgID sql.NullInt64
-		if err := rows.Scan(&location.ID, &location.Location, &location.ShortName, &location.Address, &location.Zipcode, &location.Town, &location.Latitude, &location.Longitude, &location.Internetsite, &location.CreatedAt, &orgID); err != nil {
+		if err := rows.Scan(&location.ID, &location.Location, &location.ShortName, &location.Address, &location.Zipcode, &location.Town, &location.Country, &location.Latitude, &location.Longitude, &location.Internetsite, &location.CreatedAt, &orgID); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
@@ -244,8 +247,8 @@ func createLocation(w http.ResponseWriter, r *http.Request) {
 			orgIDArg = *req.OrganizationID
 		}
 		result, err := db.Exec(
-			"INSERT INTO locations (location, short_name, address, zipcode, town, latitude, longitude, internetsite, organization_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-			req.Location, req.ShortName, req.Address, req.Zipcode, req.Town, req.Latitude, req.Longitude, req.Internetsite, orgIDArg,
+			"INSERT INTO locations (location, short_name, address, zipcode, town, country, latitude, longitude, internetsite, organization_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+			req.Location, req.ShortName, req.Address, req.Zipcode, req.Town, req.Country, req.Latitude, req.Longitude, req.Internetsite, orgIDArg,
 		)
 		if err != nil {
 			http.Error(w, "Failed to create location", http.StatusInternalServerError)
@@ -259,6 +262,7 @@ func createLocation(w http.ResponseWriter, r *http.Request) {
 			Address:        req.Address,
 			Zipcode:        req.Zipcode,
 			Town:           req.Town,
+			Country:        req.Country,
 			Latitude:       req.Latitude,
 			Longitude:      req.Longitude,
 			Internetsite:   req.Internetsite,
@@ -281,9 +285,9 @@ func getLocation(w http.ResponseWriter, r *http.Request) {
 	var location Location
 	var orgID sql.NullInt64
 	err := db.QueryRow(
-		"SELECT id, location, short_name, address, zipcode, town, latitude, longitude, internetsite, created_at, organization_id FROM locations WHERE id = ?",
+		"SELECT id, location, COALESCE(short_name,''), address, COALESCE(zipcode,''), town, COALESCE(country,''), COALESCE(latitude,''), COALESCE(longitude,''), COALESCE(internetsite,''), created_at, organization_id FROM locations WHERE id = ?",
 		id,
-	).Scan(&location.ID, &location.Location, &location.ShortName, &location.Address, &location.Zipcode, &location.Town, &location.Latitude, &location.Longitude, &location.Internetsite, &location.CreatedAt, &orgID)
+	).Scan(&location.ID, &location.Location, &location.ShortName, &location.Address, &location.Zipcode, &location.Town, &location.Country, &location.Latitude, &location.Longitude, &location.Internetsite, &location.CreatedAt, &orgID)
 	if orgID.Valid {
 		v := int(orgID.Int64)
 		location.OrganizationID = &v
@@ -339,8 +343,8 @@ func updateLocation(w http.ResponseWriter, r *http.Request) {
 
 	// Check if location exists
 	var location Location
-	err := db.QueryRow("SELECT id, location, short_name, address, zipcode, town, latitude, longitude, internetsite, created_at FROM locations WHERE id = ?", id).
-		Scan(&location.ID, &location.Location, &location.ShortName, &location.Address, &location.Zipcode, &location.Town, &location.Latitude, &location.Longitude, &location.Internetsite, &location.CreatedAt)
+	err := db.QueryRow("SELECT id, location, COALESCE(short_name,''), address, COALESCE(zipcode,''), town, COALESCE(country,''), COALESCE(latitude,''), COALESCE(longitude,''), COALESCE(internetsite,''), created_at FROM locations WHERE id = ?", id).
+		Scan(&location.ID, &location.Location, &location.ShortName, &location.Address, &location.Zipcode, &location.Town, &location.Country, &location.Latitude, &location.Longitude, &location.Internetsite, &location.CreatedAt)
 	if err == sql.ErrNoRows {
 		http.Error(w, "Location not found", http.StatusNotFound)
 		return
@@ -363,6 +367,9 @@ func updateLocation(w http.ResponseWriter, r *http.Request) {
 	if req.Town != "" {
 		location.Town = req.Town
 	}
+	if req.Country != "" {
+		location.Country = req.Country
+	}
 	if req.Latitude != "" {
 		location.Latitude = req.Latitude
 	}
@@ -375,8 +382,8 @@ func updateLocation(w http.ResponseWriter, r *http.Request) {
 
 	// Execute update
 	_, err = db.Exec(
-		"UPDATE locations SET short_name = ?, address = ?, zipcode = ?, town = ?, latitude = ?, longitude = ?, internetsite = ? WHERE id = ?",
-		location.ShortName, location.Address, location.Zipcode, location.Town, location.Latitude, location.Longitude, location.Internetsite, id,
+		"UPDATE locations SET short_name = ?, address = ?, zipcode = ?, town = ?, country = ?, latitude = ?, longitude = ?, internetsite = ? WHERE id = ?",
+		location.ShortName, location.Address, location.Zipcode, location.Town, location.Country, location.Latitude, location.Longitude, location.Internetsite, id,
 	)
 	if err != nil {
 		http.Error(w, "Failed to update location", http.StatusInternalServerError)

@@ -399,6 +399,15 @@ func migrateDB() {
 		FOREIGN KEY (location_id) REFERENCES locations(id) ON DELETE CASCADE
 	)`)
 	db.Exec("CREATE INDEX IF NOT EXISTS idx_event_locations_event_id ON event_locations(event_id)")
+	db.Exec("ALTER TABLE locations ADD COLUMN country TEXT")
+	db.Exec(`CREATE TABLE IF NOT EXISTS event_musicians (
+		event_id INTEGER NOT NULL,
+		musician_id INTEGER NOT NULL,
+		PRIMARY KEY (event_id, musician_id),
+		FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE CASCADE,
+		FOREIGN KEY (musician_id) REFERENCES musicians(id) ON DELETE CASCADE
+	)`)
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_event_musicians_event_id ON event_musicians(event_id)")
 	db.Exec("ALTER TABLE events ADD COLUMN capacity INTEGER")
 	db.Exec(`CREATE TABLE IF NOT EXISTS bookings (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -508,6 +517,7 @@ func createTables() error {
 		address TEXT,
 		zipcode TEXT,
 		town TEXT,
+		country TEXT,
 		latitude TEXT,
 		longitude TEXT,
 		internetsite TEXT,
@@ -605,6 +615,14 @@ func createTables() error {
 		FOREIGN KEY (location_id) REFERENCES locations(id) ON DELETE CASCADE
 	);
 	CREATE INDEX IF NOT EXISTS idx_event_locations_event_id ON event_locations(event_id);
+	CREATE TABLE IF NOT EXISTS event_musicians (
+		event_id INTEGER NOT NULL,
+		musician_id INTEGER NOT NULL,
+		PRIMARY KEY (event_id, musician_id),
+		FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE CASCADE,
+		FOREIGN KEY (musician_id) REFERENCES musicians(id) ON DELETE CASCADE
+	);
+	CREATE INDEX IF NOT EXISTS idx_event_musicians_event_id ON event_musicians(event_id);
 	CREATE TABLE IF NOT EXISTS bookings (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		event_id INTEGER NOT NULL,

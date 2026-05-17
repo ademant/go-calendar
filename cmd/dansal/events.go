@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"strconv"
 	"strings"
@@ -45,10 +46,14 @@ type Event struct {
 	Timetable      []TimetableEntry `json:"timetable,omitempty"`
 	Capacity       *int             `json:"capacity,omitempty"`
 	Pricing        *Pricing         `json:"pricing,omitempty"`
-	Locations      []Location       `json:"locations,omitempty"`
-	Location       string           `json:"-"`
-	TagsJSON       string           `json:"-"`
-	PricingJSON    string           `json:"-"`
+	Locations       []Location       `json:"locations,omitempty"`
+	Musicians       []Musician       `json:"musicians,omitempty"`
+	LocationID      *int             `json:"location_id,omitempty"`
+	Location        string           `json:"location,omitempty"`
+	LocationTown    string           `json:"location_town,omitempty"`
+	LocationCountry string           `json:"location_country,omitempty"`
+	TagsJSON        string           `json:"-"`
+	PricingJSON     string           `json:"-"`
 }
 
 type EventDate struct {
@@ -82,7 +87,7 @@ type EventCreateRequest struct {
 	URL                string               `json:"url,omitempty"`
 	Location           EventLocationRequest `json:"location"`
 	Date               []EventDate          `json:"date"`
-	Musicians          []string             `json:"musicians"`
+	Musicians          []int                `json:"musicians,omitempty"`
 	Source             string               `json:"source,omitempty"`
 	OrganizationID     *int                 `json:"organization_id,omitempty"`
 	SourceLastModified int64                `json:"source_last_modified,omitempty"`
@@ -128,7 +133,7 @@ var timeFormats = []string{
 }
 
 // SELECT used by all event list / single-event queries
-const eventListSelect = `SELECT e.id, e.uid, e.title, e.description, e.start_time, e.end_time, e.has_ball, e.has_workshop, e.is_cancelled, e.tags, e.is_published, e.short_code, COALESCE(e.url,''), COALESCE(e.source,''), e.created_at, COALESCE(l.location, ''), e.organization_id, COALESCE(e.pricing,''), e.capacity FROM events e LEFT JOIN locations l ON e.location_id = l.id`
+const eventListSelect = `SELECT e.id, e.uid, e.title, e.description, e.start_time, e.end_time, e.has_ball, e.has_workshop, e.is_cancelled, e.tags, e.is_published, e.short_code, COALESCE(e.url,''), COALESCE(e.source,''), e.created_at, COALESCE(l.location,''), e.organization_id, COALESCE(e.pricing,''), e.capacity, e.location_id, COALESCE(l.town,''), COALESCE(l.country,'') FROM events e LEFT JOIN locations l ON e.location_id = l.id`
 
 // ── low-level helpers ──────────────────────────────────────────────────────
 
@@ -171,13 +176,12 @@ func scanEventRow(s scanner) (Event, error) {
 	var event Event
 	var hasBallInt, hasWorkshopInt, isCancelledInt, isPublishedInt int
 	var startEpoch, endEpoch int64
-	var orgID sql.NullInt64
-	var capacity sql.NullInt64
+	var orgID, locID, capacity sql.NullInt64
 	var uid sql.NullString
 	if err := s.Scan(&event.ID, &uid, &event.Title, &event.Description, &startEpoch, &endEpoch,
 		&hasBallInt, &hasWorkshopInt, &isCancelledInt, &event.TagsJSON, &isPublishedInt,
 		&event.ShortCode, &event.URL, &event.Source, &event.CreatedAt, &event.Location, &orgID,
-		&event.PricingJSON, &capacity); err != nil {
+		&event.PricingJSON, &capacity, &locID, &event.LocationTown, &event.LocationCountry); err != nil {
 		return Event{}, err
 	}
 	if uid.Valid {
@@ -193,6 +197,10 @@ func scanEventRow(s scanner) (Event, error) {
 	if orgID.Valid {
 		v := int(orgID.Int64)
 		event.OrganizationID = &v
+	}
+	if locID.Valid {
+		v := int(locID.Int64)
+		event.LocationID = &v
 	}
 	if capacity.Valid {
 		v := int(capacity.Int64)
@@ -210,19 +218,23 @@ func scanEventRow(s scanner) (Event, error) {
 	return event, nil
 }
 
-// fetchEventByID loads a single event by primary key (no location join).
+// fetchEventByID loads a single event by primary key, including location fields via JOIN.
 func fetchEventByID(q querier, id int) (Event, error) {
 	var event Event
 	var hasBallInt, hasWorkshopInt, isCancelledInt, isPublishedInt int
 	var startEpoch, endEpoch int64
-	var orgID sql.NullInt64
+	var orgID, locID, capacity sql.NullInt64
 	var uid sql.NullString
-	var capacity sql.NullInt64
 	err := q.QueryRow(
-		"SELECT id, uid, title, description, start_time, end_time, has_ball, has_workshop, is_cancelled, tags, is_published, short_code, COALESCE(url,''), COALESCE(source,''), created_at, organization_id, COALESCE(pricing,''), capacity FROM events WHERE id = ?", id,
+		`SELECT e.id, e.uid, e.title, e.description, e.start_time, e.end_time, e.has_ball, e.has_workshop,
+		 e.is_cancelled, e.tags, e.is_published, e.short_code, COALESCE(e.url,''), COALESCE(e.source,''),
+		 e.created_at, e.organization_id, COALESCE(e.pricing,''), e.capacity, e.location_id,
+		 COALESCE(l.location,''), COALESCE(l.town,''), COALESCE(l.country,'')
+		 FROM events e LEFT JOIN locations l ON e.location_id = l.id WHERE e.id = ?`, id,
 	).Scan(&event.ID, &uid, &event.Title, &event.Description, &startEpoch, &endEpoch,
 		&hasBallInt, &hasWorkshopInt, &isCancelledInt, &event.TagsJSON, &isPublishedInt,
-		&event.ShortCode, &event.URL, &event.Source, &event.CreatedAt, &orgID, &event.PricingJSON, &capacity)
+		&event.ShortCode, &event.URL, &event.Source, &event.CreatedAt, &orgID, &event.PricingJSON,
+		&capacity, &locID, &event.Location, &event.LocationTown, &event.LocationCountry)
 	if uid.Valid {
 		event.UID = uid.String
 	}
@@ -239,6 +251,10 @@ func fetchEventByID(q querier, id int) (Event, error) {
 	if orgID.Valid {
 		v := int(orgID.Int64)
 		event.OrganizationID = &v
+	}
+	if locID.Valid {
+		v := int(locID.Int64)
+		event.LocationID = &v
 	}
 	if capacity.Valid {
 		v := int(capacity.Int64)
@@ -334,6 +350,21 @@ func applyEventFilters(r *http.Request, query *string, args *[]interface{}) {
 	if tag := q.Get("tag"); tag != "" {
 		*query += " AND EXISTS (SELECT 1 FROM json_each(e.tags) WHERE value = ?)"
 		*args = append(*args, tag)
+	}
+	if country := q.Get("country"); country != "" {
+		*query += " AND l.country = ?"
+		*args = append(*args, country)
+	}
+	if latStr, lonStr, radStr := q.Get("lat"), q.Get("lon"), q.Get("radius_km"); latStr != "" && lonStr != "" && radStr != "" {
+		lat, latErr := strconv.ParseFloat(latStr, 64)
+		lon, lonErr := strconv.ParseFloat(lonStr, 64)
+		radius, radErr := strconv.ParseFloat(radStr, 64)
+		if latErr == nil && lonErr == nil && radErr == nil && radius > 0 {
+			latDelta := radius / 111.0
+			lonDelta := radius / (111.0 * math.Cos(lat*math.Pi/180))
+			*query += " AND CAST(l.latitude AS REAL) BETWEEN ? AND ? AND CAST(l.longitude AS REAL) BETWEEN ? AND ?"
+			*args = append(*args, lat-latDelta, lat+latDelta, lon-lonDelta, lon+lonDelta)
+		}
 	}
 }
 
@@ -528,6 +559,13 @@ func createEventFromRequest(q querier, req EventCreateRequest, locationID int64,
 			allCreated = false
 		}
 
+		if len(req.Musicians) > 0 {
+			q.Exec("DELETE FROM event_musicians WHERE event_id = ?", id)
+			for _, musicianID := range req.Musicians {
+				q.Exec("INSERT OR IGNORE INTO event_musicians (event_id, musician_id) VALUES (?, ?)", id, musicianID)
+			}
+		}
+
 		event, err := fetchEventByID(q, id)
 		if err != nil {
 			return nil, false, err
@@ -570,18 +608,42 @@ func annotateEditable(events []Event, userRole string, userID int) {
 	}
 }
 
+// fetchEventMusicians returns musicians linked to an event via event_musicians.
+func fetchEventMusicians(eventID int) ([]Musician, error) {
+	rows, err := db.Query(
+		`SELECT m.id, m.bandname, COALESCE(m.short_name,''), COALESCE(m.internetsite,''),
+		 COALESCE(m.description,''), m.created_at
+		 FROM musicians m JOIN event_musicians em ON m.id = em.musician_id
+		 WHERE em.event_id = ? ORDER BY m.bandname`,
+		eventID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var musicians []Musician
+	for rows.Next() {
+		var m Musician
+		if err := rows.Scan(&m.ID, &m.Bandname, &m.ShortName, &m.Internetsite, &m.Description, &m.CreatedAt); err != nil {
+			return nil, err
+		}
+		musicians = append(musicians, m)
+	}
+	return musicians, nil
+}
+
 // fetchAllEventLocations returns locations for an event: the primary location
 // (events.location_id) first, followed by any entries in event_locations.
 func fetchAllEventLocations(eventID int) ([]Location, error) {
 	const cols = `l.id, l.location, COALESCE(l.short_name,''), COALESCE(l.address,''),
-		COALESCE(l.zipcode,''), COALESCE(l.town,''), COALESCE(l.latitude,''),
+		COALESCE(l.zipcode,''), COALESCE(l.town,''), COALESCE(l.country,''), COALESCE(l.latitude,''),
 		COALESCE(l.longitude,''), COALESCE(l.internetsite,''), l.created_at, l.organization_id`
 
 	scanLoc := func(s scanner) (Location, error) {
 		var loc Location
 		var orgID sql.NullInt64
 		if err := s.Scan(&loc.ID, &loc.Location, &loc.ShortName, &loc.Address,
-			&loc.Zipcode, &loc.Town, &loc.Latitude, &loc.Longitude,
+			&loc.Zipcode, &loc.Town, &loc.Country, &loc.Latitude, &loc.Longitude,
 			&loc.Internetsite, &loc.CreatedAt, &orgID); err != nil {
 			return Location{}, err
 		}
@@ -1128,6 +1190,9 @@ func getEvent(w http.ResponseWriter, r *http.Request) {
 	}
 	if locs, err := fetchAllEventLocations(event.ID); err == nil && len(locs) > 0 {
 		event.Locations = locs
+	}
+	if musicians, err := fetchEventMusicians(event.ID); err == nil && len(musicians) > 0 {
+		event.Musicians = musicians
 	}
 
 	if strings.Contains(accept, "text/calendar") {
