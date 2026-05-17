@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -46,6 +47,68 @@ func parseFolkdanceTime(datetime, date string) (string, error) {
 		return t.UTC().Format(time.RFC3339), nil
 	}
 	return "", fmt.Errorf("no time value")
+}
+
+// parseFolkdancePrice converts a folkdance.page price string (e.g. "€12-€18",
+// "$15", "donation", "10 PLN") into a structured Pricing, or nil when the
+// string is empty or unparseable.
+func parseFolkdancePrice(s string) *Pricing {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return nil
+	}
+	lower := strings.ToLower(s)
+	if lower == "free" {
+		return &Pricing{Type: "free"}
+	}
+	if lower == "donation" {
+		return &Pricing{Type: "donation"}
+	}
+
+	// stripSym strips a leading currency symbol and returns the remainder plus ISO code.
+	stripSym := func(t string) (string, string) {
+		switch {
+		case strings.HasPrefix(t, "€"):
+			return t[len("€"):], "EUR"
+		case strings.HasPrefix(t, "£"):
+			return t[len("£"):], "GBP"
+		case strings.HasPrefix(t, "$"):
+			return t[1:], "USD"
+		}
+		return t, ""
+	}
+
+	rest, currency := stripSym(s)
+
+	// Range: "€12-€18" or "$15-$20" — hi may also carry a currency prefix.
+	if idx := strings.Index(rest, "-"); idx > 0 {
+		hiStr, _ := stripSym(rest[idx+1:])
+		lo, errLo := strconv.ParseFloat(rest[:idx], 64)
+		hi, errHi := strconv.ParseFloat(hiStr, 64)
+		if errLo == nil && errHi == nil {
+			return &Pricing{
+				Type:     "multiple",
+				Currency: currency,
+				Prices:   []Price{{Label: "from", Amount: lo}, {Label: "to", Amount: hi}},
+			}
+		}
+	}
+
+	// Single amount with symbol prefix: "€98", "£7.50".
+	if currency != "" {
+		if amt, err := strconv.ParseFloat(rest, 64); err == nil {
+			return &Pricing{Type: "single", Amount: amt, Currency: currency}
+		}
+	}
+
+	// "10 PLN" style: numeric amount followed by a currency code.
+	if parts := strings.Fields(s); len(parts) == 2 {
+		if amt, err := strconv.ParseFloat(parts[0], 64); err == nil {
+			return &Pricing{Type: "single", Amount: amt, Currency: parts[1]}
+		}
+	}
+
+	return nil
 }
 
 func folkdanceLocationString(city, state, country string) string {
@@ -153,10 +216,15 @@ func importFromFolkdanceJSON(src FetchSource) ([]Event, bool, error) {
 		locStr := folkdanceLocationString(fe.City, fe.State, fe.Country)
 
 		var musicianIDs []int
-		for _, band := range fe.Bands {
-			id, err := ensureMusician(tx, band)
+		seenMusician := make(map[string]bool)
+		for _, name := range append(fe.Bands, fe.Callers...) {
+			if name == "" || seenMusician[name] {
+				continue
+			}
+			seenMusician[name] = true
+			id, err := ensureMusician(tx, name)
 			if err != nil {
-				return nil, false, fmt.Errorf("ensureMusician %q: %w", band, err)
+				return nil, false, fmt.Errorf("ensureMusician %q: %w", name, err)
 			}
 			if id > 0 {
 				musicianIDs = append(musicianIDs, int(id))
@@ -165,6 +233,7 @@ func importFromFolkdanceJSON(src FetchSource) ([]Event, bool, error) {
 
 		eventReq := EventCreateRequest{
 			Title:          fe.Name,
+			Description:    fe.Details,
 			StartTime:      startTime,
 			EndTime:        endTime,
 			HasBall:        fe.Social,
@@ -175,6 +244,7 @@ func importFromFolkdanceJSON(src FetchSource) ([]Event, bool, error) {
 			Source:         src.URL,
 			OrganizationID: ensureOrgByName(fe.Organisation),
 			Musicians:      musicianIDs,
+			Pricing:        parseFolkdancePrice(fe.Price),
 			Location: EventLocationRequest{
 				Location: locStr,
 				Town:     fe.City,
