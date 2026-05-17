@@ -15,6 +15,7 @@ type Musician struct {
 	Bandname     string `json:"bandname"`
 	ShortName    string `json:"short_name,omitempty"`
 	Internetsite string `json:"internetsite"`
+	Description  string `json:"description,omitempty"`
 	CreatedAt    string `json:"created_at"`
 }
 
@@ -22,19 +23,21 @@ type MusicianCreateRequest struct {
 	Bandname     string `json:"bandname"`
 	ShortName    string `json:"short_name"`
 	Internetsite string `json:"internetsite"`
+	Description  string `json:"description"`
 }
 
 type MusicianUpdateRequest struct {
 	Bandname     string `json:"bandname"`
 	ShortName    string `json:"short_name"`
 	Internetsite string `json:"internetsite"`
+	Description  string `json:"description"`
 }
 
 // GET /api/v1/musicians - List all musicians
 func getMusicians(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
-	rows, err := db.Query("SELECT id, bandname, short_name, internetsite, created_at FROM musicians")
+	rows, err := db.Query("SELECT id, bandname, COALESCE(short_name,''), COALESCE(internetsite,''), COALESCE(description,''), created_at FROM musicians")
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -44,7 +47,7 @@ func getMusicians(w http.ResponseWriter, r *http.Request) {
 	musicians := []Musician{}
 	for rows.Next() {
 		var musician Musician
-		if err := rows.Scan(&musician.ID, &musician.Bandname, &musician.ShortName, &musician.Internetsite, &musician.CreatedAt); err != nil {
+		if err := rows.Scan(&musician.ID, &musician.Bandname, &musician.ShortName, &musician.Internetsite, &musician.Description, &musician.CreatedAt); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
@@ -63,9 +66,9 @@ func getMusician(w http.ResponseWriter, r *http.Request) {
 
 	var musician Musician
 	err := db.QueryRow(
-		"SELECT id, bandname, short_name, internetsite, created_at FROM musicians WHERE id = ?",
+		"SELECT id, bandname, COALESCE(short_name,''), COALESCE(internetsite,''), COALESCE(description,''), created_at FROM musicians WHERE id = ?",
 		id,
-	).Scan(&musician.ID, &musician.Bandname, &musician.ShortName, &musician.Internetsite, &musician.CreatedAt)
+	).Scan(&musician.ID, &musician.Bandname, &musician.ShortName, &musician.Internetsite, &musician.Description, &musician.CreatedAt)
 
 	if err == sql.ErrNoRows {
 		http.Error(w, "Musician not found", http.StatusNotFound)
@@ -112,9 +115,9 @@ func createMusician(w http.ResponseWriter, r *http.Request) {
 	for _, req := range reqs {
 		var m Musician
 		if err := db.QueryRow(
-			"INSERT INTO musicians (bandname, short_name, internetsite) VALUES (?, ?, ?) RETURNING id, bandname, COALESCE(short_name,''), COALESCE(internetsite,''), created_at",
-			req.Bandname, req.ShortName, req.Internetsite,
-		).Scan(&m.ID, &m.Bandname, &m.ShortName, &m.Internetsite, &m.CreatedAt); err != nil {
+			"INSERT INTO musicians (bandname, short_name, internetsite, description) VALUES (?, ?, ?, ?) RETURNING id, bandname, COALESCE(short_name,''), COALESCE(internetsite,''), COALESCE(description,''), created_at",
+			req.Bandname, req.ShortName, req.Internetsite, req.Description,
+		).Scan(&m.ID, &m.Bandname, &m.ShortName, &m.Internetsite, &m.Description, &m.CreatedAt); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
@@ -145,8 +148,8 @@ func updateMusician(w http.ResponseWriter, r *http.Request) {
 	}
 
 	result, err := db.Exec(
-		"UPDATE musicians SET bandname = ?, short_name = ?, internetsite = ? WHERE id = ?",
-		req.Bandname, req.ShortName, req.Internetsite, id,
+		"UPDATE musicians SET bandname = ?, short_name = ?, internetsite = ?, description = ? WHERE id = ?",
+		req.Bandname, req.ShortName, req.Internetsite, req.Description, id,
 	)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -161,9 +164,9 @@ func updateMusician(w http.ResponseWriter, r *http.Request) {
 
 	var musician Musician
 	err = db.QueryRow(
-		"SELECT id, bandname, short_name, internetsite, created_at FROM musicians WHERE id = ?",
+		"SELECT id, bandname, COALESCE(short_name,''), COALESCE(internetsite,''), COALESCE(description,''), created_at FROM musicians WHERE id = ?",
 		id,
-	).Scan(&musician.ID, &musician.Bandname, &musician.ShortName, &musician.Internetsite, &musician.CreatedAt)
+	).Scan(&musician.ID, &musician.Bandname, &musician.ShortName, &musician.Internetsite, &musician.Description, &musician.CreatedAt)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return

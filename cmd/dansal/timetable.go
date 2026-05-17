@@ -14,22 +14,24 @@ import (
 )
 
 type TimetableEntry struct {
-	ID         int    `json:"id"`
-	EventID    int    `json:"event_id"`
-	StartTime  string `json:"start_time"`
-	EndTime    string `json:"end_time"`
-	Title      string `json:"title"`
-	Room       string `json:"room,omitempty"`
-	LocationID *int   `json:"location_id,omitempty"`
-	CreatedAt  string `json:"created_at"`
+	ID          int    `json:"id"`
+	EventID     int    `json:"event_id"`
+	StartTime   string `json:"start_time"`
+	EndTime     string `json:"end_time"`
+	Title       string `json:"title"`
+	Description string `json:"description,omitempty"`
+	Room        string `json:"room,omitempty"`
+	LocationID  *int   `json:"location_id,omitempty"`
+	CreatedAt   string `json:"created_at"`
 }
 
 type TimetableEntryRequest struct {
-	StartTime  string `json:"start_time"`
-	EndTime    string `json:"end_time"`
-	Title      string `json:"title"`
-	Room       string `json:"room"`
-	LocationID *int   `json:"location_id"`
+	StartTime   string `json:"start_time"`
+	EndTime     string `json:"end_time"`
+	Title       string `json:"title"`
+	Description string `json:"description"`
+	Room        string `json:"room"`
+	LocationID  *int   `json:"location_id"`
 }
 
 var timeSlotRe = regexp.MustCompile(`^([01]\d|2[0-3]):[0-5]\d$`)
@@ -39,7 +41,7 @@ func validTimeSlot(s string) bool { return timeSlotRe.MatchString(s) }
 func scanTimetableRow(s scanner) (TimetableEntry, error) {
 	var e TimetableEntry
 	var locID sql.NullInt64
-	if err := s.Scan(&e.ID, &e.EventID, &e.StartTime, &e.EndTime, &e.Title, &e.Room, &locID, &e.CreatedAt); err != nil {
+	if err := s.Scan(&e.ID, &e.EventID, &e.StartTime, &e.EndTime, &e.Title, &e.Description, &e.Room, &locID, &e.CreatedAt); err != nil {
 		return TimetableEntry{}, err
 	}
 	if locID.Valid {
@@ -49,12 +51,12 @@ func scanTimetableRow(s scanner) (TimetableEntry, error) {
 	return e, nil
 }
 
-const timetableReturning = "RETURNING id, event_id, start_time, end_time, title, COALESCE(room,''), location_id, created_at"
+const timetableReturning = "RETURNING id, event_id, start_time, end_time, title, COALESCE(description,''), COALESCE(room,''), location_id, created_at"
 
 // fetchTimetable returns all entries for an event ordered by start_time.
 func fetchTimetable(eventID int) ([]TimetableEntry, error) {
 	rows, err := db.Query(
-		"SELECT id, event_id, start_time, end_time, title, COALESCE(room,''), location_id, created_at FROM timetable_entries WHERE event_id = ? ORDER BY start_time, id",
+		"SELECT id, event_id, start_time, end_time, title, COALESCE(description,''), COALESCE(room,''), location_id, created_at FROM timetable_entries WHERE event_id = ? ORDER BY start_time, id",
 		eventID,
 	)
 	if err != nil {
@@ -125,8 +127,8 @@ func insertEntry(q querier, eventID int, req TimetableEntryRequest) (TimetableEn
 		locIDArg = *req.LocationID
 	}
 	return scanTimetableRow(q.QueryRow(
-		"INSERT INTO timetable_entries (event_id, start_time, end_time, title, room, location_id) VALUES (?, ?, ?, ?, ?, ?) "+timetableReturning,
-		eventID, req.StartTime, req.EndTime, req.Title, req.Room, locIDArg,
+		"INSERT INTO timetable_entries (event_id, start_time, end_time, title, description, room, location_id) VALUES (?, ?, ?, ?, ?, ?, ?) "+timetableReturning,
+		eventID, req.StartTime, req.EndTime, req.Title, req.Description, req.Room, locIDArg,
 	))
 }
 
