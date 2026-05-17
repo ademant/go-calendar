@@ -3,6 +3,8 @@ package main
 import (
 	"database/sql"
 	"encoding/json"
+	"errors"
+	"io"
 	"net/http"
 
 	"github.com/gorilla/mux"
@@ -76,41 +78,51 @@ func getMusician(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(musician)
 }
 
-// POST /api/v1/musicians - Create musician
+// POST /api/v1/musicians - Create one or more musicians
 func createMusician(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
-	var req MusicianCreateRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+	requesterRole := r.Header.Get("X-User-Role")
+	if requesterRole != RoleAdmin && requesterRole != RoleUser {
+		http.Error(w, "Forbidden", http.StatusForbidden)
 		return
 	}
 
-	result, err := db.Exec(
-		"INSERT INTO musicians (bandname, short_name, internetsite) VALUES (?, ?, ?)",
-		req.Bandname, req.ShortName, req.Internetsite,
-	)
+	body, err := io.ReadAll(r.Body)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		status := http.StatusBadRequest
+		if errors.As(err, new(*http.MaxBytesError)) {
+			status = http.StatusRequestEntityTooLarge
+		}
+		http.Error(w, err.Error(), status)
 		return
 	}
 
-	id, _ := result.LastInsertId()
-	musician := Musician{
-		ID:           int(id),
-		Bandname:     req.Bandname,
-		ShortName:    req.ShortName,
-		Internetsite: req.Internetsite,
+	var reqs []MusicianCreateRequest
+	if json.Unmarshal(body, &reqs) != nil || len(reqs) == 0 || reqs[0].Bandname == "" {
+		var single MusicianCreateRequest
+		if err := json.Unmarshal(body, &single); err != nil {
+			http.Error(w, "Invalid request body", http.StatusBadRequest)
+			return
+		}
+		reqs = []MusicianCreateRequest{single}
 	}
 
-	err = db.QueryRow("SELECT created_at FROM musicians WHERE id = ?", id).Scan(&musician.CreatedAt)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
+	musicians := make([]Musician, 0, len(reqs))
+	for _, req := range reqs {
+		var m Musician
+		if err := db.QueryRow(
+			"INSERT INTO musicians (bandname, short_name, internetsite) VALUES (?, ?, ?) RETURNING id, bandname, COALESCE(short_name,''), COALESCE(internetsite,''), created_at",
+			req.Bandname, req.ShortName, req.Internetsite,
+		).Scan(&m.ID, &m.Bandname, &m.ShortName, &m.Internetsite, &m.CreatedAt); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		musicians = append(musicians, m)
 	}
 
 	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(musician)
+	json.NewEncoder(w).Encode(musicians)
 }
 
 // PUT /api/v1/musicians/{id} - Update musician

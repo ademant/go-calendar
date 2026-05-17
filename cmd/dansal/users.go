@@ -143,6 +143,11 @@ func getUsers(w http.ResponseWriter, r *http.Request) {
 func createUser(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
+	if r.Header.Get("X-User-Role") != RoleAdmin {
+		http.Error(w, "Forbidden: only admins may create users directly; use invite links instead", http.StatusForbidden)
+		return
+	}
+
 	var req UserCreateRequest
 
 	// Parse request body based on content type

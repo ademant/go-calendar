@@ -591,6 +591,7 @@ func main() {
 	eventRoutes.Use(TokenMiddleware)
 	eventRoutes.HandleFunc("", getEvents).Methods("GET")
 	eventRoutes.HandleFunc("", createEvent).Methods("POST")
+	eventRoutes.HandleFunc("", patchEvents).Methods("PATCH")
 	eventRoutes.HandleFunc("/{id}", getEvent).Methods("GET")
 	eventRoutes.HandleFunc("/{id}", deleteEvent).Methods("DELETE")
 	eventRoutes.HandleFunc("/{id}/publish", publishEvent).Methods("POST")

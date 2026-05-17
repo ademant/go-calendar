@@ -232,6 +232,22 @@ func deleteEventImage(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	if userRole != RoleAdmin {
+		callerID, _ := strconv.Atoi(r.Header.Get("X-User-ID"))
+		var orgID sql.NullInt64
+		if err := db.QueryRow("SELECT organization_id FROM events WHERE id = ?", eventID).Scan(&orgID); err == sql.ErrNoRows {
+			http.Error(w, "Event not found", http.StatusNotFound)
+			return
+		} else if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		if !orgID.Valid || !isOrgMember(callerID, int(orgID.Int64)) {
+			http.Error(w, "Forbidden: not a member of the event's organization", http.StatusForbidden)
+			return
+		}
+	}
+
 	imgPath := filepath.Join(config.Server.ImagesDir, eventID+".avif")
 	if err := os.Remove(imgPath); err != nil {
 		if os.IsNotExist(err) {
@@ -257,13 +273,22 @@ func uploadEventImage(w http.ResponseWriter, r *http.Request) {
 	eventID := mux.Vars(r)["event_id"]
 
 	var id int
-	err := db.QueryRow("SELECT id FROM events WHERE id = ?", eventID).Scan(&id)
+	var orgID sql.NullInt64
+	err := db.QueryRow("SELECT id, organization_id FROM events WHERE id = ?", eventID).Scan(&id, &orgID)
 	if err == sql.ErrNoRows {
 		http.Error(w, "Event not found", http.StatusNotFound)
 		return
 	} else if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
+	}
+
+	if userRole != RoleAdmin {
+		callerID, _ := strconv.Atoi(r.Header.Get("X-User-ID"))
+		if !orgID.Valid || !isOrgMember(callerID, int(orgID.Int64)) {
+			http.Error(w, "Forbidden: not a member of the event's organization", http.StatusForbidden)
+			return
+		}
 	}
 
 	if err := r.ParseMultipartForm(config.Server.MaxBodyBytes); err != nil {

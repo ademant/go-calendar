@@ -41,6 +41,7 @@ type Event struct {
 	CreatedAt      string   `json:"created_at"`
 	ImageURL       string   `json:"image_url,omitempty"`
 	OrganizationID *int     `json:"organization_id,omitempty"`
+	Editable       *bool    `json:"editable,omitempty"`
 	Location       string   `json:"-"`
 	TagsJSON       string   `json:"-"`
 }
@@ -49,6 +50,16 @@ type EventDate struct {
 	Description string `json:"description"`
 	StartTime   string `json:"start_time"`
 	EndTime     string `json:"end_time"`
+}
+
+type EventPatchRequest struct {
+	IDs            []int  `json:"ids"`
+	OrganizationID *int   `json:"organization_id"`
+	LocationID     *int   `json:"location_id"`
+	IsCancelled    *bool  `json:"is_cancelled"`
+	IsPublished    *bool  `json:"is_published"`
+	HasBall        *bool  `json:"has_ball"`
+	HasWorkshop    *bool  `json:"has_workshop"`
 }
 
 type EventCreateRequest struct {
@@ -468,12 +479,142 @@ func createEventFromRequest(q querier, req EventCreateRequest, locationID int64,
 	return createdEvents, allCreated, nil
 }
 
+// userOrgSet returns the set of organization IDs the user is a member of.
+func userOrgSet(userID int) map[int]bool {
+	rows, err := db.Query("SELECT organization_id FROM organization_members WHERE user_id = ?", userID)
+	if err != nil {
+		return nil
+	}
+	defer rows.Close()
+	orgs := make(map[int]bool)
+	for rows.Next() {
+		var id int
+		rows.Scan(&id)
+		orgs[id] = true
+	}
+	return orgs
+}
+
+// annotateEditable sets Editable on each event based on the caller's role.
+// Admins can edit everything; users can edit events belonging to their orgs.
+// The org membership set is fetched once to avoid N+1 queries.
+func annotateEditable(events []Event, userRole string, userID int) {
+	isAdmin := userRole == RoleAdmin
+	var memberOrgs map[int]bool
+	if !isAdmin && userRole == RoleUser {
+		memberOrgs = userOrgSet(userID)
+	}
+	for i := range events {
+		editable := isAdmin || (memberOrgs != nil && events[i].OrganizationID != nil && memberOrgs[*events[i].OrganizationID])
+		events[i].Editable = &editable
+	}
+}
+
 // ── HTTP handlers ──────────────────────────────────────────────────────────
+
+// PATCH /api/v1/events
+func patchEvents(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	userRole := r.Header.Get("X-User-Role")
+	if userRole != RoleAdmin && userRole != RoleUser {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
+	callerID, _ := strconv.Atoi(r.Header.Get("X-User-ID"))
+
+	var req EventPatchRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+	if len(req.IDs) == 0 {
+		http.Error(w, "ids is required", http.StatusBadRequest)
+		return
+	}
+
+	// Build SET clause from whichever fields are present.
+	var setClauses []string
+	var setArgs []interface{}
+	if req.OrganizationID != nil {
+		setClauses = append(setClauses, "organization_id = ?")
+		setArgs = append(setArgs, *req.OrganizationID)
+	}
+	if req.LocationID != nil {
+		setClauses = append(setClauses, "location_id = ?")
+		setArgs = append(setArgs, *req.LocationID)
+	}
+	if req.IsCancelled != nil {
+		setClauses = append(setClauses, "is_cancelled = ?")
+		setArgs = append(setArgs, *req.IsCancelled)
+	}
+	if req.IsPublished != nil {
+		setClauses = append(setClauses, "is_published = ?")
+		setArgs = append(setArgs, *req.IsPublished)
+	}
+	if req.HasBall != nil {
+		setClauses = append(setClauses, "has_ball = ?")
+		setArgs = append(setArgs, *req.HasBall)
+	}
+	if req.HasWorkshop != nil {
+		setClauses = append(setClauses, "has_workshop = ?")
+		setArgs = append(setArgs, *req.HasWorkshop)
+	}
+	if len(setClauses) == 0 {
+		http.Error(w, "no fields to update", http.StatusBadRequest)
+		return
+	}
+
+	// Build the IN placeholder list once; reused for auth check and update.
+	placeholders := strings.Repeat("?,", len(req.IDs)-1) + "?"
+	idArgs := make([]interface{}, len(req.IDs))
+	for i, id := range req.IDs {
+		idArgs[i] = id
+	}
+
+	if userRole != RoleAdmin {
+		// One query: count events the caller is not allowed to touch.
+		// An event is off-limits when it has no org or its org is not one
+		// the caller belongs to.
+		authArgs := append(append([]interface{}{}, idArgs...), callerID)
+		var forbidden int
+		err := db.QueryRow(fmt.Sprintf(
+			"SELECT COUNT(*) FROM events WHERE id IN (%s) AND (organization_id IS NULL OR organization_id NOT IN (SELECT organization_id FROM organization_members WHERE user_id = ?))",
+			placeholders,
+		), authArgs...).Scan(&forbidden)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		if forbidden > 0 {
+			http.Error(w, "Forbidden: not authorized to update one or more of the specified events", http.StatusForbidden)
+			return
+		}
+		// Also verify membership in the target org when reassigning.
+		if req.OrganizationID != nil && !isOrgMember(callerID, *req.OrganizationID) {
+			http.Error(w, "Forbidden: not a member of the target organization", http.StatusForbidden)
+			return
+		}
+	}
+
+	args := append(append([]interface{}{}, setArgs...), idArgs...)
+	result, err := db.Exec(
+		fmt.Sprintf("UPDATE events SET %s WHERE id IN (%s)", strings.Join(setClauses, ", "), placeholders),
+		args...,
+	)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	n, _ := result.RowsAffected()
+	json.NewEncoder(w).Encode(map[string]int64{"updated": n})
+}
 
 // GET /api/v1/events
 func getEvents(w http.ResponseWriter, r *http.Request) {
 	accept := r.Header.Get("Accept")
 	userRole := r.Header.Get("X-User-Role")
+	callerID, _ := strconv.Atoi(r.Header.Get("X-User-ID"))
 	isAuthorizedAdmin := userRole == RoleUser || userRole == RoleAdmin || userRole == RolePublisher
 
 	query := eventListSelect + " WHERE 1=1"
@@ -525,6 +666,8 @@ func getEvents(w http.ResponseWriter, r *http.Request) {
 		}
 		events = append(events, event)
 	}
+
+	annotateEditable(events, userRole, callerID)
 
 	if strings.Contains(accept, "text/calendar") {
 		cal := ics.NewCalendar()
@@ -736,6 +879,8 @@ func createEvent(w http.ResponseWriter, r *http.Request) {
 // GET /api/v1/events/{id}
 func getEvent(w http.ResponseWriter, r *http.Request) {
 	accept := r.Header.Get("Accept")
+	userRole := r.Header.Get("X-User-Role")
+	callerID, _ := strconv.Atoi(r.Header.Get("X-User-ID"))
 	id := mux.Vars(r)["id"]
 
 	event, err := scanEventRow(db.QueryRow(eventListSelect+" WHERE e.id = ?", id))
@@ -746,6 +891,9 @@ func getEvent(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+
+	editable := userRole == RoleAdmin || (userRole == RoleUser && event.OrganizationID != nil && isOrgMember(callerID, *event.OrganizationID))
+	event.Editable = &editable
 
 	if strings.Contains(accept, "text/calendar") {
 		cal := ics.NewCalendar()

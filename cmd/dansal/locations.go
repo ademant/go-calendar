@@ -3,6 +3,8 @@ package main
 import (
 	"database/sql"
 	"encoding/json"
+	"errors"
+	"io"
 	"net/http"
 	"regexp"
 	"strconv"
@@ -162,83 +164,111 @@ func getLocations(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(locations)
 }
 
-// POST /api/v1/locations - Create a new location
+// POST /api/v1/locations - Create one or more locations
 func createLocation(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
 	requesterRole := r.Header.Get("X-User-Role")
 	callerID, _ := strconv.Atoi(r.Header.Get("X-User-ID"))
 
-	var req LocationCreateRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		status := http.StatusBadRequest
+		if errors.As(err, new(*http.MaxBytesError)) {
+			status = http.StatusRequestEntityTooLarge
+		}
+		http.Error(w, err.Error(), status)
 		return
 	}
 
-	if req.Location == "" {
-		http.Error(w, "Location is required", http.StatusBadRequest)
-		return
+	var reqs []LocationCreateRequest
+	if json.Unmarshal(body, &reqs) != nil || len(reqs) == 0 || reqs[0].Location == "" {
+		var single LocationCreateRequest
+		if err := json.Unmarshal(body, &single); err != nil {
+			http.Error(w, "Invalid request body", http.StatusBadRequest)
+			return
+		}
+		reqs = []LocationCreateRequest{single}
 	}
 
+	// Validate all items before inserting any.
+	for _, req := range reqs {
+		if req.Location == "" {
+			http.Error(w, "location is required", http.StatusBadRequest)
+			return
+		}
+	}
 	if requesterRole != RoleAdmin {
 		if requesterRole != RoleUser && requesterRole != RolePublisher {
 			http.Error(w, "Forbidden", http.StatusForbidden)
 			return
 		}
-		if req.OrganizationID == nil {
-			http.Error(w, "organization_id is required", http.StatusBadRequest)
-			return
-		}
-		if !isOrgMember(callerID, *req.OrganizationID) {
-			http.Error(w, "Forbidden: not a member of the specified organization", http.StatusForbidden)
-			return
-		}
-	}
-
-	// Derive street and town for the duplicate-street check.
-	// Prefer explicit request fields; fall back to parsing the location name.
-	street, town := req.Address, req.Town
-	if street == "" || town == "" {
-		if parsed, ok := parseLocationNameServer(req.Location); ok {
-			if street == "" {
-				street = parsed.street
+		checked := make(map[int]bool)
+		for _, req := range reqs {
+			if req.OrganizationID == nil {
+				http.Error(w, "organization_id is required", http.StatusBadRequest)
+				return
 			}
-			if town == "" {
-				town = parsed.town
+			orgID := *req.OrganizationID
+			member, seen := checked[orgID]
+			if !seen {
+				member = isOrgMember(callerID, orgID)
+				checked[orgID] = member
+			}
+			if !member {
+				http.Error(w, "Forbidden: not a member of the specified organization", http.StatusForbidden)
+				return
 			}
 		}
 	}
-	similar := similarLocations(req.Location, street, town)
 
-	var orgIDArg interface{}
-	if req.OrganizationID != nil {
-		orgIDArg = *req.OrganizationID
-	}
-	result, err := db.Exec(
-		"INSERT INTO locations (location, short_name, address, zipcode, town, latitude, longitude, internetsite, organization_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-		req.Location, req.ShortName, req.Address, req.Zipcode, req.Town, req.Latitude, req.Longitude, req.Internetsite, orgIDArg,
-	)
-	if err != nil {
-		http.Error(w, "Failed to create location", http.StatusInternalServerError)
-		return
-	}
+	results := make([]LocationCreateResponse, 0, len(reqs))
+	for _, req := range reqs {
+		// Derive street and town for the duplicate-street check.
+		// Prefer explicit request fields; fall back to parsing the location name.
+		street, town := req.Address, req.Town
+		if street == "" || town == "" {
+			if parsed, ok := parseLocationNameServer(req.Location); ok {
+				if street == "" {
+					street = parsed.street
+				}
+				if town == "" {
+					town = parsed.town
+				}
+			}
+		}
+		similar := similarLocations(req.Location, street, town)
 
-	id, _ := result.LastInsertId()
-	location := Location{
-		ID:             int(id),
-		Location:       req.Location,
-		ShortName:      req.ShortName,
-		Address:        req.Address,
-		Zipcode:        req.Zipcode,
-		Town:           req.Town,
-		Latitude:       req.Latitude,
-		Longitude:      req.Longitude,
-		Internetsite:   req.Internetsite,
-		OrganizationID: req.OrganizationID,
+		var orgIDArg interface{}
+		if req.OrganizationID != nil {
+			orgIDArg = *req.OrganizationID
+		}
+		result, err := db.Exec(
+			"INSERT INTO locations (location, short_name, address, zipcode, town, latitude, longitude, internetsite, organization_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+			req.Location, req.ShortName, req.Address, req.Zipcode, req.Town, req.Latitude, req.Longitude, req.Internetsite, orgIDArg,
+		)
+		if err != nil {
+			http.Error(w, "Failed to create location", http.StatusInternalServerError)
+			return
+		}
+		id, _ := result.LastInsertId()
+		loc := Location{
+			ID:             int(id),
+			Location:       req.Location,
+			ShortName:      req.ShortName,
+			Address:        req.Address,
+			Zipcode:        req.Zipcode,
+			Town:           req.Town,
+			Latitude:       req.Latitude,
+			Longitude:      req.Longitude,
+			Internetsite:   req.Internetsite,
+			OrganizationID: req.OrganizationID,
+		}
+		results = append(results, LocationCreateResponse{Location: loc, SimilarLocations: similar})
 	}
 
 	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(LocationCreateResponse{Location: location, SimilarLocations: similar})
+	json.NewEncoder(w).Encode(results)
 }
 
 // GET /api/v1/locations/{id} - Get a specific location
