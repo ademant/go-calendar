@@ -14,15 +14,16 @@ import (
 )
 
 type TimetableEntry struct {
-	ID          int    `json:"id"`
-	EventID     int    `json:"event_id"`
-	StartTime   string `json:"start_time"`
-	EndTime     string `json:"end_time"`
-	Title       string `json:"title"`
-	Description string `json:"description,omitempty"`
-	Room        string `json:"room,omitempty"`
-	LocationID  *int   `json:"location_id,omitempty"`
-	CreatedAt   string `json:"created_at"`
+	ID           int    `json:"id"`
+	EventID      int    `json:"event_id"`
+	StartTime    string `json:"start_time"`
+	EndTime      string `json:"end_time"`
+	Title        string `json:"title"`
+	Description  string `json:"description,omitempty"`
+	Room         string `json:"room,omitempty"`
+	LocationID   *int   `json:"location_id,omitempty"`
+	LocationName string `json:"location_name,omitempty"`
+	CreatedAt    string `json:"created_at"`
 }
 
 type TimetableEntryRequest struct {
@@ -53,10 +54,14 @@ func scanTimetableRow(s scanner) (TimetableEntry, error) {
 
 const timetableReturning = "RETURNING id, event_id, start_time, end_time, title, COALESCE(description,''), COALESCE(room,''), location_id, created_at"
 
-// fetchTimetable returns all entries for an event ordered by start_time.
+// fetchTimetable returns all entries for an event ordered by start_time,
+// including the location name via a LEFT JOIN.
 func fetchTimetable(eventID int) ([]TimetableEntry, error) {
 	rows, err := db.Query(
-		"SELECT id, event_id, start_time, end_time, title, COALESCE(description,''), COALESCE(room,''), location_id, created_at FROM timetable_entries WHERE event_id = ? ORDER BY start_time, id",
+		`SELECT t.id, t.event_id, t.start_time, t.end_time, t.title, COALESCE(t.description,''),
+		        COALESCE(t.room,''), t.location_id, COALESCE(l.location,''), t.created_at
+		 FROM timetable_entries t LEFT JOIN locations l ON t.location_id = l.id
+		 WHERE t.event_id = ? ORDER BY t.start_time, t.id`,
 		eventID,
 	)
 	if err != nil {
@@ -65,9 +70,15 @@ func fetchTimetable(eventID int) ([]TimetableEntry, error) {
 	defer rows.Close()
 	entries := []TimetableEntry{}
 	for rows.Next() {
-		e, err := scanTimetableRow(rows)
-		if err != nil {
+		var e TimetableEntry
+		var locID sql.NullInt64
+		if err := rows.Scan(&e.ID, &e.EventID, &e.StartTime, &e.EndTime, &e.Title,
+			&e.Description, &e.Room, &locID, &e.LocationName, &e.CreatedAt); err != nil {
 			return nil, err
+		}
+		if locID.Valid {
+			v := int(locID.Int64)
+			e.LocationID = &v
 		}
 		entries = append(entries, e)
 	}

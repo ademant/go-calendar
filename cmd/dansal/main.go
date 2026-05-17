@@ -321,6 +321,14 @@ func migrateDB() {
 	db.Exec("ALTER TABLE events ADD COLUMN pricing TEXT")
 	db.Exec("ALTER TABLE musicians ADD COLUMN description TEXT")
 	db.Exec("ALTER TABLE timetable_entries ADD COLUMN description TEXT")
+	db.Exec(`CREATE TABLE IF NOT EXISTS event_locations (
+		event_id INTEGER NOT NULL,
+		location_id INTEGER NOT NULL,
+		PRIMARY KEY (event_id, location_id),
+		FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE CASCADE,
+		FOREIGN KEY (location_id) REFERENCES locations(id) ON DELETE CASCADE
+	)`)
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_event_locations_event_id ON event_locations(event_id)")
 	db.Exec(`CREATE TABLE IF NOT EXISTS verification_tokens (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		token TEXT UNIQUE NOT NULL,
@@ -478,6 +486,14 @@ func createTables() error {
 		FOREIGN KEY (location_id) REFERENCES locations(id)
 	);
 	CREATE INDEX IF NOT EXISTS idx_timetable_event_id ON timetable_entries(event_id);
+	CREATE TABLE IF NOT EXISTS event_locations (
+		event_id INTEGER NOT NULL,
+		location_id INTEGER NOT NULL,
+		PRIMARY KEY (event_id, location_id),
+		FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE CASCADE,
+		FOREIGN KEY (location_id) REFERENCES locations(id) ON DELETE CASCADE
+	);
+	CREATE INDEX IF NOT EXISTS idx_event_locations_event_id ON event_locations(event_id);
 	CREATE INDEX IF NOT EXISTS idx_events_url            ON events(url) WHERE url IS NOT NULL;
 	CREATE INDEX IF NOT EXISTS idx_events_published_start ON events(is_published, start_time);
 	CREATE INDEX IF NOT EXISTS idx_events_title_location  ON events(title, location_id);
@@ -617,6 +633,8 @@ func main() {
 	eventRoutes.HandleFunc("/{id}/timetable", addTimetableEntries).Methods("POST")
 	eventRoutes.HandleFunc("/{id}/timetable", replaceTimetable).Methods("PUT")
 	eventRoutes.HandleFunc("/{id}/timetable/{entry_id}", deleteTimetableEntry).Methods("DELETE")
+	eventRoutes.HandleFunc("/{id}/locations", addEventLocation).Methods("POST")
+	eventRoutes.HandleFunc("/{id}/locations/{location_id}", removeEventLocation).Methods("DELETE")
 
 	// Image upload (protected)
 	imageRoutes := router.PathPrefix("/api/v1/images").Subrouter()

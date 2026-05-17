@@ -44,6 +44,7 @@ type Event struct {
 	Editable       *bool            `json:"editable,omitempty"`
 	Timetable      []TimetableEntry `json:"timetable,omitempty"`
 	Pricing        *Pricing         `json:"pricing,omitempty"`
+	Locations      []Location       `json:"locations,omitempty"`
 	Location       string           `json:"-"`
 	TagsJSON       string           `json:"-"`
 	PricingJSON    string           `json:"-"`
@@ -552,6 +553,165 @@ func annotateEditable(events []Event, userRole string, userID int) {
 	}
 }
 
+// fetchAllEventLocations returns locations for an event: the primary location
+// (events.location_id) first, followed by any entries in event_locations.
+func fetchAllEventLocations(eventID int) ([]Location, error) {
+	const cols = `l.id, l.location, COALESCE(l.short_name,''), COALESCE(l.address,''),
+		COALESCE(l.zipcode,''), COALESCE(l.town,''), COALESCE(l.latitude,''),
+		COALESCE(l.longitude,''), COALESCE(l.internetsite,''), l.created_at, l.organization_id`
+
+	scanLoc := func(s scanner) (Location, error) {
+		var loc Location
+		var orgID sql.NullInt64
+		if err := s.Scan(&loc.ID, &loc.Location, &loc.ShortName, &loc.Address,
+			&loc.Zipcode, &loc.Town, &loc.Latitude, &loc.Longitude,
+			&loc.Internetsite, &loc.CreatedAt, &orgID); err != nil {
+			return Location{}, err
+		}
+		if orgID.Valid {
+			v := int(orgID.Int64)
+			loc.OrganizationID = &v
+		}
+		return loc, nil
+	}
+
+	var locs []Location
+
+	primary, err := scanLoc(db.QueryRow(
+		"SELECT "+cols+" FROM locations l JOIN events e ON l.id = e.location_id WHERE e.id = ?",
+		eventID,
+	))
+	if err == nil {
+		locs = append(locs, primary)
+	}
+
+	rows, err := db.Query(
+		"SELECT "+cols+" FROM locations l JOIN event_locations el ON l.id = el.location_id WHERE el.event_id = ? ORDER BY l.id",
+		eventID,
+	)
+	if err != nil {
+		return locs, nil
+	}
+	defer rows.Close()
+	for rows.Next() {
+		loc, err := scanLoc(rows)
+		if err != nil {
+			continue
+		}
+		locs = append(locs, loc)
+	}
+	return locs, nil
+}
+
+type EventLocationAddRequest struct {
+	LocationID int `json:"location_id"`
+}
+
+// POST /api/v1/events/{id}/locations
+func addEventLocation(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	userRole := r.Header.Get("X-User-Role")
+	if userRole != RoleAdmin && userRole != RoleUser {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
+	callerID, _ := strconv.Atoi(r.Header.Get("X-User-ID"))
+	eventID, err := strconv.Atoi(mux.Vars(r)["id"])
+	if err != nil {
+		http.Error(w, "Invalid event ID", http.StatusBadRequest)
+		return
+	}
+
+	var orgID sql.NullInt64
+	if err := db.QueryRow("SELECT organization_id FROM events WHERE id = ?", eventID).Scan(&orgID); err == sql.ErrNoRows {
+		http.Error(w, "Event not found", http.StatusNotFound)
+		return
+	} else if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if userRole != RoleAdmin && (!orgID.Valid || !isOrgMember(callerID, int(orgID.Int64))) {
+		http.Error(w, "Forbidden: not authorized to edit this event", http.StatusForbidden)
+		return
+	}
+
+	var req EventLocationAddRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.LocationID == 0 {
+		http.Error(w, "location_id is required", http.StatusBadRequest)
+		return
+	}
+
+	var exists int
+	if err := db.QueryRow("SELECT 1 FROM locations WHERE id = ?", req.LocationID).Scan(&exists); err == sql.ErrNoRows {
+		http.Error(w, "Location not found", http.StatusNotFound)
+		return
+	} else if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	if _, err := db.Exec(
+		"INSERT OR IGNORE INTO event_locations (event_id, location_id) VALUES (?, ?)",
+		eventID, req.LocationID,
+	); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	locs, _ := fetchAllEventLocations(eventID)
+	w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode(locs)
+}
+
+// DELETE /api/v1/events/{id}/locations/{location_id}
+func removeEventLocation(w http.ResponseWriter, r *http.Request) {
+	userRole := r.Header.Get("X-User-Role")
+	if userRole != RoleAdmin && userRole != RoleUser {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
+	callerID, _ := strconv.Atoi(r.Header.Get("X-User-ID"))
+	vars := mux.Vars(r)
+	eventID, err := strconv.Atoi(vars["id"])
+	if err != nil {
+		http.Error(w, "Invalid event ID", http.StatusBadRequest)
+		return
+	}
+	locationID, err := strconv.Atoi(vars["location_id"])
+	if err != nil {
+		http.Error(w, "Invalid location ID", http.StatusBadRequest)
+		return
+	}
+
+	var orgID sql.NullInt64
+	if err := db.QueryRow("SELECT organization_id FROM events WHERE id = ?", eventID).Scan(&orgID); err == sql.ErrNoRows {
+		http.Error(w, "Event not found", http.StatusNotFound)
+		return
+	} else if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if userRole != RoleAdmin && (!orgID.Valid || !isOrgMember(callerID, int(orgID.Int64))) {
+		http.Error(w, "Forbidden: not authorized to edit this event", http.StatusForbidden)
+		return
+	}
+
+	result, err := db.Exec(
+		"DELETE FROM event_locations WHERE event_id = ? AND location_id = ?",
+		eventID, locationID,
+	)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if n, _ := result.RowsAffected(); n == 0 {
+		http.Error(w, "Location not linked to this event", http.StatusNotFound)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 // ── HTTP handlers ──────────────────────────────────────────────────────────
 
 // PATCH /api/v1/events
@@ -944,6 +1104,9 @@ func getEvent(w http.ResponseWriter, r *http.Request) {
 
 	if timetable, err := fetchTimetable(event.ID); err == nil {
 		event.Timetable = timetable
+	}
+	if locs, err := fetchAllEventLocations(event.ID); err == nil && len(locs) > 0 {
+		event.Locations = locs
 	}
 
 	if strings.Contains(accept, "text/calendar") {
