@@ -413,6 +413,31 @@ func migrateDB() {
 	)`)
 	db.Exec("CREATE INDEX IF NOT EXISTS idx_bookings_event_id ON bookings(event_id)")
 	db.Exec("CREATE INDEX IF NOT EXISTS idx_bookings_visitor_id ON bookings(visitor_id)")
+	db.Exec(`CREATE TABLE IF NOT EXISTS threads (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		event_id INTEGER NOT NULL,
+		type TEXT NOT NULL DEFAULT 'discussion' CHECK(type IN ('discussion','ridesharing')),
+		title TEXT NOT NULL,
+		author_id INTEGER,
+		is_closed INTEGER NOT NULL DEFAULT 0,
+		departure_location TEXT,
+		departure_time TEXT,
+		available_seats INTEGER,
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE CASCADE,
+		FOREIGN KEY (author_id) REFERENCES users(id) ON DELETE SET NULL
+	)`)
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_threads_event_id ON threads(event_id)")
+	db.Exec(`CREATE TABLE IF NOT EXISTS posts (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		thread_id INTEGER NOT NULL,
+		author_id INTEGER,
+		body TEXT NOT NULL,
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		FOREIGN KEY (thread_id) REFERENCES threads(id) ON DELETE CASCADE,
+		FOREIGN KEY (author_id) REFERENCES users(id) ON DELETE SET NULL
+	)`)
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_posts_thread_id ON posts(thread_id)")
 	migrateUsersRoles()
 	db.Exec(`CREATE TABLE IF NOT EXISTS verification_tokens (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -593,6 +618,31 @@ func createTables() error {
 	);
 	CREATE INDEX IF NOT EXISTS idx_bookings_event_id ON bookings(event_id);
 	CREATE INDEX IF NOT EXISTS idx_bookings_visitor_id ON bookings(visitor_id);
+	CREATE TABLE IF NOT EXISTS threads (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		event_id INTEGER NOT NULL,
+		type TEXT NOT NULL DEFAULT 'discussion' CHECK(type IN ('discussion','ridesharing')),
+		title TEXT NOT NULL,
+		author_id INTEGER,
+		is_closed INTEGER NOT NULL DEFAULT 0,
+		departure_location TEXT,
+		departure_time TEXT,
+		available_seats INTEGER,
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE CASCADE,
+		FOREIGN KEY (author_id) REFERENCES users(id) ON DELETE SET NULL
+	);
+	CREATE INDEX IF NOT EXISTS idx_threads_event_id ON threads(event_id);
+	CREATE TABLE IF NOT EXISTS posts (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		thread_id INTEGER NOT NULL,
+		author_id INTEGER,
+		body TEXT NOT NULL,
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		FOREIGN KEY (thread_id) REFERENCES threads(id) ON DELETE CASCADE,
+		FOREIGN KEY (author_id) REFERENCES users(id) ON DELETE SET NULL
+	);
+	CREATE INDEX IF NOT EXISTS idx_posts_thread_id ON posts(thread_id);
 	CREATE INDEX IF NOT EXISTS idx_events_url            ON events(url) WHERE url IS NOT NULL;
 	CREATE INDEX IF NOT EXISTS idx_events_published_start ON events(is_published, start_time);
 	CREATE INDEX IF NOT EXISTS idx_events_title_location  ON events(title, location_id);
@@ -734,6 +784,13 @@ func main() {
 	eventRoutes.HandleFunc("/{id}/timetable/{entry_id}", deleteTimetableEntry).Methods("DELETE")
 	eventRoutes.HandleFunc("/{id}/locations", addEventLocation).Methods("POST")
 	eventRoutes.HandleFunc("/{id}/locations/{location_id}", removeEventLocation).Methods("DELETE")
+	eventRoutes.HandleFunc("/{id}/threads", getThreads).Methods("GET")
+	eventRoutes.HandleFunc("/{id}/threads", createThread).Methods("POST")
+	eventRoutes.HandleFunc("/{id}/threads/{thread_id}", getThread).Methods("GET")
+	eventRoutes.HandleFunc("/{id}/threads/{thread_id}", patchThread).Methods("PATCH")
+	eventRoutes.HandleFunc("/{id}/threads/{thread_id}", deleteThread).Methods("DELETE")
+	eventRoutes.HandleFunc("/{id}/threads/{thread_id}/posts", createPost).Methods("POST")
+	eventRoutes.HandleFunc("/{id}/threads/{thread_id}/posts/{post_id}", deletePost).Methods("DELETE")
 
 	// Image upload (protected)
 	imageRoutes := router.PathPrefix("/api/v1/images").Subrouter()
