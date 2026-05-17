@@ -100,6 +100,11 @@ type UserInfo struct {
 	Username      string `json:"username"`
 	Email         string `json:"email"`
 	Role          string `json:"role"`
+	Description   string `json:"description"`
+	Telegram      string `json:"telegram"`
+	Matrix        string `json:"matrix"`
+	Mastodon      string `json:"mastodon"`
+	Website       string `json:"website"`
 	EmailVerified bool   `json:"email_verified"`
 	CreatedAt     string `json:"created_at"`
 }
@@ -387,8 +392,8 @@ func (c *DansalClient) GetUser(ctx context.Context, id int, token string) (UserI
 	return u, json.NewDecoder(resp.Body).Decode(&u)
 }
 
-func (c *DansalClient) UpdateUserEmail(ctx context.Context, id int, email, token string) error {
-	body, _ := json.Marshal(map[string]string{"email": email})
+func (c *DansalClient) UpdateUser(ctx context.Context, id int, fields map[string]string, token string) error {
+	body, _ := json.Marshal(fields)
 	resp, err := c.authed(ctx, http.MethodPut, fmt.Sprintf("/api/v1/users/%d", id), token, body)
 	if err != nil {
 		return err

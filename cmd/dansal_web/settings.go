@@ -45,9 +45,16 @@ func settingsUpdateHandler(cfg *Config, tmpls *Templates, client *DansalClient, 
 			return
 		}
 		token := getSessionToken(r)
-		email := r.FormValue("email")
+		fields := map[string]string{
+			"email":       r.FormValue("email"),
+			"description": r.FormValue("description"),
+			"telegram":    r.FormValue("telegram"),
+			"matrix":      r.FormValue("matrix"),
+			"mastodon":    r.FormValue("mastodon"),
+			"website":     r.FormValue("website"),
+		}
 
-		if err := client.UpdateUserEmail(r.Context(), su.ID, email, token); err != nil {
+		if err := client.UpdateUser(r.Context(), su.ID, fields, token); err != nil {
 			u, _ := client.GetUser(r.Context(), su.ID, token)
 			title := i18n.T(r, "settings_title")
 			renderTemplate(w, tmpls.settings, tmplData(r, cfg, i18n, title, SettingsData{
