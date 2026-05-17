@@ -321,8 +321,9 @@ func updateUser(w http.ResponseWriter, r *http.Request) {
 	user.MatrixVerified = matrixVer == 1
 	user.Disabled = disabledInt == 1
 
-	if req.Email != "" {
+	if req.Email != "" && req.Email != user.Email {
 		user.Email = req.Email
+		user.EmailVerified = false
 	}
 	if req.Role != "" {
 		user.Role = req.Role
@@ -330,11 +331,13 @@ func updateUser(w http.ResponseWriter, r *http.Request) {
 	if req.Description != "" {
 		user.Description = req.Description
 	}
-	if req.Telegram != "" {
+	if req.Telegram != "" && req.Telegram != user.Telegram {
 		user.Telegram = req.Telegram
+		user.TelegramVerified = false
 	}
-	if req.Matrix != "" {
+	if req.Matrix != "" && req.Matrix != user.Matrix {
 		user.Matrix = req.Matrix
+		user.MatrixVerified = false
 	}
 	if req.Mastodon != "" {
 		user.Mastodon = req.Mastodon
