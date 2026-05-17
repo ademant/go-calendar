@@ -556,10 +556,10 @@ Type is auto-detected via a HEAD request when omitted.
 ### POST /api/v1/fetchurl
 
 ```json
-{ "url": "https://example.com/calendar.ics", "type": "ical", "tags": ["bal-folk"], "organization_id": 3 }
+{ "url": "https://example.com/calendar.ics", "type": "ical", "tags": ["bal-folk"], "organization": "My Dance Club" }
 ```
 
-`type` and `tags` are optional. `organization_id` is optional.
+`type` and `tags` are optional. `organization` (string name) finds or creates an organization with that name and assigns it to the source. `organization_id` (integer) takes precedence when both are provided.
 
 Re-POSTing the same URL updates its `type`, `tags`, and `organization_id` (upsert by URL).
 
@@ -577,11 +577,11 @@ Registers and imports multiple sources in one call. Entries that do not contain 
     "bal-folk"
   ],
   "tags": ["Germany"],
-  "organization_id": 3
+  "organization": "My Dance Club"
 }
 ```
 
-`type` — optional; auto-detected per URL when omitted. `organization_id` and `tags` are applied to all sources.
+`type` — optional; auto-detected per URL when omitted. `organization`, `organization_id`, and `tags` are applied to all sources. `organization_id` takes precedence over `organization` when both are set.
 
 Response: array of per-source results:
 ```json

@@ -19,7 +19,8 @@ type FetchURLRequest struct {
 	URL            string   `json:"url"`
 	Type           string   `json:"type"`
 	Tags           []string `json:"tags"`
-	OrganizationID *int     `json:"organization_id,omitempty"`
+	Organization   string   `json:"organization,omitempty"`   // find-or-create by name
+	OrganizationID *int     `json:"organization_id,omitempty"` // takes precedence over Organization
 }
 
 type FetchSource struct {
@@ -420,6 +421,10 @@ func fetchURL(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if req.OrganizationID == nil && req.Organization != "" {
+		req.OrganizationID = ensureOrgByName(req.Organization)
+	}
+
 	sourceID, err := upsertFetchSource(req.URL, req.Type, req.Tags, req.OrganizationID)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -498,10 +503,11 @@ func fetchAllURLs(w http.ResponseWriter, r *http.Request) {
 // FetchURLBulkRequest accepts a mixed list of URL strings and bare tags.
 // Any entry that does not contain "://" is treated as a tag applied to all sources.
 type FetchURLBulkRequest struct {
-	Entries        []string `json:"entries"`                  // URLs and/or bare tag strings
-	Tags           []string `json:"tags"`                     // additional shared tags
-	Type           string   `json:"type"`                     // optional; auto-detected per URL when omitted
-	OrganizationID *int     `json:"organization_id,omitempty"` // assign all imported events to this org
+	Entries        []string `json:"entries"`                   // URLs and/or bare tag strings
+	Tags           []string `json:"tags"`                      // additional shared tags
+	Type           string   `json:"type"`                      // optional; auto-detected per URL when omitted
+	Organization   string   `json:"organization,omitempty"`    // find-or-create org by name
+	OrganizationID *int     `json:"organization_id,omitempty"` // takes precedence over Organization
 }
 
 type BulkSourceResult struct {
@@ -565,6 +571,10 @@ func fetchURLBulk(w http.ResponseWriter, r *http.Request) {
 	if len(rawURLs) == 0 {
 		http.Error(w, "No valid URLs provided", http.StatusBadRequest)
 		return
+	}
+
+	if req.OrganizationID == nil && req.Organization != "" {
+		req.OrganizationID = ensureOrgByName(req.Organization)
 	}
 
 	// Build per-source FetchSource list, registering each URL.
