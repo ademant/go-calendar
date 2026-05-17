@@ -1,0 +1,56 @@
+{{template "base" .}}
+{{define "content"}}
+<div style="display:flex;align-items:center;gap:1rem;margin-bottom:1rem">
+  <h1 style="margin:0">{{.Strings.T "admin_events_title"}}</h1>
+  <a href="/admin/events/new" class="btn-primary" style="text-decoration:none;padding:.4rem 1rem;background:#1a6eb5;color:#fff;border-radius:4px;font-size:.9rem">+ {{.Strings.T "admin_event_new_title"}}</a>
+</div>
+
+{{with .Data}}
+{{if .Events}}
+<div class="table-wrap">
+<table class="event-table">
+  <thead>
+    <tr>
+      <th>{{$.Strings.T "col_date"}}</th>
+      <th>{{$.Strings.T "col_title"}}</th>
+      <th>{{$.Strings.T "col_location"}}</th>
+      <th>{{$.Strings.T "col_country"}}</th>
+      <th>Status</th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+  {{range .Events}}
+  <tr>
+    <td style="white-space:nowrap">{{formatDate .StartTime}}</td>
+    <td><a href="/events/{{.ID}}">{{.Title}}</a></td>
+    <td>{{if .Location}}{{.Location}}{{else}}{{.LocationTown}}{{end}}</td>
+    <td>{{.LocationCountry}}</td>
+    <td>
+      {{if .IsCancelled}}<span class="badge cancelled">{{$.Strings.T "badge_cancelled"}}</span>
+      {{else if .IsPublished}}<span class="badge">✓</span>
+      {{else}}<span class="badge" style="background:#fff3cd;color:#856404">{{$.Strings.T "musician_unpublished"}}</span>{{end}}
+    </td>
+    <td style="white-space:nowrap">
+      <a href="/events/{{.ID}}" class="btn-sm">{{$.Strings.T "btn_details"}}</a>
+    </td>
+  </tr>
+  {{end}}
+  </tbody>
+</table>
+</div>
+{{else}}
+<p>{{$.Strings.T "no_events_found"}}</p>
+{{end}}
+{{end}}
+
+<style>
+.table-wrap{overflow-x:auto}
+.event-table{width:100%;border-collapse:collapse;font-size:.9rem}
+.event-table th,.event-table td{padding:.5rem .65rem;text-align:left;border-bottom:1px solid #eee;vertical-align:top}
+.event-table thead th{background:#f4f6fb;font-weight:600;color:#333;white-space:nowrap}
+.event-table tbody tr:hover{background:#f9f9ff}
+.btn-sm{display:inline-block;padding:.2rem .5rem;border:1px solid #ccc;border-radius:3px;font-size:.8rem;text-decoration:none;color:#333}
+.btn-sm:hover{background:#f0f0f0}
+</style>
+{{end}}

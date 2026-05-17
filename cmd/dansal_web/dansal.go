@@ -5,6 +5,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
+	"mime/multipart"
 	"net/http"
 	"strings"
 )
@@ -626,6 +628,112 @@ func (c *DansalClient) UseMagicLogin(ctx context.Context, token string) (*LoginR
 	}
 	var lr LoginResponse
 	return &lr, json.NewDecoder(resp.Body).Decode(&lr)
+}
+
+// ── event creation types ───────────────────────────────────────────────────
+
+type EventCreateReq struct {
+	Title          string      `json:"title"`
+	Description    string      `json:"description,omitempty"`
+	StartTime      string      `json:"start_time"`
+	EndTime        string      `json:"end_time,omitempty"`
+	HasBall        bool        `json:"has_ball"`
+	HasWorkshop    bool        `json:"has_workshop"`
+	Tags           []string    `json:"tags,omitempty"`
+	URL            string      `json:"url,omitempty"`
+	OrganizationID *int        `json:"organization_id,omitempty"`
+	Pricing        *Pricing    `json:"pricing,omitempty"`
+	Location       EventLocReq `json:"location"`
+}
+
+type EventLocReq struct {
+	Location  string `json:"location"`
+	Address   string `json:"address,omitempty"`
+	Town      string `json:"town,omitempty"`
+	Country   string `json:"country,omitempty"`
+	Latitude  string `json:"latitude,omitempty"`
+	Longitude string `json:"longitude,omitempty"`
+}
+
+type TimetableEntryReq struct {
+	StartTime   string `json:"start_time"`
+	EndTime     string `json:"end_time,omitempty"`
+	Title       string `json:"title"`
+	Description string `json:"description,omitempty"`
+	Room        string `json:"room,omitempty"`
+}
+
+func (c *DansalClient) GetAllEventsAdmin(ctx context.Context, token string) ([]Event, error) {
+	resp, err := c.authed(ctx, http.MethodGet, "/api/v1/events?include_past=true", token, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	var events []Event
+	if err := json.NewDecoder(resp.Body).Decode(&events); err != nil {
+		return nil, err
+	}
+	return events, nil
+}
+
+func (c *DansalClient) CreateEvent(ctx context.Context, req EventCreateReq, token string) (Event, error) {
+	body, _ := json.Marshal(req)
+	resp, err := c.authed(ctx, http.MethodPost, "/api/v1/events", token, body)
+	if err != nil {
+		return Event{}, err
+	}
+	defer resp.Body.Close()
+	b, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusOK {
+		return Event{}, fmt.Errorf("create event: %s: %s", resp.Status, string(b))
+	}
+	var result []Event
+	if err := json.Unmarshal(b, &result); err != nil || len(result) == 0 {
+		return Event{}, fmt.Errorf("no event in response")
+	}
+	return result[0], nil
+}
+
+func (c *DansalClient) UploadEventImage(ctx context.Context, eventID int, data []byte, filename, token string) error {
+	var buf bytes.Buffer
+	mw := multipart.NewWriter(&buf)
+	fw, err := mw.CreateFormFile("image", filename)
+	if err != nil {
+		return err
+	}
+	if _, err := fw.Write(data); err != nil {
+		return err
+	}
+	mw.Close()
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost,
+		fmt.Sprintf("%s/api/v1/images/%d", c.BaseURL, eventID), &buf)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Content-Type", mw.FormDataContentType())
+	resp, err := c.HTTP.Do(req)
+	if err != nil {
+		return err
+	}
+	resp.Body.Close()
+	if resp.StatusCode >= 300 {
+		return fmt.Errorf("upload image: %s", resp.Status)
+	}
+	return nil
+}
+
+func (c *DansalClient) AddTimetableEntries(ctx context.Context, eventID int, entries []TimetableEntryReq, token string) error {
+	body, _ := json.Marshal(entries)
+	resp, err := c.authed(ctx, http.MethodPost, fmt.Sprintf("/api/v1/events/%d/timetable", eventID), token, body)
+	if err != nil {
+		return err
+	}
+	resp.Body.Close()
+	if resp.StatusCode >= 300 {
+		return fmt.Errorf("add timetable: %s", resp.Status)
+	}
+	return nil
 }
 
 func (c *DansalClient) ConsumeVerification(ctx context.Context, token string) error {

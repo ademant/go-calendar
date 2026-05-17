@@ -197,6 +197,8 @@ type Templates struct {
 	musician           *template.Template
 	adminMusicians     *template.Template
 	adminMusicianEdit  *template.Template
+	adminEvents        *template.Template
+	adminEventNew      *template.Template
 }
 
 func loadTemplates() *Templates {
@@ -225,6 +227,8 @@ func loadTemplates() *Templates {
 		musician:          load("musician"),
 		adminMusicians:    load("admin_musicians"),
 		adminMusicianEdit: load("admin_musician_edit"),
+		adminEvents:       load("admin_events"),
+		adminEventNew:     load("admin_event_new"),
 	}
 }
 

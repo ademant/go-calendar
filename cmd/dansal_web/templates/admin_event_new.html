@@ -1,0 +1,316 @@
+{{template "base" .}}
+{{define "content"}}
+<h1>{{.Strings.T "admin_event_new_title"}}</h1>
+
+{{with .Data}}
+{{if .ErrorKey}}<p class="form-error" role="alert">{{$.Strings.T .ErrorKey}}</p>{{end}}
+
+<form method="post" enctype="multipart/form-data" class="evt-form">
+
+  <!-- Image -->
+  <section class="form-section">
+    <h2>{{$.Strings.T "evt_image"}}</h2>
+    <div id="drop-zone" class="drop-zone">
+      <input type="file" id="image" name="image" accept="image/*" style="display:none">
+      <div id="drop-label" class="drop-label">
+        <span>{{$.Strings.T "evt_image_hint"}}</span>
+        <button type="button" onclick="document.getElementById('image').click()" class="btn-secondary btn-sm-secondary">{{$.Strings.T "evt_image_browse"}}</button>
+      </div>
+      <img id="image-preview" style="display:none;max-height:200px;border-radius:4px;margin-top:.5rem">
+    </div>
+  </section>
+
+  <!-- Basic info -->
+  <section class="form-section">
+    <h2>{{$.Strings.T "evt_basic_info"}}</h2>
+
+    <label for="title">{{$.Strings.T "evt_title"}} *</label>
+    <input id="title" type="text" name="title" required placeholder="{{$.Strings.T "evt_title_placeholder"}}">
+
+    <div class="field-row">
+      <div>
+        <label for="date">{{$.Strings.T "evt_date"}}</label>
+        <input id="date" type="date" name="date">
+      </div>
+      <div>
+        <label for="start_time">{{$.Strings.T "evt_start"}}</label>
+        <input id="start_time" type="time" name="start_time">
+      </div>
+      <div>
+        <label for="end_time">{{$.Strings.T "evt_end"}}</label>
+        <input id="end_time" type="time" name="end_time">
+      </div>
+    </div>
+
+    <div class="check-row">
+      <label class="check-label"><input type="checkbox" name="has_ball"> {{$.Strings.T "filter_type_ball"}}</label>
+      <label class="check-label"><input type="checkbox" name="has_workshop"> {{$.Strings.T "filter_type_workshop"}}</label>
+    </div>
+
+    <label for="description">{{$.Strings.T "evt_description"}}</label>
+    <textarea id="description" name="description" rows="5"></textarea>
+
+    <label for="url">{{$.Strings.T "evt_website"}}</label>
+    <input id="url" type="url" name="url" placeholder="https://...">
+
+    <label for="tags">{{$.Strings.T "evt_tags"}} <span class="field-hint">({{$.Strings.T "evt_tags_hint"}})</span></label>
+    <input id="tags" type="text" name="tags" placeholder="balfolk, workshop, festival">
+  </section>
+
+  <!-- Organisation -->
+  <section class="form-section">
+    <h2>{{$.Strings.T "evt_organisation"}}</h2>
+    <label for="org_choice">{{$.Strings.T "evt_org_select"}}</label>
+    <select id="org_choice" name="org_choice" onchange="toggleOrgNew()">
+      <option value="">— {{$.Strings.T "evt_none"}} —</option>
+      <option value="existing">{{$.Strings.T "evt_org_existing"}}</option>
+      <option value="new">{{$.Strings.T "evt_org_new"}}</option>
+    </select>
+
+    <div id="org-existing" hidden>
+      <label for="org_id">{{$.Strings.T "evt_org_select_existing"}}</label>
+      <select id="org_id" name="org_id">
+        <option value="">—</option>
+        {{range .Organizations}}<option value="{{.ID}}">{{.Name}}</option>{{end}}
+      </select>
+    </div>
+
+    <div id="org-new" hidden>
+      <label for="new_org_name">{{$.Strings.T "org_name"}}</label>
+      <input id="new_org_name" type="text" name="new_org_name" placeholder="{{$.Strings.T "org_name"}}">
+    </div>
+  </section>
+
+  <!-- Location -->
+  <section class="form-section">
+    <h2>{{$.Strings.T "evt_location"}}</h2>
+    <label for="loc_choice">{{$.Strings.T "evt_loc_select"}}</label>
+    <select id="loc_choice" name="loc_choice" onchange="toggleLocNew()">
+      <option value="">— {{$.Strings.T "evt_none"}} —</option>
+      <option value="existing">{{$.Strings.T "evt_loc_existing"}}</option>
+      <option value="new">{{$.Strings.T "evt_loc_new"}}</option>
+    </select>
+
+    <div id="loc-existing" hidden>
+      <label for="loc_id">{{$.Strings.T "evt_loc_select_existing"}}</label>
+      <select id="loc_id" name="loc_id">
+        <option value="">—</option>
+        {{range .Locations}}<option value="{{.ID}}">{{.Location}}{{if .Town}}, {{.Town}}{{end}}</option>{{end}}
+      </select>
+    </div>
+
+    <div id="loc-new" hidden class="loc-new-fields">
+      <label for="new_loc_name">{{$.Strings.T "loc_name"}} *</label>
+      <input id="new_loc_name" type="text" name="new_loc_name" placeholder="{{$.Strings.T "loc_name_placeholder"}}">
+      <label for="new_loc_address">{{$.Strings.T "loc_address"}}</label>
+      <input id="new_loc_address" type="text" name="new_loc_address">
+      <div class="field-row">
+        <div>
+          <label for="new_loc_town">{{$.Strings.T "loc_town"}}</label>
+          <input id="new_loc_town" type="text" name="new_loc_town">
+        </div>
+        <div>
+          <label for="new_loc_country">{{$.Strings.T "loc_country"}}</label>
+          <input id="new_loc_country" type="text" name="new_loc_country">
+        </div>
+      </div>
+      <div class="field-row">
+        <div>
+          <label for="new_loc_lat">{{$.Strings.T "loc_lat"}}</label>
+          <input id="new_loc_lat" type="text" name="new_loc_lat" placeholder="51.5074">
+        </div>
+        <div>
+          <label for="new_loc_lng">{{$.Strings.T "loc_lng"}}</label>
+          <input id="new_loc_lng" type="text" name="new_loc_lng" placeholder="0.1278">
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Pricing -->
+  <section class="form-section">
+    <h2>{{$.Strings.T "evt_admission"}}</h2>
+    <label for="pricing_type">{{$.Strings.T "evt_pricing_type"}}</label>
+    <select id="pricing_type" name="pricing_type" onchange="togglePricing()">
+      <option value="none">— {{$.Strings.T "evt_none"}} —</option>
+      <option value="free">{{$.Strings.T "evt_free"}}</option>
+      <option value="donation">{{$.Strings.T "evt_donation"}}</option>
+      <option value="single">{{$.Strings.T "evt_pricing_single"}}</option>
+      <option value="multiple">{{$.Strings.T "evt_pricing_multiple"}}</option>
+    </select>
+
+    <div id="pricing-single" hidden class="field-row">
+      <div>
+        <label for="pricing_amount">{{$.Strings.T "evt_pricing_amount"}}</label>
+        <input id="pricing_amount" type="number" name="pricing_amount" min="0" step="0.01" placeholder="10.00">
+      </div>
+      <div>
+        <label for="pricing_currency">{{$.Strings.T "evt_pricing_currency"}}</label>
+        <input id="pricing_currency" type="text" name="pricing_currency" placeholder="EUR" style="max-width:80px">
+      </div>
+    </div>
+
+    <div id="pricing-multiple" hidden>
+      <table class="growing-table" id="pricing-table">
+        <thead><tr><th>{{$.Strings.T "evt_pricing_label"}}</th><th>{{$.Strings.T "evt_pricing_amount"}}</th></tr></thead>
+        <tbody id="pricing-body">
+          <tr>
+            <td><input type="text" name="pl_label" placeholder="Standard" oninput="growPricingTable(this)"></td>
+            <td><input type="number" name="pl_amount" min="0" step="0.01" placeholder="10.00"></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- Timetable -->
+  <section class="form-section">
+    <h2>{{$.Strings.T "evt_timetable"}}</h2>
+    <table class="growing-table" id="tt-table">
+      <thead>
+        <tr>
+          <th>{{$.Strings.T "tt_start"}}</th>
+          <th>{{$.Strings.T "tt_end"}}</th>
+          <th>{{$.Strings.T "tt_title"}}</th>
+          <th>{{$.Strings.T "tt_desc"}}</th>
+          <th>{{$.Strings.T "tt_room"}}</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody id="tt-body">
+        <tr class="tt-row">
+          <td><input type="time" name="tt_start"></td>
+          <td><input type="time" name="tt_end"></td>
+          <td><input type="text" name="tt_title" placeholder="{{$.Strings.T "tt_title_placeholder"}}" oninput="growTTTable(this)"></td>
+          <td><input type="text" name="tt_desc" placeholder="{{$.Strings.T "tt_desc_placeholder"}}"></td>
+          <td><input type="text" name="tt_room" placeholder="{{$.Strings.T "tt_room_placeholder"}}"></td>
+          <td><button type="button" class="btn-del-row" onclick="delRow(this)" title="Remove">×</button></td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <div class="form-actions">
+    <button type="submit" class="btn-primary">{{$.Strings.T "admin_save"}}</button>
+    <a href="/admin/events" class="btn-secondary">{{$.Strings.T "admin_cancel"}}</a>
+  </div>
+</form>
+{{end}}
+
+<style>
+.evt-form{display:flex;flex-direction:column;gap:0}
+.form-section{background:#fff;border:1px solid #ddd;border-radius:6px;padding:1.25rem 1.5rem;margin-bottom:1rem}
+.form-section h2{font-size:1rem;font-weight:700;color:#1a1a2e;margin-bottom:.9rem;text-transform:uppercase;letter-spacing:.04em}
+.form-section label{display:block;font-weight:600;font-size:.88rem;color:#444;margin-top:.6rem;margin-bottom:.2rem}
+.form-section input[type=text],.form-section input[type=url],.form-section input[type=email],
+.form-section input[type=date],.form-section input[type=time],.form-section input[type=number],
+.form-section textarea,.form-section select{width:100%;padding:.4rem .55rem;border:1px solid #ccc;border-radius:4px;font-size:.92rem}
+.form-section input:focus,.form-section textarea:focus,.form-section select:focus{outline:2px solid #1a6eb5;border-color:#1a6eb5}
+.field-row{display:flex;gap:.75rem;flex-wrap:wrap}
+.field-row>div{flex:1;min-width:120px}
+.field-hint{font-weight:400;color:#888;font-size:.82rem}
+.check-row{display:flex;gap:1.5rem;margin:.5rem 0}
+.check-label{display:flex;align-items:center;gap:.4rem;font-size:.92rem;cursor:pointer}
+.check-label input{width:auto}
+.drop-zone{border:2px dashed #ccc;border-radius:6px;padding:1.5rem;text-align:center;cursor:pointer;transition:border-color .2s}
+.drop-zone.drag-over{border-color:#1a6eb5;background:#f0f4ff}
+.drop-label{display:flex;flex-direction:column;align-items:center;gap:.5rem;color:#888;font-size:.9rem}
+.btn-sm-secondary{padding:.3rem .75rem;border:1px solid #ccc;border-radius:4px;background:#f5f5f5;cursor:pointer;font-size:.85rem}
+.btn-sm-secondary:hover{background:#e8e8e8}
+.loc-new-fields{display:flex;flex-direction:column;gap:.1rem}
+.growing-table{width:100%;border-collapse:collapse;font-size:.88rem}
+.growing-table th{text-align:left;padding:.3rem .4rem;font-size:.8rem;font-weight:600;color:#555;border-bottom:1px solid #ddd}
+.growing-table td{padding:.2rem .3rem;vertical-align:middle}
+.growing-table input{width:100%;padding:.3rem .4rem;border:1px solid #ddd;border-radius:3px;font-size:.88rem}
+.btn-del-row{background:none;border:none;color:#999;cursor:pointer;font-size:1.1rem;padding:0 .3rem;line-height:1}
+.btn-del-row:hover{color:#c0392b}
+.form-error{background:#f8d7da;color:#721c24;border:1px solid #f5c6cb;border-radius:4px;padding:.6rem .9rem;margin-bottom:1rem;font-size:.9rem}
+.form-actions{display:flex;gap:.75rem;margin-top:.5rem}
+.btn-primary{padding:.45rem 1.2rem;background:#1a6eb5;color:#fff;border:none;border-radius:4px;font-size:.95rem;cursor:pointer}
+.btn-primary:hover{background:#0d4a80}
+.btn-secondary{padding:.45rem 1.2rem;background:#f5f5f5;color:#333;border:1px solid #ccc;border-radius:4px;font-size:.95rem;text-decoration:none;cursor:pointer}
+.btn-secondary:hover{background:#e8e8e8}
+</style>
+
+<script>
+function toggleOrgNew(){
+  var v=document.getElementById('org_choice').value;
+  document.getElementById('org-existing').hidden=(v!=='existing');
+  document.getElementById('org-new').hidden=(v!=='new');
+}
+function toggleLocNew(){
+  var v=document.getElementById('loc_choice').value;
+  document.getElementById('loc-existing').hidden=(v!=='existing');
+  document.getElementById('loc-new').hidden=(v!=='new');
+}
+function togglePricing(){
+  var v=document.getElementById('pricing_type').value;
+  document.getElementById('pricing-single').hidden=(v!=='single');
+  document.getElementById('pricing-multiple').hidden=(v!=='multiple');
+}
+
+// Growing timetable
+function growTTTable(el){
+  var tbody=document.getElementById('tt-body');
+  var rows=tbody.querySelectorAll('.tt-row');
+  var last=rows[rows.length-1];
+  if(el.closest('.tt-row')===last && el.value.trim()!==''){
+    addTTRow();
+  }
+}
+function addTTRow(){
+  var tbody=document.getElementById('tt-body');
+  var row=document.createElement('tr');
+  row.className='tt-row';
+  row.innerHTML='<td><input type="time" name="tt_start"></td>'+
+    '<td><input type="time" name="tt_end"></td>'+
+    '<td><input type="text" name="tt_title" oninput="growTTTable(this)"></td>'+
+    '<td><input type="text" name="tt_desc"></td>'+
+    '<td><input type="text" name="tt_room"></td>'+
+    '<td><button type="button" class="btn-del-row" onclick="delRow(this)" title="Remove">×</button></td>';
+  tbody.appendChild(row);
+}
+function delRow(btn){
+  var row=btn.closest('tr');
+  var tbody=row.parentNode;
+  if(tbody.querySelectorAll('tr').length>1) row.remove();
+}
+
+// Growing pricing table
+function growPricingTable(el){
+  var tbody=document.getElementById('pricing-body');
+  var rows=tbody.querySelectorAll('tr');
+  var last=rows[rows.length-1];
+  if(el.closest('tr')===last && el.value.trim()!==''){
+    var row=document.createElement('tr');
+    row.innerHTML='<td><input type="text" name="pl_label" oninput="growPricingTable(this)"></td>'+
+      '<td><input type="number" name="pl_amount" min="0" step="0.01"></td>';
+    tbody.appendChild(row);
+  }
+}
+
+// Image drop zone
+(function(){
+  var dz=document.getElementById('drop-zone');
+  var inp=document.getElementById('image');
+  var prev=document.getElementById('image-preview');
+  var lbl=document.getElementById('drop-label');
+  function showPreview(file){
+    var url=URL.createObjectURL(file);
+    prev.src=url;prev.style.display='block';
+    lbl.style.display='none';
+  }
+  inp.addEventListener('change',function(){if(this.files[0])showPreview(this.files[0]);});
+  dz.addEventListener('dragover',function(e){e.preventDefault();dz.classList.add('drag-over');});
+  dz.addEventListener('dragleave',function(){dz.classList.remove('drag-over');});
+  dz.addEventListener('drop',function(e){
+    e.preventDefault();dz.classList.remove('drag-over');
+    var f=e.dataTransfer.files[0];
+    if(f&&f.type.startsWith('image/')){
+      var dt=new DataTransfer();dt.items.add(f);inp.files=dt.files;
+      showPreview(f);
+    }
+  });
+})();
+</script>
+{{end}}

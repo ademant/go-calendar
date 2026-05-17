@@ -48,6 +48,10 @@ func main() {
 	r.HandleFunc("/api/v1/login/magic/{token}", magicLoginHandler(cfg, tmpls, client, i18n)).Methods("GET")
 	r.HandleFunc("/api/v1/verify/{token}", verifyEmailHandler(cfg, tmpls, client, i18n)).Methods("GET")
 
+	r.HandleFunc("/admin/events", adminEventsHandler(cfg, tmpls, client, i18n)).Methods("GET")
+	r.HandleFunc("/admin/events/new", adminEventNewPageHandler(cfg, tmpls, client, i18n)).Methods("GET")
+	r.HandleFunc("/admin/events/new", adminEventCreateHandler(cfg, tmpls, client, i18n)).Methods("POST")
+
 	r.HandleFunc("/admin/organizations", adminOrgsHandler(cfg, tmpls, client, i18n)).Methods("GET")
 	r.HandleFunc("/admin/organizations/new", adminOrgNewPageHandler(cfg, tmpls, i18n)).Methods("GET")
 	r.HandleFunc("/admin/organizations/new", adminOrgCreateHandler(cfg, tmpls, client, i18n)).Methods("POST")

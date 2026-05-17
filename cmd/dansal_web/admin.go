@@ -2,6 +2,8 @@ package main
 
 import (
 	"encoding/json"
+	"io"
+	"log"
 	"net/http"
 	"sort"
 	"strconv"
@@ -737,5 +739,255 @@ func adminLocationSaveHandler(cfg *Config, tmpls *Templates, client *DansalClien
 			return
 		}
 		http.Redirect(w, r, "/admin/locations", http.StatusSeeOther)
+	}
+}
+
+// ── Events ────────────────────────────────────────────────────────────────────
+
+type AdminEventsData struct {
+	Events []Event
+}
+
+type AdminEventNewData struct {
+	Organizations []Organization
+	Locations     []Location
+	Musicians     []Musician
+	ErrorKey      string
+}
+
+func adminEventsHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		_, ok := requireLogin(w, r)
+		if !ok {
+			return
+		}
+		events, err := client.GetAllEventsAdmin(r.Context(), getSessionToken(r))
+		if err != nil {
+			http.Error(w, "could not load events", http.StatusBadGateway)
+			return
+		}
+		title := i18n.T(r, "admin_events_title")
+		renderTemplate(w, tmpls.adminEvents, tmplData(r, cfg, i18n, title, AdminEventsData{Events: events}))
+	}
+}
+
+func adminEventNewPageHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		_, ok := requireLogin(w, r)
+		if !ok {
+			return
+		}
+		orgs, _ := client.GetOrganizations(r.Context())
+		locs, _ := client.GetLocations(r.Context())
+		musicians, _ := client.GetMusicians(r.Context())
+		title := i18n.T(r, "admin_event_new_title")
+		renderTemplate(w, tmpls.adminEventNew, tmplData(r, cfg, i18n, title, AdminEventNewData{
+			Organizations: orgs,
+			Locations:     locs,
+			Musicians:     musicians,
+		}))
+	}
+}
+
+func adminEventCreateHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		_, ok := requireLogin(w, r)
+		if !ok {
+			return
+		}
+		if err := r.ParseMultipartForm(32 << 20); err != nil {
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+
+		renderErr := func(errKey string) {
+			orgs, _ := client.GetOrganizations(r.Context())
+			locs, _ := client.GetLocations(r.Context())
+			musicians, _ := client.GetMusicians(r.Context())
+			title := i18n.T(r, "admin_event_new_title")
+			renderTemplate(w, tmpls.adminEventNew, tmplData(r, cfg, i18n, title, AdminEventNewData{
+				Organizations: orgs,
+				Locations:     locs,
+				Musicians:     musicians,
+				ErrorKey:      errKey,
+			}))
+		}
+
+		date := r.FormValue("date")
+		startT := r.FormValue("start_time")
+		endT := r.FormValue("end_time")
+		startTime, endTime := "", ""
+		if date != "" && startT != "" {
+			startTime = date + "T" + startT + ":00"
+		}
+		if date != "" && endT != "" {
+			endTime = date + "T" + endT + ":00"
+		}
+
+		var orgID *int
+		switch r.FormValue("org_choice") {
+		case "existing":
+			if v := r.FormValue("org_id"); v != "" {
+				if n, err := strconv.Atoi(v); err == nil {
+					orgID = &n
+				}
+			}
+		case "new":
+			newOrg := Organization{Name: strings.TrimSpace(r.FormValue("new_org_name"))}
+			if newOrg.Name != "" {
+				created, err := client.CreateOrganization(r.Context(), newOrg, getSessionToken(r))
+				if err != nil {
+					renderErr("admin_save_error")
+					return
+				}
+				orgID = &created.ID
+			}
+		}
+
+		var locReq EventLocReq
+		switch r.FormValue("loc_choice") {
+		case "existing":
+			if v := r.FormValue("loc_id"); v != "" {
+				if n, err := strconv.Atoi(v); err == nil {
+					locs, _ := client.GetLocations(r.Context())
+					for _, l := range locs {
+						if l.ID == n {
+							locReq = EventLocReq{
+								Location:  l.Location,
+								Address:   l.Address,
+								Town:      l.Town,
+								Country:   l.Country,
+								Latitude:  l.Latitude,
+								Longitude: l.Longitude,
+							}
+							break
+						}
+					}
+				}
+			}
+		case "new":
+			locReq = EventLocReq{
+				Location:  strings.TrimSpace(r.FormValue("new_loc_name")),
+				Address:   strings.TrimSpace(r.FormValue("new_loc_address")),
+				Town:      strings.TrimSpace(r.FormValue("new_loc_town")),
+				Country:   strings.TrimSpace(r.FormValue("new_loc_country")),
+				Latitude:  strings.TrimSpace(r.FormValue("new_loc_lat")),
+				Longitude: strings.TrimSpace(r.FormValue("new_loc_lng")),
+			}
+		}
+
+		var pricing *Pricing
+		if pt := r.FormValue("pricing_type"); pt != "" && pt != "none" {
+			p := &Pricing{Type: pt}
+			switch pt {
+			case "single":
+				if amt := r.FormValue("pricing_amount"); amt != "" {
+					if f, err := strconv.ParseFloat(amt, 64); err == nil {
+						p.Amount = f
+					}
+				}
+				p.Currency = strings.TrimSpace(r.FormValue("pricing_currency"))
+			case "multiple":
+				labels := r.MultipartForm.Value["pl_label"]
+				amounts := r.MultipartForm.Value["pl_amount"]
+				for i, lbl := range labels {
+					lbl = strings.TrimSpace(lbl)
+					if lbl == "" {
+						continue
+					}
+					var amt float64
+					if i < len(amounts) {
+						if f, err := strconv.ParseFloat(strings.TrimSpace(amounts[i]), 64); err == nil {
+							amt = f
+						}
+					}
+					p.Prices = append(p.Prices, Price{Label: lbl, Amount: amt})
+				}
+				if len(p.Prices) == 0 {
+					p = nil
+				}
+			}
+			pricing = p
+		}
+
+		var tags []string
+		if t := strings.TrimSpace(r.FormValue("tags")); t != "" {
+			for _, tag := range strings.Split(t, ",") {
+				if tag = strings.TrimSpace(tag); tag != "" {
+					tags = append(tags, tag)
+				}
+			}
+		}
+
+		req := EventCreateReq{
+			Title:          strings.TrimSpace(r.FormValue("title")),
+			Description:    strings.TrimSpace(r.FormValue("description")),
+			StartTime:      startTime,
+			EndTime:        endTime,
+			HasBall:        r.FormValue("has_ball") == "on",
+			HasWorkshop:    r.FormValue("has_workshop") == "on",
+			Tags:           tags,
+			URL:            strings.TrimSpace(r.FormValue("url")),
+			OrganizationID: orgID,
+			Pricing:        pricing,
+			Location:       locReq,
+		}
+
+		if req.Title == "" {
+			renderErr("evt_title_required")
+			return
+		}
+
+		event, err := client.CreateEvent(r.Context(), req, getSessionToken(r))
+		if err != nil {
+			log.Printf("create event error: %v", err)
+			renderErr("admin_save_error")
+			return
+		}
+
+		if file, header, ferr := r.FormFile("image"); ferr == nil {
+			defer file.Close()
+			data, rerr := io.ReadAll(file)
+			if rerr == nil {
+				if uerr := client.UploadEventImage(r.Context(), event.ID, data, header.Filename, getSessionToken(r)); uerr != nil {
+					log.Printf("upload image error: %v", uerr)
+				}
+			}
+		}
+
+		starts := r.MultipartForm.Value["tt_start"]
+		ends := r.MultipartForm.Value["tt_end"]
+		titles := r.MultipartForm.Value["tt_title"]
+		descs := r.MultipartForm.Value["tt_desc"]
+		rooms := r.MultipartForm.Value["tt_room"]
+		var ttEntries []TimetableEntryReq
+		for i, s := range starts {
+			s = strings.TrimSpace(s)
+			if i >= len(titles) {
+				break
+			}
+			t := strings.TrimSpace(titles[i])
+			if s == "" && t == "" {
+				continue
+			}
+			entry := TimetableEntryReq{StartTime: s, Title: t}
+			if i < len(ends) {
+				entry.EndTime = strings.TrimSpace(ends[i])
+			}
+			if i < len(descs) {
+				entry.Description = strings.TrimSpace(descs[i])
+			}
+			if i < len(rooms) {
+				entry.Room = strings.TrimSpace(rooms[i])
+			}
+			ttEntries = append(ttEntries, entry)
+		}
+		if len(ttEntries) > 0 {
+			if terr := client.AddTimetableEntries(r.Context(), event.ID, ttEntries, getSessionToken(r)); terr != nil {
+				log.Printf("add timetable error: %v", terr)
+			}
+		}
+
+		http.Redirect(w, r, "/admin/events", http.StatusSeeOther)
 	}
 }
