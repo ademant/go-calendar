@@ -456,13 +456,16 @@ func createTables() error {
 		start_time INTEGER NOT NULL,
 		end_time INTEGER NOT NULL,
 		location_id INTEGER,
+		organization_id INTEGER,
 		has_ball INTEGER DEFAULT 0,
 		has_workshop INTEGER DEFAULT 0,
+		is_cancelled INTEGER DEFAULT 0,
 		tags TEXT,
 		is_published INTEGER DEFAULT 0,
 		short_code TEXT UNIQUE,
 		url TEXT,
 		source TEXT,
+		source_last_modified INTEGER,
 		pricing TEXT,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		FOREIGN KEY (location_id) REFERENCES locations(id)
@@ -490,6 +493,7 @@ func createTables() error {
 		latitude TEXT,
 		longitude TEXT,
 		internetsite TEXT,
+		organization_id INTEGER,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 	);
 	CREATE TABLE IF NOT EXISTS musicians (
