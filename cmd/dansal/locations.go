@@ -393,6 +393,120 @@ func updateLocation(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(location)
 }
 
+// PATCH /api/v1/locations/{id} - Full update including organization_id
+func patchLocation(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	requesterRole := r.Header.Get("X-User-Role")
+	id := mux.Vars(r)["id"]
+
+	if requesterRole != RoleAdmin {
+		if requesterRole != RoleUser && requesterRole != RolePublisher {
+			http.Error(w, "Forbidden", http.StatusForbidden)
+			return
+		}
+		callerID, _ := strconv.Atoi(r.Header.Get("X-User-ID"))
+		var orgID sql.NullInt64
+		err := db.QueryRow("SELECT organization_id FROM locations WHERE id = ?", id).Scan(&orgID)
+		if err == sql.ErrNoRows {
+			http.Error(w, "Location not found", http.StatusNotFound)
+			return
+		}
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		if !orgID.Valid || !isOrgMember(callerID, int(orgID.Int64)) {
+			http.Error(w, "Forbidden", http.StatusForbidden)
+			return
+		}
+	}
+
+	var req struct {
+		Location       string `json:"location"`
+		ShortName      string `json:"short_name"`
+		Address        string `json:"address"`
+		Zipcode        string `json:"zipcode"`
+		Town           string `json:"town"`
+		Country        string `json:"country"`
+		Latitude       string `json:"latitude"`
+		Longitude      string `json:"longitude"`
+		Internetsite   string `json:"internetsite"`
+		OrganizationID *int   `json:"organization_id"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	var loc Location
+	var orgID sql.NullInt64
+	err := db.QueryRow(
+		"SELECT id, location, COALESCE(short_name,''), address, COALESCE(zipcode,''), town, COALESCE(country,''), COALESCE(latitude,''), COALESCE(longitude,''), COALESCE(internetsite,''), created_at, organization_id FROM locations WHERE id = ?", id,
+	).Scan(&loc.ID, &loc.Location, &loc.ShortName, &loc.Address, &loc.Zipcode, &loc.Town, &loc.Country, &loc.Latitude, &loc.Longitude, &loc.Internetsite, &loc.CreatedAt, &orgID)
+	if err == sql.ErrNoRows {
+		http.Error(w, "Location not found", http.StatusNotFound)
+		return
+	}
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	if req.Location != "" {
+		loc.Location = req.Location
+	}
+	loc.ShortName = req.ShortName
+	loc.Address = req.Address
+	loc.Zipcode = req.Zipcode
+	if req.Town != "" {
+		loc.Town = req.Town
+	}
+	loc.Country = req.Country
+	loc.Latitude = req.Latitude
+	loc.Longitude = req.Longitude
+	loc.Internetsite = req.Internetsite
+	loc.OrganizationID = req.OrganizationID
+
+	var orgVal interface{}
+	if loc.OrganizationID != nil {
+		orgVal = *loc.OrganizationID
+	}
+	if _, err := db.Exec(
+		"UPDATE locations SET location=?, short_name=?, address=?, zipcode=?, town=?, country=?, latitude=?, longitude=?, internetsite=?, organization_id=? WHERE id=?",
+		loc.Location, loc.ShortName, loc.Address, loc.Zipcode, loc.Town, loc.Country, loc.Latitude, loc.Longitude, loc.Internetsite, orgVal, loc.ID,
+	); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	json.NewEncoder(w).Encode(loc)
+}
+
+// POST /api/v1/locations/bulk-assign-org - Admin bulk-assign organization to locations
+func bulkAssignLocationOrg(w http.ResponseWriter, r *http.Request) {
+	if r.Header.Get("X-User-Role") != RoleAdmin {
+		http.Error(w, "Forbidden: admin only", http.StatusForbidden)
+		return
+	}
+	var req struct {
+		IDs            []int `json:"ids"`
+		OrganizationID *int  `json:"organization_id"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || len(req.IDs) == 0 {
+		http.Error(w, "invalid body", http.StatusBadRequest)
+		return
+	}
+	var orgVal interface{}
+	if req.OrganizationID != nil {
+		orgVal = *req.OrganizationID
+	}
+	for _, id := range req.IDs {
+		db.Exec("UPDATE locations SET organization_id=? WHERE id=?", orgVal, id)
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 // DELETE /api/v1/locations/{id} - Delete a location
 func deleteLocation(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")

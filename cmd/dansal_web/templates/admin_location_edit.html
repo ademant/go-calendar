@@ -1,0 +1,155 @@
+{{template "base" .}}
+{{define "content"}}
+<h1>{{.Strings.T "admin_edit"}} — {{with .Data}}{{.Location.Location}}{{end}}</h1>
+
+<div class="edit-wrap">
+{{with .Data}}
+{{if .ErrorKey}}<p class="form-error" role="alert">{{$.Strings.T .ErrorKey}}</p>{{end}}
+
+<!-- Nominatim geocoding widget -->
+<div class="geo-widget">
+  <label for="geo-search">{{$.Strings.T "loc_geocode_search"}}</label>
+  <div class="geo-row">
+    <input id="geo-search" type="text" placeholder="{{.Location.Address}}, {{.Location.Zipcode}} {{.Location.Town}}" autocomplete="off">
+    <button type="button" id="geo-btn">{{$.Strings.T "loc_geocode_btn"}}</button>
+  </div>
+  <ul id="geo-results" class="geo-results"></ul>
+</div>
+
+<form method="post" class="edit-form">
+  <label for="location">{{$.Strings.T "loc_name"}}</label>
+  <input id="location" type="text" name="location" value="{{.Location.Location}}" required>
+
+  <label for="short_name">{{$.Strings.T "loc_short_name"}}</label>
+  <input id="short_name" type="text" name="short_name" value="{{.Location.ShortName}}">
+
+  <label for="address">{{$.Strings.T "loc_address"}}</label>
+  <input id="address" type="text" name="address" value="{{.Location.Address}}">
+
+  <div class="form-row">
+    <div>
+      <label for="zipcode">{{$.Strings.T "loc_zipcode"}}</label>
+      <input id="zipcode" type="text" name="zipcode" value="{{.Location.Zipcode}}">
+    </div>
+    <div style="flex:2">
+      <label for="town">{{$.Strings.T "loc_town"}}</label>
+      <input id="town" type="text" name="town" value="{{.Location.Town}}" required>
+    </div>
+  </div>
+
+  <label for="country">{{$.Strings.T "loc_country"}}</label>
+  <input id="country" type="text" name="country" value="{{.Location.Country}}">
+
+  <div class="form-row">
+    <div>
+      <label for="latitude">{{$.Strings.T "loc_latitude"}}</label>
+      <input id="latitude" type="text" name="latitude" value="{{.Location.Latitude}}" placeholder="52.5200">
+    </div>
+    <div>
+      <label for="longitude">{{$.Strings.T "loc_longitude"}}</label>
+      <input id="longitude" type="text" name="longitude" value="{{.Location.Longitude}}" placeholder="13.4050">
+    </div>
+  </div>
+
+  <label for="internetsite">{{$.Strings.T "loc_website"}}</label>
+  <input id="internetsite" type="url" name="internetsite" value="{{.Location.Internetsite}}">
+
+  <label for="organization_id">{{$.Strings.T "fetch_org"}}</label>
+  <select id="organization_id" name="organization_id">
+    <option value="">{{$.Strings.T "loc_no_org"}}</option>
+    {{range .Orgs}}
+    <option value="{{.ID}}"{{if $.Data.Location.OrganizationID}}{{if eq (derefInt $.Data.Location.OrganizationID) .ID}} selected{{end}}{{end}}>{{.Name}}</option>
+    {{end}}
+  </select>
+
+  <div class="form-actions">
+    <button type="submit" class="btn-primary">{{$.Strings.T "admin_save"}}</button>
+    <a href="/admin/locations" class="btn-secondary">{{$.Strings.T "admin_cancel"}}</a>
+  </div>
+</form>
+{{end}}
+</div>
+
+<style>
+.edit-wrap{max-width:600px}
+.form-error{background:#f8d7da;color:#721c24;border:1px solid #f5c6cb;border-radius:4px;padding:.6rem .9rem;margin-bottom:1rem;font-size:.9rem}
+.geo-widget{background:#f0f7ff;border:1px solid #b3d4f5;border-radius:6px;padding:1rem;margin-bottom:1.25rem}
+.geo-widget label{font-weight:600;font-size:.9rem;color:#444;display:block;margin-bottom:.4rem}
+.geo-row{display:flex;gap:.5rem}
+.geo-row input{flex:1;padding:.4rem .6rem;border:1px solid #ccc;border-radius:4px;font-size:.9rem}
+.geo-row button{padding:.4rem .9rem;background:#1a6eb5;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:.9rem;white-space:nowrap}
+.geo-row button:hover{background:#0d4a80}
+.geo-results{list-style:none;padding:0;margin-top:.5rem}
+.geo-results li{padding:.35rem .5rem;border-bottom:1px solid #ddeeff;font-size:.85rem;cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:.5rem}
+.geo-results li:hover{background:#ddeeff}
+.geo-results li .geo-coords{color:#555;white-space:nowrap;font-size:.8rem}
+.geo-results li button{background:#1a6eb5;color:#fff;border:none;border-radius:3px;padding:.15rem .5rem;font-size:.8rem;cursor:pointer;flex-shrink:0}
+.edit-form{display:flex;flex-direction:column;gap:.6rem;background:#fff;border:1px solid #ddd;border-radius:6px;padding:1.5rem}
+.edit-form label{font-weight:600;font-size:.9rem;color:#444}
+.edit-form input,.edit-form select{padding:.45rem .6rem;border:1px solid #ccc;border-radius:4px;font-size:1rem;width:100%}
+.edit-form input:focus,.edit-form select:focus{outline:2px solid #1a6eb5;border-color:#1a6eb5}
+.form-row{display:flex;gap:.75rem}
+.form-row>div{display:flex;flex-direction:column;gap:.3rem;flex:1}
+.form-actions{display:flex;gap:.75rem;margin-top:.5rem}
+.btn-primary{padding:.45rem 1.2rem;background:#1a6eb5;color:#fff;border:none;border-radius:4px;font-size:.95rem;cursor:pointer}
+.btn-primary:hover{background:#0d4a80}
+.btn-secondary{padding:.45rem 1.2rem;background:#f5f5f5;color:#333;border:1px solid #ccc;border-radius:4px;font-size:.95rem;text-decoration:none;cursor:pointer}
+.btn-secondary:hover{background:#e8e8e8}
+</style>
+
+<script>
+(function(){
+  var btn = document.getElementById('geo-btn');
+  var input = document.getElementById('geo-search');
+  var results = document.getElementById('geo-results');
+  var lat = document.getElementById('latitude');
+  var lon = document.getElementById('longitude');
+
+  btn.addEventListener('click', function(){
+    var q = input.value.trim();
+    if(!q) return;
+    btn.disabled = true;
+    results.innerHTML = '<li style="color:#666">…</li>';
+    fetch('https://nominatim.openstreetmap.org/search?q=' + encodeURIComponent(q) + '&format=json&limit=5&addressdetails=0', {
+      headers: {'Accept-Language': document.documentElement.lang || 'de'}
+    })
+    .then(function(r){ return r.json(); })
+    .then(function(data){
+      results.innerHTML = '';
+      if(!data.length){
+        results.innerHTML = '<li style="color:#999">–</li>';
+        return;
+      }
+      data.forEach(function(item){
+        var li = document.createElement('li');
+        var name = document.createElement('span');
+        name.textContent = item.display_name;
+        var coords = document.createElement('span');
+        coords.className = 'geo-coords';
+        coords.textContent = parseFloat(item.lat).toFixed(6) + ', ' + parseFloat(item.lon).toFixed(6);
+        var copyBtn = document.createElement('button');
+        copyBtn.type = 'button';
+        copyBtn.textContent = '↙';
+        copyBtn.title = item.lat + ', ' + item.lon;
+        copyBtn.addEventListener('click', function(){
+          lat.value = parseFloat(item.lat).toFixed(6);
+          lon.value = parseFloat(item.lon).toFixed(6);
+          results.innerHTML = '';
+          lat.focus();
+        });
+        li.appendChild(name);
+        li.appendChild(coords);
+        li.appendChild(copyBtn);
+        results.appendChild(li);
+      });
+    })
+    .catch(function(){ results.innerHTML = '<li style="color:#c00">Error</li>'; })
+    .finally(function(){ btn.disabled = false; });
+  });
+
+  input.addEventListener('keydown', function(e){
+    if(e.key === 'Enter'){ e.preventDefault(); btn.click(); }
+  });
+})();
+</script>
+{{end}}

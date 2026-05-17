@@ -725,7 +725,9 @@ func main() {
 	locationRoutes := router.PathPrefix("/api/v1/locations").Subrouter()
 	locationRoutes.Use(TokenMiddleware)
 	locationRoutes.HandleFunc("", createLocation).Methods("POST")
+	locationRoutes.HandleFunc("/bulk-assign-org", bulkAssignLocationOrg).Methods("POST")
 	locationRoutes.HandleFunc("/{id}", updateLocation).Methods("PUT")
+	locationRoutes.HandleFunc("/{id}", patchLocation).Methods("PATCH")
 	locationRoutes.HandleFunc("/{id}", deleteLocation).Methods("DELETE")
 
 	// Protected musician writes

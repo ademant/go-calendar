@@ -60,6 +60,21 @@ type Musician struct {
 	Bandname string `json:"bandname"`
 }
 
+type Location struct {
+	ID             int    `json:"id"`
+	Location       string `json:"location"`
+	ShortName      string `json:"short_name,omitempty"`
+	Address        string `json:"address"`
+	Zipcode        string `json:"zipcode"`
+	Town           string `json:"town"`
+	Country        string `json:"country,omitempty"`
+	Latitude       string `json:"latitude"`
+	Longitude      string `json:"longitude"`
+	Internetsite   string `json:"internetsite"`
+	CreatedAt      string `json:"created_at"`
+	OrganizationID *int   `json:"organization_id,omitempty"`
+}
+
 type FetchSource struct {
 	ID             int      `json:"id"`
 	URL            string   `json:"url"`
@@ -251,6 +266,52 @@ func (c *DansalClient) UpdateFetchSource(ctx context.Context, id int, typ string
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("dansal API: %s", resp.Status)
+	}
+	return nil
+}
+
+func (c *DansalClient) GetLocations(ctx context.Context) ([]Location, error) {
+	var locs []Location
+	if err := c.get(ctx, "/api/v1/locations", &locs); err != nil {
+		return nil, err
+	}
+	return locs, nil
+}
+
+func (c *DansalClient) GetLocation(ctx context.Context, id int) (Location, error) {
+	var loc Location
+	if err := c.get(ctx, fmt.Sprintf("/api/v1/locations/%d", id), &loc); err != nil {
+		return Location{}, err
+	}
+	return loc, nil
+}
+
+func (c *DansalClient) UpdateLocation(ctx context.Context, id int, loc Location, token string) error {
+	body, _ := json.Marshal(loc)
+	resp, err := c.authed(ctx, http.MethodPatch, fmt.Sprintf("/api/v1/locations/%d", id), token, body)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode == http.StatusForbidden {
+		return fmt.Errorf("forbidden")
+	}
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("dansal API: %s", resp.Status)
+	}
+	return nil
+}
+
+func (c *DansalClient) BulkAssignLocationOrg(ctx context.Context, ids []int, orgID *int, token string) error {
+	payload := map[string]interface{}{"ids": ids, "organization_id": orgID}
+	body, _ := json.Marshal(payload)
+	resp, err := c.authed(ctx, http.MethodPost, "/api/v1/locations/bulk-assign-org", token, body)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusNoContent {
 		return fmt.Errorf("dansal API: %s", resp.Status)
 	}
 	return nil

@@ -1,0 +1,73 @@
+{{template "base" .}}
+{{define "content"}}
+<h1>{{.Strings.T "admin_locations_title"}}</h1>
+
+{{with .Data}}
+{{if .IsAdmin}}
+<form method="post" action="/admin/locations/bulk-assign" id="bulk-form">
+<div class="bulk-bar">
+  <span id="bulk-count"></span>
+  <select name="organization_id">
+    <option value="">{{$.Strings.T "loc_no_org"}}</option>
+    {{range .Orgs}}<option value="{{.ID}}">{{.Name}}</option>{{end}}
+  </select>
+  <button type="submit" class="btn-sm">{{$.Strings.T "loc_bulk_assign_btn"}}</button>
+</div>
+{{end}}
+
+<div class="table-wrap">
+<table class="event-table" id="loc-table">
+  <thead>
+    <tr>
+      {{if $.Data.IsAdmin}}<th class="col-cb"><input type="checkbox" id="cb-all" title="{{$.Strings.T "loc_select_all"}}"></th>{{end}}
+      <th>{{$.Strings.T "loc_name"}}</th>
+      <th>{{$.Strings.T "loc_town"}}</th>
+      <th>{{$.Strings.T "loc_country"}}</th>
+      <th>{{$.Strings.T "fetch_org"}}</th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+  {{range .Locations}}
+  {{$orgName := ""}}
+  {{if .OrganizationID}}{{with index $.Data.OrgMap (derefInt .OrganizationID)}}{{$orgName = .Name}}{{end}}{{end}}
+  <tr>
+    {{if $.Data.IsAdmin}}<td class="col-cb"><input type="checkbox" name="loc_ids" value="{{.ID}}" class="loc-cb"></td>{{end}}
+    <td>{{.Location}}{{if .ShortName}} <span class="short-name">({{.ShortName}})</span>{{end}}</td>
+    <td>{{.Town}}</td>
+    <td>{{.Country}}</td>
+    <td>{{$orgName}}</td>
+    <td class="col-actions"><a href="/admin/locations/{{.ID}}/edit" class="btn-sm">{{$.Strings.T "admin_edit"}}</a></td>
+  </tr>
+  {{end}}
+  </tbody>
+</table>
+</div>
+{{if .IsAdmin}}</form>{{end}}
+{{end}}
+
+<style>
+.bulk-bar{display:flex;align-items:center;gap:.75rem;margin-bottom:.75rem;background:#f4f6fb;padding:.5rem .75rem;border-radius:6px;border:1px solid #ddd}
+.bulk-bar select{padding:.3rem .5rem;border:1px solid #ccc;border-radius:4px;font-size:.9rem}
+.col-cb{width:2rem;text-align:center}
+.short-name{color:#888;font-size:.85em}
+</style>
+
+<script>
+(function(){
+  var cbAll = document.getElementById('cb-all');
+  if(!cbAll) return;
+  var cbs = document.querySelectorAll('.loc-cb');
+  var countEl = document.getElementById('bulk-count');
+  function updateCount(){
+    var n = document.querySelectorAll('.loc-cb:checked').length;
+    countEl.textContent = n > 0 ? n + ' ✓' : '';
+  }
+  cbAll.addEventListener('change', function(){
+    cbs.forEach(function(cb){ cb.checked = cbAll.checked; });
+    updateCount();
+  });
+  cbs.forEach(function(cb){ cb.addEventListener('change', updateCount); });
+})();
+</script>
+{{end}}
