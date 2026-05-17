@@ -459,6 +459,19 @@ func createTables() error {
 		FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 	);
 	CREATE INDEX IF NOT EXISTS idx_magic_login_tokens_token ON magic_login_tokens(token);
+	CREATE TABLE IF NOT EXISTS timetable_entries (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		event_id INTEGER NOT NULL,
+		start_time TEXT NOT NULL,
+		end_time TEXT NOT NULL,
+		title TEXT NOT NULL,
+		room TEXT,
+		location_id INTEGER,
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE CASCADE,
+		FOREIGN KEY (location_id) REFERENCES locations(id)
+	);
+	CREATE INDEX IF NOT EXISTS idx_timetable_event_id ON timetable_entries(event_id);
 	CREATE INDEX IF NOT EXISTS idx_events_url            ON events(url) WHERE url IS NOT NULL;
 	CREATE INDEX IF NOT EXISTS idx_events_published_start ON events(is_published, start_time);
 	CREATE INDEX IF NOT EXISTS idx_events_title_location  ON events(title, location_id);
@@ -595,6 +608,9 @@ func main() {
 	eventRoutes.HandleFunc("/{id}", getEvent).Methods("GET")
 	eventRoutes.HandleFunc("/{id}", deleteEvent).Methods("DELETE")
 	eventRoutes.HandleFunc("/{id}/publish", publishEvent).Methods("POST")
+	eventRoutes.HandleFunc("/{id}/timetable", addTimetableEntries).Methods("POST")
+	eventRoutes.HandleFunc("/{id}/timetable", replaceTimetable).Methods("PUT")
+	eventRoutes.HandleFunc("/{id}/timetable/{entry_id}", deleteTimetableEntry).Methods("DELETE")
 
 	// Image upload (protected)
 	imageRoutes := router.PathPrefix("/api/v1/images").Subrouter()

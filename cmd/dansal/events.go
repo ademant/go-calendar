@@ -40,9 +40,10 @@ type Event struct {
 	Source         string   `json:"source,omitempty"`
 	CreatedAt      string   `json:"created_at"`
 	ImageURL       string   `json:"image_url,omitempty"`
-	OrganizationID *int     `json:"organization_id,omitempty"`
-	Editable       *bool    `json:"editable,omitempty"`
-	Location       string   `json:"-"`
+	OrganizationID *int             `json:"organization_id,omitempty"`
+	Editable       *bool            `json:"editable,omitempty"`
+	Timetable      []TimetableEntry `json:"timetable,omitempty"`
+	Location       string           `json:"-"`
 	TagsJSON       string   `json:"-"`
 }
 
@@ -894,6 +895,10 @@ func getEvent(w http.ResponseWriter, r *http.Request) {
 
 	editable := userRole == RoleAdmin || (userRole == RoleUser && event.OrganizationID != nil && isOrgMember(callerID, *event.OrganizationID))
 	event.Editable = &editable
+
+	if timetable, err := fetchTimetable(event.ID); err == nil {
+		event.Timetable = timetable
+	}
 
 	if strings.Contains(accept, "text/calendar") {
 		cal := ics.NewCalendar()
