@@ -8,15 +8,15 @@ SYSCONFDIR := /etc/dansal
 STATEDIR   := /var/lib/dansal
 SYSTEMDDIR := /lib/systemd/system
 
-.PHONY: build build-dansal build-web build-dansal_admin run clean install install-web update deb
+.PHONY: build build-dansal build-dansal_web build-dansal_admin run clean install install-web update deb
 
-build: build-dansal build-web build-dansal_admin
+build: build-dansal build-dansal_web build-dansal_admin
 
 build-dansal:
 	go build $(LDFLAGS) -o dansal ./cmd/dansal
 
-build-web:
-	go build -o web ./cmd/web
+build-dansal_web:
+	go build -o dansal_web ./cmd/dansal_web
 
 build-dansal_admin:
 	go build -o dansal_admin ./cmd/dansal_admin
@@ -25,7 +25,7 @@ run: build-dansal
 	./dansal --config ./config.yaml
 
 clean:
-	rm -f dansal web dansal_admin *.deb
+	rm -f dansal dansal_web dansal_admin *.deb
 
 install: build
 	# system user
@@ -60,7 +60,7 @@ install: build
 		echo "fail2ban not found — skipping (templates in deploy/fail2ban/)"; \
 	fi
 
-install-web: build-web
+install-web: build-dansal_web
 	install -d -m 750 -o $(SERVICE) -g $(SERVICE) /var/lib/dansal-web
 	@if [ ! -f $(SYSCONFDIR)/web.yaml ]; then \
 		install -m 640 -o root -g $(SERVICE) packaging/web.yaml $(SYSCONFDIR)/web.yaml; \
@@ -68,7 +68,7 @@ install-web: build-web
 	else \
 		echo "$(SYSCONFDIR)/web.yaml already exists — not overwriting"; \
 	fi
-	install -m 755 web $(BINDIR)/dansal-web
+	install -m 755 dansal_web $(BINDIR)/dansal-web
 	install -m 644 dansal-web.service $(SYSTEMDDIR)/dansal-web.service
 	systemctl daemon-reload
 	systemctl enable --now dansal-web.service
@@ -76,7 +76,7 @@ install-web: build-web
 update: build
 	install -m 755 dansal        $(BINDIR)/dansal
 	install -m 755 dansal_admin  $(BINDIR)/dansal_admin
-	install -m 755 web           $(BINDIR)/dansal-web
+	install -m 755 dansal_web    $(BINDIR)/dansal-web
 	systemctl restart $(SERVICE)
 	systemctl try-restart dansal-web.service || true
 
@@ -88,7 +88,7 @@ DEB_VERSION ?= $(shell git describe --tags --always 2>/dev/null | \
 DEB_ARCH    ?= amd64
 DEB_DIR     := /tmp/dansal-deb-$(shell date +%s%N)
 
-deb: build-dansal build-web build-dansal_admin
+deb: build-dansal build-dansal_web build-dansal_admin
 	# Package tree
 	mkdir -p $(DEB_DIR)/DEBIAN
 	mkdir -p $(DEB_DIR)/usr/bin
@@ -106,7 +106,7 @@ deb: build-dansal build-web build-dansal_admin
 	install -m 755 packaging/postrm                  $(DEB_DIR)/DEBIAN/postrm
 	# Binaries
 	install -m 755 dansal                            $(DEB_DIR)/usr/bin/dansal
-	install -m 755 web                               $(DEB_DIR)/usr/bin/dansal-web
+	install -m 755 dansal_web                        $(DEB_DIR)/usr/bin/dansal-web
 	install -m 755 dansal_admin                      $(DEB_DIR)/usr/bin/dansal_admin
 	# Systemd units
 	install -m 644 dansal.service                    $(DEB_DIR)/$(SYSTEMDDIR)/dansal.service
