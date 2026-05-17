@@ -1,6 +1,6 @@
 {{template "base" .}}
 {{define "content"}}
-<h1>Upcoming Events</h1>
+<h1>{{.Strings.T "events_title"}}</h1>
 
 {{with .Data}}
 {{$orgMap := .OrgMap}}
@@ -8,35 +8,35 @@
 <!-- Filters -->
 <div class="filters">
   <div class="filter-row">
-    <input type="search" id="f-search" placeholder="Search title, location…" aria-label="Search events">
-    <input type="date"   id="f-from"   aria-label="From date">
-    <input type="date"   id="f-to"     aria-label="To date">
-    <select id="f-country" aria-label="Filter by country">
-      <option value="">All countries</option>
+    <input type="search" id="f-search" placeholder="{{$.Strings.T "filter_search_placeholder"}}" aria-label="{{$.Strings.T "filter_search_placeholder"}}">
+    <input type="date"   id="f-from"   aria-label="{{$.Strings.T "filter_from_label"}}">
+    <input type="date"   id="f-to"     aria-label="{{$.Strings.T "filter_to_label"}}">
+    <select id="f-country" aria-label="{{$.Strings.T "filter_all_countries"}}">
+      <option value="">{{$.Strings.T "filter_all_countries"}}</option>
       {{range countryList .Events}}<option value="{{.}}">{{.}}</option>{{end}}
     </select>
-    <select id="f-type" aria-label="Filter by type">
-      <option value="">All types</option>
-      <option value="ball">Ball</option>
-      <option value="workshop">Workshop</option>
+    <select id="f-type" aria-label="{{$.Strings.T "filter_all_types"}}">
+      <option value="">{{$.Strings.T "filter_all_types"}}</option>
+      <option value="ball">{{$.Strings.T "filter_type_ball"}}</option>
+      <option value="workshop">{{$.Strings.T "filter_type_workshop"}}</option>
     </select>
-    <button type="button" id="f-clear">Clear</button>
+    <button type="button" id="f-clear">{{$.Strings.T "filter_clear"}}</button>
   </div>
   <div class="filter-info" id="f-info" aria-live="polite"></div>
 </div>
 
 <!-- Table -->
 <div class="table-wrap">
-<table class="event-table" id="event-table" aria-label="Event list">
+<table class="event-table" id="event-table" aria-label="{{$.Strings.T "events_title"}}">
   <thead>
     <tr>
-      <th data-col="date"      class="sortable sorted-asc" tabindex="0" aria-sort="ascending">Date</th>
-      <th data-col="title"     class="sortable" tabindex="0" aria-sort="none">Title</th>
-      <th data-col="location"  class="sortable" tabindex="0" aria-sort="none">Location</th>
-      <th data-col="country"   class="sortable" tabindex="0" aria-sort="none">Country</th>
-      <th class="col-type">Type</th>
-      <th data-col="organizer" class="sortable col-org" tabindex="0" aria-sort="none">Organizer</th>
-      <th class="col-actions">Links</th>
+      <th data-col="date"      class="sortable sorted-asc" tabindex="0" aria-sort="ascending">{{$.Strings.T "col_date"}}</th>
+      <th data-col="title"     class="sortable" tabindex="0" aria-sort="none">{{$.Strings.T "col_title"}}</th>
+      <th data-col="location"  class="sortable" tabindex="0" aria-sort="none">{{$.Strings.T "col_location"}}</th>
+      <th data-col="country"   class="sortable" tabindex="0" aria-sort="none">{{$.Strings.T "col_country"}}</th>
+      <th class="col-type">{{$.Strings.T "col_type"}}</th>
+      <th data-col="organizer" class="sortable col-org" tabindex="0" aria-sort="none">{{$.Strings.T "col_organizer"}}</th>
+      <th class="col-actions">{{$.Strings.T "col_links"}}</th>
     </tr>
   </thead>
   <tbody id="event-tbody">
@@ -53,7 +53,7 @@
       data-tags="{{range .Tags}}{{.}} {{end}}">
     <td class="col-date">
       <span class="date-main">{{formatDate .StartTime}}</span>
-      {{if .IsCancelled}}<span class="badge cancelled">Cancelled</span>{{end}}
+      {{if .IsCancelled}}<span class="badge cancelled">{{$.Strings.T "badge_cancelled"}}</span>{{end}}
     </td>
     <td><a href="/events/{{.ID}}">{{.Title}}</a></td>
     <td class="col-venue">
@@ -62,16 +62,16 @@
     </td>
     <td>{{.LocationCountry}}</td>
     <td class="col-type">
-      {{if .HasBall}}<span class="badge">Ball</span>{{end}}
-      {{if .HasWorkshop}}<span class="badge workshop">Workshop</span>{{end}}
+      {{if .HasBall}}<span class="badge">{{$.Strings.T "filter_type_ball"}}</span>{{end}}
+      {{if .HasWorkshop}}<span class="badge workshop">{{$.Strings.T "filter_type_workshop"}}</span>{{end}}
       {{range .Tags}}<span class="tag">{{.}}</span>{{end}}
     </td>
     <td class="col-org">
       {{if $org}}<a href="/org/{{orgSlug $org}}">{{$org}}</a>{{end}}
     </td>
     <td class="col-actions">
-      <a href="/events/{{.ID}}" class="btn-sm">Details</a>
-      {{if .URL}}<a href="{{.URL}}" class="btn-sm" target="_blank" rel="noopener">Website</a>{{end}}
+      <a href="/events/{{.ID}}" class="btn-sm">{{$.Strings.T "btn_details"}}</a>
+      {{if .URL}}<a href="{{.URL}}" class="btn-sm" target="_blank" rel="noopener">{{$.Strings.T "btn_website"}}</a>{{end}}
     </td>
   </tr>
   {{end}}
@@ -81,12 +81,12 @@
 
 <div class="pagination-bar" id="pagination-bar">
   <span id="page-info"></span>
-  <button type="button" id="load-more">Load more</button>
+  <button type="button" id="load-more">{{$.Strings.T "load_more"}}</button>
 </div>
 
 <p id="empty-state" class="empty-state" hidden>
-  No events match your filters.
-  <button type="button" id="clear-filters-empty">Clear filters</button>
+  {{$.Strings.T "no_events_found"}}
+  <button type="button" id="clear-filters-empty">{{$.Strings.T "clear_filters"}}</button>
 </p>
 
 {{end}}
@@ -188,9 +188,9 @@ th.sorted-desc::after{content:" ↓";color:#1a6eb5}
     visible.slice(0, shown).forEach(function(r){ r.classList.remove('row-filtered'); });
 
     document.getElementById('f-info').textContent =
-      visible.length + ' event' + (visible.length !== 1 ? 's' : '');
+      visible.length + ' ' + (visible.length !== 1 ? I18N.events : I18N.event);
     document.getElementById('page-info').textContent =
-      'Showing ' + shown + ' of ' + visible.length;
+      I18N.showing + ' ' + shown + ' ' + I18N.of + ' ' + visible.length;
     document.getElementById('load-more').disabled = shown >= visible.length;
     document.getElementById('empty-state').hidden  = visible.length > 0;
     document.getElementById('event-table').hidden  = visible.length === 0;
@@ -230,7 +230,8 @@ th.sorted-desc::after{content:" ↓";color:#1a6eb5}
     var prev = shown;
     shown = Math.min(shown + PAGE, visible.length);
     visible.slice(prev, shown).forEach(function(r){ r.classList.remove('row-filtered'); });
-    document.getElementById('page-info').textContent = 'Showing ' + shown + ' of ' + visible.length;
+    document.getElementById('page-info').textContent =
+      I18N.showing + ' ' + shown + ' ' + I18N.of + ' ' + visible.length;
     this.disabled = shown >= visible.length;
   });
 

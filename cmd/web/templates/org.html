@@ -6,11 +6,11 @@
 {{with .Org.Description}}<p>{{.}}</p>{{end}}
 
 <div class="fediverse">
-  <strong>Follow on the Fediverse:</strong> <code>{{.Handle}}</code>
-  <p style="margin-top:.5rem;font-size:.9rem">Search for <code>{{.Handle}}</code> in Mastodon or another Fediverse app to follow and receive event announcements.</p>
+  <strong>{{$.Strings.T "org_follow_fediverse"}}</strong> <code>{{.Handle}}</code>
+  <p style="margin-top:.5rem;font-size:.9rem">{{$.Strings.TF "org_fediverse_hint" .Handle}}</p>
 </div>
 
-<h2>Events</h2>
+<h2>{{$.Strings.T "org_events_title"}}</h2>
 {{if .Events}}
 <ul class="event-list">
 {{range .Events}}
@@ -19,15 +19,15 @@
   <div class="event-meta">
     {{if .StartTime}}<span>{{formatTime .StartTime}}</span>{{end}}
     {{if .Location}} &mdash; {{.Location}}{{else if .LocationTown}} &mdash; {{.LocationTown}}{{end}}
-    {{if .IsCancelled}}<span class="badge cancelled">Cancelled</span>{{end}}
-    {{if .HasBall}}<span class="badge">Ball</span>{{end}}
-    {{if .HasWorkshop}}<span class="badge">Workshop</span>{{end}}
+    {{if .IsCancelled}}<span class="badge cancelled">{{$.Strings.T "badge_cancelled"}}</span>{{end}}
+    {{if .HasBall}}<span class="badge">{{$.Strings.T "filter_type_ball"}}</span>{{end}}
+    {{if .HasWorkshop}}<span class="badge">{{$.Strings.T "filter_type_workshop"}}</span>{{end}}
   </div>
   {{if .Tags}}<div>{{range .Tags}}<span class="tag">#{{.}}</span>{{end}}</div>{{end}}
 </li>
 {{end}}
 </ul>
-{{else}}<p>No events found for this organisation.</p>{{end}}
+{{else}}<p>{{$.Strings.T "org_no_events"}}</p>{{end}}
 
 {{end}}{{/* .Data */}}
 {{end}}

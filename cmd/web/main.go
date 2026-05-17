@@ -17,6 +17,7 @@ func main() {
 	}
 
 	tmpls := loadTemplates()
+	i18n := loadI18n(cfg.I18nFile)
 
 	r := mux.NewRouter()
 
@@ -24,16 +25,17 @@ func main() {
 	r.HandleFunc("/.well-known/nodeinfo", nodeinfoIndexHandler(cfg)).Methods("GET")
 	r.HandleFunc("/nodeinfo/2.0", nodeinfoHandler(cfg)).Methods("GET")
 
-	r.HandleFunc("/org/{name}", actorOrFrontendHandler(cfg, tmpls, db, client)).Methods("GET")
+	r.HandleFunc("/org/{name}", actorOrFrontendHandler(cfg, tmpls, db, client, i18n)).Methods("GET")
 	r.HandleFunc("/org/{name}/outbox", outboxHandler(cfg, db, client)).Methods("GET")
 	r.HandleFunc("/org/{name}/followers", followersHandler(cfg, db)).Methods("GET")
 	r.HandleFunc("/org/{name}/inbox", inboxHandler(cfg, db, client)).Methods("POST")
 
-	r.HandleFunc("/", indexHandler(cfg, tmpls, client)).Methods("GET")
-	r.HandleFunc("/events/{id}", eventHandler(cfg, tmpls, client)).Methods("GET")
-	r.HandleFunc("/login", loginPageHandler(cfg, tmpls)).Methods("GET")
-	r.HandleFunc("/login", loginHandler(cfg, tmpls, client)).Methods("POST")
+	r.HandleFunc("/", indexHandler(cfg, tmpls, client, i18n)).Methods("GET")
+	r.HandleFunc("/events/{id}", eventHandler(cfg, tmpls, client, i18n)).Methods("GET")
+	r.HandleFunc("/login", loginPageHandler(cfg, tmpls, i18n)).Methods("GET")
+	r.HandleFunc("/login", loginHandler(cfg, tmpls, client, i18n)).Methods("POST")
 	r.HandleFunc("/logout", logoutHandler(cfg, client)).Methods("POST")
+	r.HandleFunc("/lang", langHandler(i18n)).Methods("GET")
 
 	go startDelivery(cfg, db, client)
 

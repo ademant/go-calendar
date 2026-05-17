@@ -1,5 +1,5 @@
 {{define "base"}}<!DOCTYPE html>
-<html lang="en">
+<html lang="{{.LangCode}}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -7,9 +7,13 @@
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:system-ui,sans-serif;line-height:1.6;color:#222;background:#fafafa;padding:0 1rem}
-nav{background:#1a1a2e;color:#fff;padding:.6rem 1rem;margin:0 -1rem 1.5rem;display:flex;align-items:center;gap:1.5rem}
+nav{background:#1a1a2e;color:#fff;padding:.6rem 1rem;margin:0 -1rem 1.5rem;display:flex;align-items:center;gap:1rem;flex-wrap:wrap}
 .nav-brand{color:#fff;text-decoration:none;font-weight:700;font-size:1.1rem;white-space:nowrap}
 .nav-brand:hover{color:#c0c8ff}
+.nav-lang{display:flex;gap:.25rem;align-items:center}
+.lang-btn{background:transparent;border:none;cursor:pointer;font-size:1.1rem;padding:.1rem .2rem;border-radius:3px;opacity:.5;line-height:1}
+.lang-btn:hover{opacity:1;background:rgba(255,255,255,.1)}
+.lang-btn.lang-active{opacity:1}
 .nav-links{display:flex;gap:1rem;flex:1}
 .nav-links a{color:#c0c8ff;text-decoration:none;font-size:.95rem}
 .nav-links a:hover{color:#fff;text-decoration:underline}
@@ -42,23 +46,29 @@ footer{text-align:center;color:#999;font-size:.8rem;margin-top:2rem;padding-top:
 <body>
 <nav>
   <a class="nav-brand" href="/">{{.Domain}}</a>
+  <div class="nav-lang">
+    {{range .Languages}}<a href="/lang?code={{.Code}}" class="lang-btn{{if .Active}} lang-active{{end}}" title="{{.Name}}">{{.Flag}}</a>{{end}}
+  </div>
   <div class="nav-links">
-    <a href="/">Events</a>
+    <a href="/">{{.Strings.T "nav_events"}}</a>
   </div>
   <div class="nav-user">
     {{if .User}}
       <span>{{.User.Username}}</span>
       <form method="post" action="/logout" style="margin:0">
-        <button type="submit" class="nav-btn">Logout</button>
+        <button type="submit" class="nav-btn">{{.Strings.T "nav_logout"}}</button>
       </form>
     {{else}}
-      <a class="nav-btn" href="/login">Login</a>
+      <a class="nav-btn" href="/login">{{.Strings.T "nav_login"}}</a>
     {{end}}
   </div>
 </nav>
+<script>
+var I18N={event:"{{.Strings.T "js_event"}}",events:"{{.Strings.T "js_events"}}",showing:"{{.Strings.T "js_showing"}}",of:"{{.Strings.T "js_of"}}"};
+</script>
 <main>
 {{block "content" .}}{{end}}
 </main>
-<footer>Powered by dansal</footer>
+<footer>{{.Strings.T "nav_footer"}}</footer>
 </body>
 </html>{{end}}

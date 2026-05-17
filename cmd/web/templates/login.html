@@ -1,18 +1,18 @@
 {{template "base" .}}
 {{define "content"}}
-<h1>Login</h1>
+<h1>{{.Strings.T "login_title"}}</h1>
 
 <div class="login-wrap">
   {{with .Data}}
-  {{if .Error}}<p class="login-error" role="alert">{{.Error}}</p>{{end}}
+  {{if .ErrorKey}}<p class="login-error" role="alert">{{$.Strings.T .ErrorKey}}</p>{{end}}
   <form method="post" action="/login" class="login-form" autocomplete="on">
-    <label for="username">Username</label>
+    <label for="username">{{$.Strings.T "login_username"}}</label>
     <input id="username" type="text" name="username" value="{{.Username}}"
            required autofocus autocomplete="username">
-    <label for="password">Password</label>
+    <label for="password">{{$.Strings.T "login_password"}}</label>
     <input id="password" type="password" name="password"
            required autocomplete="current-password">
-    <button type="submit">Login</button>
+    <button type="submit">{{$.Strings.T "login_submit"}}</button>
   </form>
   {{end}}
 </div>

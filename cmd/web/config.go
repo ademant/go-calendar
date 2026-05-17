@@ -14,6 +14,7 @@ type Config struct {
 	DansalURL string `yaml:"dansal_url"`
 	DBPath    string `yaml:"db_path"`
 	PollSecs  int    `yaml:"poll_secs"`
+	I18nFile  string `yaml:"i18n_file"` // optional path to override embedded i18n.yaml
 }
 
 func loadConfig() *Config {

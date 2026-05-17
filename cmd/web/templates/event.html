@@ -4,27 +4,27 @@
 {{with .Event}}
 <h1>{{.Title}}</h1>
 
-{{if .IsCancelled}}<p><span class="badge cancelled">This event has been cancelled</span></p>{{end}}
+{{if .IsCancelled}}<p><span class="badge cancelled">{{$.Strings.T "evt_cancelled"}}</span></p>{{end}}
 
 <div class="detail-section">
-  {{if .StartTime}}<div class="detail-row"><span class="detail-label">Starts:</span> {{formatTime .StartTime}}</div>{{end}}
-  {{if .EndTime}}<div class="detail-row"><span class="detail-label">Ends:</span> {{formatTime .EndTime}}</div>{{end}}
-  {{if .Location}}<div class="detail-row"><span class="detail-label">Venue:</span> {{.Location}}</div>{{end}}
-  {{if .LocationTown}}<div class="detail-row"><span class="detail-label">Town:</span> {{.LocationTown}}{{if .LocationCountry}}, {{.LocationCountry}}{{end}}</div>{{end}}
-  {{if .Description}}<div class="detail-row"><span class="detail-label">Description:</span><br>{{.Description}}</div>{{end}}
-  {{if .URL}}<div class="detail-row"><span class="detail-label">Website:</span> <a href="{{.URL}}" rel="noopener">{{.URL}}</a></div>{{end}}
-  {{if .Tags}}<div class="detail-row"><span class="detail-label">Tags:</span> {{range .Tags}}<span class="tag">#{{.}}</span>{{end}}</div>{{end}}
-  {{if .HasBall}}<div class="detail-row"><span class="badge">Ball</span></div>{{end}}
-  {{if .HasWorkshop}}<div class="detail-row"><span class="badge">Workshop</span></div>{{end}}
+  {{if .StartTime}}<div class="detail-row"><span class="detail-label">{{$.Strings.T "evt_starts"}}</span> {{formatTime .StartTime}}</div>{{end}}
+  {{if .EndTime}}<div class="detail-row"><span class="detail-label">{{$.Strings.T "evt_ends"}}</span> {{formatTime .EndTime}}</div>{{end}}
+  {{if .Location}}<div class="detail-row"><span class="detail-label">{{$.Strings.T "evt_venue"}}</span> {{.Location}}</div>{{end}}
+  {{if .LocationTown}}<div class="detail-row"><span class="detail-label">{{$.Strings.T "evt_town"}}</span> {{.LocationTown}}{{if .LocationCountry}}, {{.LocationCountry}}{{end}}</div>{{end}}
+  {{if .Description}}<div class="detail-row"><span class="detail-label">{{$.Strings.T "evt_description"}}</span><br>{{.Description}}</div>{{end}}
+  {{if .URL}}<div class="detail-row"><span class="detail-label">{{$.Strings.T "evt_website"}}</span> <a href="{{.URL}}" rel="noopener">{{.URL}}</a></div>{{end}}
+  {{if .Tags}}<div class="detail-row"><span class="detail-label">{{$.Strings.T "evt_tags"}}</span> {{range .Tags}}<span class="tag">#{{.}}</span>{{end}}</div>{{end}}
+  {{if .HasBall}}<div class="detail-row"><span class="badge">{{$.Strings.T "filter_type_ball"}}</span></div>{{end}}
+  {{if .HasWorkshop}}<div class="detail-row"><span class="badge">{{$.Strings.T "filter_type_workshop"}}</span></div>{{end}}
   {{with .Pricing}}
-  <div class="detail-row"><span class="detail-label">Admission:</span>
-    {{if eq .Type "free"}}Free{{end}}
-    {{if eq .Type "donation"}}By donation{{end}}
+  <div class="detail-row"><span class="detail-label">{{$.Strings.T "evt_admission"}}</span>
+    {{if eq .Type "free"}}{{$.Strings.T "evt_free"}}{{end}}
+    {{if eq .Type "donation"}}{{$.Strings.T "evt_donation"}}{{end}}
     {{if eq .Type "single"}}{{.Amount}}{{if .Currency}} {{.Currency}}{{end}}{{end}}
     {{if eq .Type "multiple"}}{{range .Prices}}<span>{{.Label}}: {{.Amount}}</span> {{end}}{{end}}
   </div>
   {{end}}
-  {{if .Musicians}}<div class="detail-row"><span class="detail-label">Music:</span>
+  {{if .Musicians}}<div class="detail-row"><span class="detail-label">{{$.Strings.T "evt_music"}}</span>
     {{range .Musicians}}<span>{{.Bandname}}</span> {{end}}
   </div>{{end}}
 </div>
@@ -33,7 +33,7 @@
 
 {{with .Org}}
 <div class="detail-section">
-  <h2>Organised by <a href="/org/{{$.Data.OrgSlug}}">{{.Name}}</a></h2>
+  <h2>{{$.Strings.T "evt_organised_by"}} <a href="/org/{{$.Data.OrgSlug}}">{{.Name}}</a></h2>
   {{if .Description}}<p>{{.Description}}</p>{{end}}
 </div>
 {{end}}

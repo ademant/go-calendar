@@ -14,18 +14,25 @@ import (
 )
 
 type TemplateData struct {
-	Title  string
-	Domain string
-	User   *SessionUser
-	Data   interface{}
+	Title     string
+	Domain    string
+	User      *SessionUser
+	Strings   I18nStrings
+	LangCode  string
+	Languages []LangOption
+	Data      interface{}
 }
 
-func tmplData(r *http.Request, cfg *Config, title string, data interface{}) TemplateData {
+func tmplData(r *http.Request, cfg *Config, i18n *I18n, title string, data interface{}) TemplateData {
+	lang := i18n.detectLang(r)
 	return TemplateData{
-		Title:  title,
-		Domain: cfg.Domain,
-		User:   getSessionUser(r),
-		Data:   data,
+		Title:     title,
+		Domain:    cfg.Domain,
+		User:      getSessionUser(r),
+		Strings:   i18n.Strings(lang),
+		LangCode:  lang,
+		Languages: i18n.Options(lang),
+		Data:      data,
 	}
 }
 
@@ -137,7 +144,7 @@ func renderTemplate(w http.ResponseWriter, tmpl *template.Template, data interfa
 	}
 }
 
-func indexHandler(cfg *Config, tmpls *Templates, client *DansalClient) http.HandlerFunc {
+func indexHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		events, err := client.GetEvents(r.Context(), "")
 		if err != nil {
@@ -150,11 +157,12 @@ func indexHandler(cfg *Config, tmpls *Templates, client *DansalClient) http.Hand
 				orgMap[o.ID] = o
 			}
 		}
-		renderTemplate(w, tmpls.index, tmplData(r, cfg, "Upcoming Events", IndexData{Events: events, OrgMap: orgMap}))
+		title := i18n.T(r, "events_title")
+		renderTemplate(w, tmpls.index, tmplData(r, cfg, i18n, title, IndexData{Events: events, OrgMap: orgMap}))
 	}
 }
 
-func eventHandler(cfg *Config, tmpls *Templates, client *DansalClient) http.HandlerFunc {
+func eventHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		idStr := mux.Vars(r)["id"]
 		id, err := strconv.Atoi(idStr)
@@ -178,11 +186,11 @@ func eventHandler(cfg *Config, tmpls *Templates, client *DansalClient) http.Hand
 			}
 		}
 
-		renderTemplate(w, tmpls.event, tmplData(r, cfg, event.Title, EventData{Event: event, Org: org, OrgSlug: slug}))
+		renderTemplate(w, tmpls.event, tmplData(r, cfg, i18n, event.Title, EventData{Event: event, Org: org, OrgSlug: slug}))
 	}
 }
 
-func orgFrontendHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *DansalClient) http.HandlerFunc {
+func orgFrontendHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *DansalClient, i18n *I18n) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		slug := mux.Vars(r)["name"]
 
@@ -207,7 +215,7 @@ func orgFrontendHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *Dansa
 		}
 
 		handle := "@" + slug + "@" + cfg.Domain
-		renderTemplate(w, tmpls.org, tmplData(r, cfg, org.Name, OrgData{
+		renderTemplate(w, tmpls.org, tmplData(r, cfg, i18n, org.Name, OrgData{
 			Org:    org,
 			Events: events,
 			Slug:   slug,
@@ -216,8 +224,8 @@ func orgFrontendHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *Dansa
 	}
 }
 
-func actorOrFrontendHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *DansalClient) http.HandlerFunc {
-	frontendH := orgFrontendHandler(cfg, tmpls, db, client)
+func actorOrFrontendHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *DansalClient, i18n *I18n) http.HandlerFunc {
+	frontendH := orgFrontendHandler(cfg, tmpls, db, client, i18n)
 	apH := apActorHandler(cfg, db, client)
 	return func(w http.ResponseWriter, r *http.Request) {
 		if isAPRequest(r) {
