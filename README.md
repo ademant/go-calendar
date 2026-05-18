@@ -68,6 +68,117 @@ go build -o dansal
 ./dansal
 ```
 
+## Administrator guide
+
+### First login
+
+On the very first run, dansal creates an admin account and prints the generated password to the console:
+
+```
+Admin user created — username: admin  password: <generated>
+```
+
+Log in at `/login` with those credentials and change the password immediately in **Settings**.
+
+### User management (`/admin/users`)
+
+Admins can create, edit, and delete user accounts.
+
+**Roles:**
+
+| Role | Can do |
+|---|---|
+| `admin` | Everything |
+| `publisher` | Create and edit events, manage locations and musicians |
+| `user` | Create events for their own organisation only |
+| `viewer` | Read-only; can see unpublished events |
+
+**Creating a user directly** — fill in username, email, password and role. The user can then log in immediately.
+
+**Invite links** — a safer alternative for self-registration. Go to `/admin/invites`, create a link with an optional role and organisation pre-assignment, and share it. The recipient registers through the link and lands with the configured role already set. Links expire after `invite_expiry_hours` (default 48 h).
+
+**Disabling an account** — tick the *Disabled* checkbox on the edit form. The user cannot log in but the account and its history are preserved.
+
+**Deleting a user** — admin accounts cannot be deleted via the UI; demote to another role first.
+
+### Organisations (`/admin/organizations`)
+
+Organisations represent folk clubs, dance groups, or any recurring promoter. Each organisation can have:
+
+- One or more **locations** (venues it uses regularly)
+- One or more **iCal feed sources** that are fetched automatically
+- Social links: website, Mastodon, Instagram, Facebook, contact email
+
+**Create** — click *New organisation*, fill in name and optional details.
+
+**Edit** — the edit page also lets you assign locations and feed sources to the organisation.
+
+**Run feeds** — the table has a *Run feeds* button per organisation that immediately fetches all assigned iCal sources and imports new events.
+
+**Delete** — confirmation required; cascades to membership records but not to events or locations.
+
+**Assigning users** — on the edit page, add users as members. Members with the `user` role can then create and edit events belonging to that organisation.
+
+### Locations (`/admin/locations`)
+
+Locations store the venue details used by events. Fields: name, short name, address, postcode, town, country, latitude/longitude, website, organisation.
+
+The geo-coordinates are shown on the map on event detail pages. If coordinates are missing, the event still appears in the list but not on the map. You can look up coordinates from any mapping service and paste them in.
+
+### Events (`/admin/events`)
+
+**Creating an event:**
+
+1. Go to `/admin/events/new`.
+2. Set title, start/end time, location, and organisation.
+3. Choose type: **Ball**, **Workshop** (with optional difficulty: beginner / advanced / pro), **Festival**, or a combination.
+4. Add a description, pricing, booking URL, and tags as needed.
+5. Attach musicians from the musicians list.
+6. Add a timetable for multi-room or multi-slot events.
+7. Save — the event is created as **unpublished** and only visible to logged-in users.
+
+**Publishing** — open the event detail page and click *Publish*, or tick *Published* on the edit form. Only published events appear on the public map and calendar.
+
+**Cancelling** — tick *Cancelled* on the edit form. The event remains visible with a cancellation notice.
+
+**Importing via iCal feed** — go to `/admin/fetchurls`, add a feed URL (type `ical`), optionally assign it to an organisation, and click *Fetch*. Events already present (matched by UID or URL) are updated rather than duplicated. You can also set up recurring fetches by assigning feeds to organisations and using the *Run feeds* button or the scheduled fetch-all endpoint.
+
+### Musicians (`/admin/musicians`)
+
+Musicians can be linked to a MusicBrainz ID for automatic discography lookups. Add social links (Mastodon, Instagram, Facebook, SoundCloud) and a short description. Once created, musicians can be attached to individual events.
+
+### iCal feed sources (`/admin/fetchurls`)
+
+Each feed source has a URL, a type (`ical`), optional tags that are applied to all imported events, and an optional organisation assignment.
+
+**Bulk operations** — select multiple sources and use *Bulk fetch* to run them all at once, or *Bulk assign org* to move a batch to an organisation.
+
+**Last fetched** — the table shows when each source was last successfully fetched.
+
+### Contact board moderation
+
+Each event page has a rideshare/accommodation board. Posts are only visible after the poster confirms their email. As admin (or as a member of the event's organisation) you can delete any post directly from the event page using the *Delete* button next to each entry.
+
+### Verification and account security
+
+- **Email verification** — users verify their email from Settings. Tokens expire after `verification_expiry_hours` (default 24 h).
+- **Telegram verification** — users link their Telegram account via a deep link from Settings (see [Telegram integration](#telegram-integration)).
+- **Failed login lockout** — after `login_max_failures` failed attempts within `login_failure_window_secs`, the account is automatically disabled. Re-enable it from the user edit page.
+- **Magic link login** — users can request a one-time login link sent to their email, useful if they forget their password.
+- **Sessions** — users can view and revoke their active sessions from Settings. Admins can see all sessions via the API.
+
+### Reload configuration without restart
+
+Send `SIGHUP` to the running process to reload `config.yaml` without downtime:
+
+```bash
+kill -HUP $(pidof dansal)
+```
+
+Port, database path, and admin socket changes still require a full restart.
+
+---
+
 ## Legal pages (Contact & Impressum)
 
 The web frontend supports an optional contact line in the page footer and an Impressum page at `/impressum`. Both are configured via a separate YAML file referenced by `pages_file` in the web config.
