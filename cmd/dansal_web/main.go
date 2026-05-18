@@ -36,6 +36,7 @@ func main() {
 	r.HandleFunc("/banner.svg", svgHandler(bannerSVG)).Methods("GET")
 	r.HandleFunc("/", indexHandler(cfg, tmpls, client, i18n)).Methods("GET")
 	r.HandleFunc("/events/{id}", eventHandler(cfg, tmpls, client, i18n)).Methods("GET")
+	r.HandleFunc("/events/{id}.ics", feedEventICSHandler(cfg, client)).Methods("GET")
 	r.HandleFunc("/musicians", musiciansHandler(cfg, tmpls, client, i18n)).Methods("GET")
 	r.HandleFunc("/musicians/{id}", musicianHandler(cfg, tmpls, client, i18n)).Methods("GET")
 	r.HandleFunc("/impressum", impressumHandler(cfg, tmpls, i18n)).Methods("GET")

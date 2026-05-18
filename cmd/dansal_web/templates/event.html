@@ -14,7 +14,16 @@
   {{if $.User}}<a href="/admin/events/{{.ID}}/edit" class="btn-edit-event">{{$.Strings.T "admin_edit"}}</a>{{end}}
   {{if .IsCancelled}}<p><span class="badge cancelled">{{$.Strings.T "evt_cancelled"}}</span></p>{{end}}
   <div class="evt-header-meta">
-    {{if .StartTime}}<span class="evt-time">{{formatTime $.LangCode .StartTime}}{{if .EndTime}} – {{formatTime $.LangCode .EndTime}}{{end}}</span>{{end}}
+    {{if .StartTime}}
+    <span class="evt-time">
+      {{formatTime $.LangCode .StartTime}}
+      {{if .EndTime}}
+        {{if sameDate .StartTime .EndTime}} – {{formatHourMin .EndTime}}
+        {{else}} – {{formatTime $.LangCode .EndTime}}
+        {{end}}
+      {{end}}
+    </span>
+    {{end}}
     {{if .Location}}<span class="evt-sep">·</span><span>{{.Location}}</span>{{end}}
     {{if or .LocationAddress .LocationZipcode}}
       <span class="evt-sep">·</span><span>{{if .LocationAddress}}{{.LocationAddress}}, {{end}}{{.LocationZipcode}} {{.LocationTown}}{{if .LocationCountry}}, {{.LocationCountry}}{{end}}</span>
@@ -70,26 +79,59 @@
   </div>
 
   <aside class="evt-sidebar">
+
+    {{/* Type + difficulty badges */}}
     {{if or .HasBall (or .HasWorkshop .HasFestival)}}
     <div class="sidebar-block">
       {{if .HasBall}}<span class="badge">{{$.Strings.T "filter_type_ball"}}</span>{{end}}
-      {{if .HasWorkshop}}<span class="badge">{{$.Strings.T "filter_type_workshop"}}</span>{{end}}
+      {{if .HasWorkshop}}
+        <span class="badge">{{$.Strings.T "filter_type_workshop"}}</span>
+        {{if .WorkshopDifficulty}}<span class="badge badge-difficulty">{{$.Strings.T (print "workshop_difficulty_" .WorkshopDifficulty)}}</span>{{end}}
+      {{end}}
       {{if .HasFestival}}<span class="badge">{{$.Strings.T "filter_type_festival"}}</span>{{end}}
     </div>
     {{end}}
 
-    {{with .Pricing}}
+    {{/* Location block */}}
+    {{if or .Location .LocationTown}}
     <div class="sidebar-block">
-      <div class="sidebar-label">{{$.Strings.T "evt_admission"}}</div>
-      {{if eq .Type "free"}}<div>{{$.Strings.T "evt_free"}}</div>{{end}}
-      {{if eq .Type "donation"}}<div>{{$.Strings.T "evt_donation"}}</div>{{end}}
-      {{if eq .Type "single"}}<div>{{.Amount}}{{if .Currency}} {{.Currency}}{{end}}</div>{{end}}
-      {{if eq .Type "multiple"}}
-        {{range .Prices}}<div>{{.Label}}: {{.Amount}}</div>{{end}}
+      <div class="sidebar-label">{{$.Strings.T "evt_venue"}}</div>
+      {{if .Location}}<div class="evt-loc-name">{{.Location}}</div>{{end}}
+      {{if or .LocationAddress .LocationZipcode .LocationTown}}
+      <div class="evt-loc-addr">
+        {{if .LocationAddress}}<span>{{.LocationAddress}}</span><br>{{end}}
+        {{if or .LocationZipcode .LocationTown}}<span>{{.LocationZipcode}} {{.LocationTown}}</span>{{end}}
+        {{if .LocationCountry}}<br><span>{{.LocationCountry}}</span>{{end}}
+      </div>
+      {{end}}
+      {{if and .LocationLat .LocationLng}}
+      <div id="evt-map" data-lat="{{.LocationLat}}" data-lng="{{.LocationLng}}" class="evt-map"></div>
       {{end}}
     </div>
     {{end}}
 
+    {{/* Admission */}}
+    {{with .Pricing}}
+    {{$cur := .Currency}}
+    <div class="sidebar-block">
+      <div class="sidebar-label">{{$.Strings.T "evt_admission"}}</div>
+      {{if eq .Type "free"}}<div>{{$.Strings.T "evt_free"}}</div>{{end}}
+      {{if eq .Type "donation"}}<div>{{$.Strings.T "evt_donation"}}</div>{{end}}
+      {{if eq .Type "single"}}<div>{{.Amount}} {{if .Currency}}{{.Currency}}{{else}}€{{end}}</div>{{end}}
+      {{if eq .Type "multiple"}}
+        {{range .Prices}}<div>{{.Label}}: {{.Amount}} {{if $cur}}{{$cur}}{{else}}€{{end}}</div>{{end}}
+      {{end}}
+    </div>
+    {{end}}
+
+    {{/* Booking / tickets */}}
+    {{if .BookingURL}}
+    <div class="sidebar-block">
+      <a href="{{.BookingURL}}" target="_blank" rel="noopener" class="btn-booking">{{$.Strings.T "evt_booking"}}</a>
+    </div>
+    {{end}}
+
+    {{/* Website */}}
     {{if .URL}}
     <div class="sidebar-block">
       <div class="sidebar-label">{{$.Strings.T "evt_links"}}</div>
@@ -97,12 +139,33 @@
     </div>
     {{end}}
 
+    {{/* Add to calendar */}}
+    <div class="sidebar-block">
+      <a href="/events/{{.ID}}.ics" class="sidebar-link">📅 {{$.Strings.T "evt_add_to_calendar"}}</a>
+    </div>
+
+    {{/* Tags */}}
     {{if .Tags}}
     <div class="sidebar-block">
       <div class="sidebar-label">{{$.Strings.T "evt_tags"}}</div>
       <div>{{range .Tags}}<span class="tag">#{{.}}</span>{{end}}</div>
     </div>
     {{end}}
+
+    {{/* Organisation contact */}}
+    {{with $.Data.Org}}
+    {{if or .ContactEmail .Website .Mastodon .Instagram .Facebook}}
+    <div class="sidebar-block">
+      <div class="sidebar-label">{{$.Strings.T "evt_org_contact"}}</div>
+      {{with .ContactEmail}}<div><a href="mailto:{{.}}" class="sidebar-link">{{.}}</a></div>{{end}}
+      {{with .Website}}<div><a href="{{.}}" target="_blank" rel="noopener" class="sidebar-link">{{$.Strings.T "evt_website"}}</a></div>{{end}}
+      {{with .Mastodon}}<div><a href="{{mastodonURL .}}" target="_blank" rel="noopener me" class="sidebar-link">Mastodon</a></div>{{end}}
+      {{with .Instagram}}<div><a href="https://instagram.com/{{.}}" target="_blank" rel="noopener" class="sidebar-link">Instagram</a></div>{{end}}
+      {{with .Facebook}}<div><a href="https://facebook.com/{{.}}" target="_blank" rel="noopener" class="sidebar-link">Facebook</a></div>{{end}}
+    </div>
+    {{end}}
+    {{end}}
+
   </aside>
 </div>
 
@@ -162,5 +225,30 @@
 .m-link-mastodon{background:#563acc}.m-link-mastodon:hover{background:#3c278e}
 .m-link-instagram{background:#c13584}.m-link-instagram:hover{background:#8a255e}
 .m-link-facebook{background:#1877f2}.m-link-facebook:hover{background:#0d5ab5}
+.badge-difficulty{background:#fff3cd;color:#856404}
+.evt-loc-name{font-weight:600;font-size:.92rem;color:#1a1a2e;margin-bottom:.25rem}
+.evt-loc-addr{font-size:.88rem;color:#555;line-height:1.5;margin-bottom:.5rem}
+.evt-map{height:160px;border-radius:4px;overflow:hidden;margin-top:.5rem;background:#e8e8e8}
+.btn-booking{display:block;text-align:center;padding:.5rem 1rem;background:#1a6eb5;color:#fff;border-radius:4px;font-size:.9rem;font-weight:600;text-decoration:none}
+.btn-booking:hover{background:#0d4a80;color:#fff}
 </style>
+
+{{if .Event.LocationLat}}
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+(function(){
+  var el=document.getElementById('evt-map');
+  if(!el) return;
+  var lat=parseFloat(el.dataset.lat), lng=parseFloat(el.dataset.lng);
+  if(isNaN(lat)||isNaN(lng)) return;
+  var map=L.map(el,{zoomControl:false,dragging:false,scrollWheelZoom:false,doubleClickZoom:false,boxZoom:false,keyboard:false,touchZoom:false}).setView([lat,lng],15);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'}).addTo(map);
+  L.marker([lat,lng]).addTo(map);
+  el.addEventListener('click',function(){window.open('https://www.openstreetmap.org/?mlat='+lat+'&mlon='+lng+'#map=16/'+lat+'/'+lng,'_blank');});
+  el.style.cursor='pointer';
+})();
+</script>
+{{end}}
+
 {{end}}

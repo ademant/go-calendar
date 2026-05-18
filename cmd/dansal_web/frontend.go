@@ -165,6 +165,20 @@ var tmplFuncMap = template.FuncMap{
 		}
 		return ""
 	},
+	"formatHourMin": func(s string) string {
+		if t, ok := parseTime(s); ok {
+			return fmt.Sprintf("%02d:%02d", t.Hour(), t.Minute())
+		}
+		return ""
+	},
+	"sameDate": func(s1, s2 string) bool {
+		t1, ok1 := parseTime(s1)
+		t2, ok2 := parseTime(s2)
+		if !ok1 || !ok2 {
+			return false
+		}
+		return t1.Year() == t2.Year() && t1.Month() == t2.Month() && t1.Day() == t2.Day()
+	},
 	"join": func(ss []string) string {
 		return strings.Join(ss, ", ")
 	},

@@ -433,6 +433,7 @@ func migrateDB() {
 	db.Exec("ALTER TABLE organizations ADD COLUMN facebook TEXT")
 	db.Exec("ALTER TABLE organizations ADD COLUMN contact_email TEXT")
 	db.Exec("ALTER TABLE events ADD COLUMN workshop_difficulty TEXT DEFAULT ''")
+	db.Exec("ALTER TABLE events ADD COLUMN booking_url TEXT DEFAULT ''")
 	migrateUsersRoles()
 	db.Exec(`CREATE TABLE IF NOT EXISTS verification_tokens (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -713,6 +714,7 @@ func main() {
 
 	// iCal feeds (public, no auth)
 	router.HandleFunc("/api/v1/events.ics", getEventsICS).Methods("GET")
+	router.HandleFunc("/api/v1/events/{id:[0-9]+}.ics", getEventICS).Methods("GET")
 	router.HandleFunc("/api/v1/events/tag/{tag}.ics", getEventsByTagICS).Methods("GET")
 	router.HandleFunc("/api/v1/events/town/{town}.ics", getEventsByTownICS).Methods("GET")
 

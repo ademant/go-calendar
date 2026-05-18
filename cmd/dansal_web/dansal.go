@@ -41,6 +41,7 @@ type Event struct {
 	LocationCountry string     `json:"location_country,omitempty"`
 	LocationLat     string     `json:"location_lat,omitempty"`
 	LocationLng     string     `json:"location_lng,omitempty"`
+	BookingURL      string     `json:"booking_url,omitempty"`
 	Pricing         *Pricing         `json:"pricing,omitempty"`
 	Musicians       []Musician       `json:"musicians,omitempty"`
 	Timetable       []TimetableEntry `json:"timetable,omitempty"`
@@ -672,6 +673,7 @@ type EventCreateReq struct {
 	HasWorkshop          bool        `json:"has_workshop"`
 	HasFestival          bool        `json:"has_festival"`
 	WorkshopDifficulty   string      `json:"workshop_difficulty,omitempty"`
+	BookingURL           string      `json:"booking_url,omitempty"`
 	Tags                 []string    `json:"tags,omitempty"`
 	URL            string      `json:"url,omitempty"`
 	OrganizationID *int        `json:"organization_id,omitempty"`
@@ -688,6 +690,7 @@ type EventUpdateReq struct {
 	HasWorkshop          bool        `json:"has_workshop"`
 	HasFestival          bool        `json:"has_festival"`
 	WorkshopDifficulty   string      `json:"workshop_difficulty,omitempty"`
+	BookingURL           string      `json:"booking_url,omitempty"`
 	IsCancelled          bool        `json:"is_cancelled"`
 	IsPublished    bool        `json:"is_published"`
 	Tags           []string    `json:"tags,omitempty"`

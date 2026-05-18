@@ -6,12 +6,35 @@ import (
 	"encoding/xml"
 	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
 	ics "github.com/arran4/golang-ical"
 	"github.com/gorilla/mux"
 )
+
+// feedEventICSHandler serves a single event as an iCal download.
+func feedEventICSHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		id, err := strconv.Atoi(mux.Vars(r)["id"])
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		event, err := client.GetEvent(r.Context(), id)
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		cal := ics.NewCalendar()
+		cal.SetMethod(ics.MethodPublish)
+		feedAddEventToCalendar(cal, cfg.Domain, event)
+		w.Header().Set("Content-Type", "text/calendar; charset=utf-8")
+		w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="event-%d.ics"`, id))
+		w.Write([]byte(cal.Serialize()))
+	}
+}
 
 // feedMainHandler serves all upcoming events.
 func feedMainHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
