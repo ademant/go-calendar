@@ -111,3 +111,80 @@ impressum:
 - **Impressum** — the text is rendered verbatim (whitespace preserved) on `/impressum`. A link to that page appears in the footer only when an impressum text is configured. Language fallback works the same way as for contact.
 
 If `pages_file` is not set in the config, both features are silently disabled — no footer line, no `/impressum` route content.
+
+## Telegram integration
+
+Dansal supports Telegram in two ways:
+
+1. **Account verification** — users prove they control a Telegram account by clicking a deep link that sends a one-time token to the bot.
+2. **Admin messaging** — admins can send a plain-text message to any user who has completed Telegram verification.
+
+### How it works
+
+Because Telegram bots cannot initiate a conversation, the verification flow relies on a deep link:
+
+1. The user adds their Telegram handle (`@username`) in **Settings**.
+2. They click **Get Telegram verification link**. The server mints a short-lived token and returns a deep link of the form `https://t.me/BOTNAME?start=TOKEN`.
+3. The user clicks the link. Telegram opens the bot and automatically sends `/start TOKEN`.
+4. The bot webhook receives the `/start TOKEN` command, validates the token, marks `telegram_verified = 1` on the user record, and stores the numeric Telegram `chat_id` needed for future outbound messages.
+5. The bot replies with a confirmation message in Telegram.
+
+### Create a bot
+
+1. Open Telegram and start a conversation with **@BotFather**.
+2. Send `/newbot` and follow the prompts to choose a name and a username (must end in `bot`).
+3. BotFather gives you a **bot token** (format `123456789:AABBcc…`). Keep this secret.
+
+### Configure dansal
+
+Add the following keys to the backend's `config.yaml`:
+
+```yaml
+server:
+  telegram_bot_token: "123456789:AABBccDDeeFFggHH"   # from BotFather
+  telegram_bot_name: "myDansalBot"                    # username without the leading @
+```
+
+`telegram_bot_token` is used to call the Telegram Bot API (send messages, etc.).  
+`telegram_bot_name` is used to construct the deep link shown to users in Settings.
+
+### Register the webhook
+
+Telegram must know where to forward incoming messages. Register the webhook once after deploying:
+
+```bash
+curl -X POST "https://api.telegram.org/bot<TOKEN>/setWebhook" \
+     -H "Content-Type: application/json" \
+     -d '{"url": "https://yourdomain.example.com/telegram/webhook"}'
+```
+
+Replace `<TOKEN>` with your bot token and the URL with your public server address. The endpoint `/telegram/webhook` is served by the dansal backend and requires no authentication — Telegram calls it directly.
+
+You can verify the webhook is registered:
+
+```bash
+curl "https://api.telegram.org/bot<TOKEN>/getWebhookInfo"
+```
+
+### Sending a message to a user (admin)
+
+Once a user has verified their Telegram account, an admin can send them a message via the API:
+
+```bash
+curl -X POST "https://yourdomain.example.com/api/v1/users/42/telegram/message" \
+     -H "Authorization: Bearer <ADMIN_TOKEN>" \
+     -H "Content-Type: application/json" \
+     -d '{"text": "Hello from dansal!"}'
+```
+
+Returns `204 No Content` on success. Returns `400` if the user has no verified Telegram account.
+
+### Verification token lifetime
+
+Verification tokens expire after the number of hours set by `verification_expiry_hours` (default `24`). If a user lets the link expire, they can request a new one by clicking the button again in Settings.
+
+### Notes
+
+- The `/telegram/webhook` route is unauthenticated by design — Telegram servers call it directly. The endpoint validates the token from the payload; there is no secret exposed.
+- If `telegram_bot_token` or `telegram_bot_name` is not set, the verification request returns a `500` error and no token is stored.
+- Changing the Telegram handle in Settings clears the existing verification status and stored `chat_id`, requiring the user to re-verify.
