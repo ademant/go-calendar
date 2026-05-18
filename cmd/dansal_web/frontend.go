@@ -17,25 +17,34 @@ import (
 )
 
 type TemplateData struct {
-	Title     string
-	Domain    string
-	User      *SessionUser
-	Strings   I18nStrings
-	LangCode  string
-	Languages []LangOption
-	Data      interface{}
+	Title        string
+	Domain       string
+	User         *SessionUser
+	Strings      I18nStrings
+	LangCode     string
+	Languages    []LangOption
+	Contact      string
+	ImpressumURL string
+	Data         interface{}
 }
 
 func tmplData(r *http.Request, cfg *Config, i18n *I18n, title string, data interface{}) TemplateData {
 	lang := i18n.detectLang(r)
+	contact := cfg.pagesContent.ContactText(lang)
+	impressumURL := ""
+	if cfg.pagesContent.ImpressumText(lang) != "" {
+		impressumURL = "/impressum"
+	}
 	return TemplateData{
-		Title:     title,
-		Domain:    cfg.Domain,
-		User:      getSessionUser(r),
-		Strings:   i18n.Strings(lang),
-		LangCode:  lang,
-		Languages: i18n.Options(lang),
-		Data:      data,
+		Title:        title,
+		Domain:       cfg.Domain,
+		User:         getSessionUser(r),
+		Strings:      i18n.Strings(lang),
+		LangCode:     lang,
+		Languages:    i18n.Options(lang),
+		Contact:      contact,
+		ImpressumURL: impressumURL,
+		Data:         data,
 	}
 }
 
@@ -249,6 +258,7 @@ type Templates struct {
 	adminMusicianEdit  *template.Template
 	adminEvents        *template.Template
 	adminEventNew      *template.Template
+	impressum          *template.Template
 }
 
 func loadTemplates() *Templates {
@@ -280,6 +290,7 @@ func loadTemplates() *Templates {
 		adminMusicianEdit: load("admin_musician_edit"),
 		adminEvents:       load("admin_events"),
 		adminEventNew:     load("admin_event_new"),
+		impressum:         load("impressum"),
 	}
 }
 
@@ -420,5 +431,19 @@ func apActorHandler(cfg *Config, db *sql.DB, client *DansalClient) http.HandlerF
 
 		a := actorFromOrg(cfg, org, actor)
 		writeJSON(w, http.StatusOK, a)
+	}
+}
+
+func impressumHandler(cfg *Config, tmpls *Templates, i18n *I18n) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		pc := loadPagesContent(cfg.PagesFile)
+		lang := i18n.detectLang(r)
+		body := pc.ImpressumHTML(lang)
+		if body == "" {
+			http.NotFound(w, r)
+			return
+		}
+		title := i18n.T(r, "nav_impressum")
+		renderTemplate(w, tmpls.impressum, tmplData(r, cfg, i18n, title, body))
 	}
 }

@@ -17,3 +17,22 @@ db_path: /var/lib/dansal-web/web.db
 # How often (seconds) the delivery worker polls the dansal API for new
 # published events and pushes them to follower inboxes.
 poll_secs: 300
+
+# Optional: path to a YAML file containing per-language contact info and
+# impressum text.  If omitted, no contact line or Impressum link appears.
+# The file is re-read on every /impressum request (no restart needed).
+#
+# Example /etc/dansal/pages.yaml:
+#
+#   contact:
+#     de: "Kontakt: kontakt@example.com"
+#     en: "Contact: kontakt@example.com"
+#     fr: "Contact : kontakt@example.com"
+#   impressum:
+#     de: |
+#       Angaben gemäß § 5 TMG
+#       Max Mustermann
+#       Musterstraße 1, 12345 Berlin
+#       kontakt@example.com
+#
+# pages_file: /etc/dansal/pages.yaml

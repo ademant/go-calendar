@@ -10,6 +10,7 @@ import (
 
 func main() {
 	cfg := loadConfig()
+	cfg.pagesContent = loadPagesContent(cfg.PagesFile)
 	db := initDB(cfg.DBPath)
 	client := &DansalClient{
 		BaseURL: cfg.DansalURL,
@@ -37,6 +38,7 @@ func main() {
 	r.HandleFunc("/events/{id}", eventHandler(cfg, tmpls, client, i18n)).Methods("GET")
 	r.HandleFunc("/musicians", musiciansHandler(cfg, tmpls, client, i18n)).Methods("GET")
 	r.HandleFunc("/musicians/{id}", musicianHandler(cfg, tmpls, client, i18n)).Methods("GET")
+	r.HandleFunc("/impressum", impressumHandler(cfg, tmpls, i18n)).Methods("GET")
 	r.HandleFunc("/login", loginPageHandler(cfg, tmpls, i18n)).Methods("GET")
 	r.HandleFunc("/login", loginHandler(cfg, tmpls, client, i18n)).Methods("POST")
 	r.HandleFunc("/logout", logoutHandler(cfg, client)).Methods("POST")

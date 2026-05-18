@@ -49,6 +49,8 @@ a:hover{color:#0d4a80}
 .fediverse{background:#e8f4ff;border:1px solid #b3d4f5;border-radius:6px;padding:1rem;margin-bottom:1rem}
 .fediverse code{font-size:.95rem;background:#dbeeff;padding:.1rem .3rem;border-radius:3px}
 footer{text-align:center;color:#999;font-size:.8rem;margin-top:2rem;padding-top:1rem;border-top:1px solid #eee}
+.footer-contact{margin-bottom:.25rem}
+.impressum-text{white-space:pre-wrap;font-family:inherit;font-size:.95rem;line-height:1.6}
 </style>
 </head>
 <body>
@@ -90,6 +92,9 @@ var I18N={event:"{{.Strings.T "js_event"}}",events:"{{.Strings.T "js_events"}}",
 <main>
 {{block "content" .}}{{end}}
 </main>
-<footer>{{.Strings.T "nav_footer"}}</footer>
+<footer>
+  {{if .Contact}}<p class="footer-contact">{{.Contact}}</p>{{end}}
+  <p>{{.Strings.T "nav_footer"}}{{if .ImpressumURL}} &middot; <a href="{{.ImpressumURL}}">{{.Strings.T "nav_impressum"}}</a>{{end}}</p>
+</footer>
 </body>
 </html>{{end}}

@@ -225,6 +225,7 @@ languages:
       verify_error_expired: "Liamm gwiriadur distagnet."
       verify_back_settings: "Distreiñ d'an arventennoù"
       verify_back_login: "Distreiñ d'ar gevreañ"
+      nav_impressum: "Notenn lezenn"
 
   de:
     flag: "🇩🇪"
@@ -458,6 +459,7 @@ languages:
       verify_error_expired: "Bestätigungslink abgelaufen."
       verify_back_settings: "Zu den Einstellungen"
       verify_back_login: "Zur Anmeldung"
+      nav_impressum: "Impressum"
 
   en:
     flag: "🇬🇧"
@@ -691,6 +693,7 @@ languages:
       verify_error_expired: "Verification link has expired."
       verify_back_settings: "Back to settings"
       verify_back_login: "Back to login"
+      nav_impressum: "Legal notice"
 
   es:
     flag: "🇪🇸"
@@ -912,6 +915,7 @@ languages:
       verify_error_expired: "Enlace de verificación caducado."
       verify_back_settings: "Volver a los ajustes"
       verify_back_login: "Volver al inicio de sesión"
+      nav_impressum: "Aviso legal"
 
   fr:
     flag: "🇫🇷"
@@ -1145,6 +1149,7 @@ languages:
       verify_error_expired: "Lien de vérification expiré."
       verify_back_settings: "Retour aux paramètres"
       verify_back_login: "Retour à la connexion"
+      nav_impressum: "Mentions légales"
 
   it:
     flag: "🇮🇹"
@@ -1366,6 +1371,7 @@ languages:
       verify_error_expired: "Link di verifica scaduto."
       verify_back_settings: "Torna alle impostazioni"
       verify_back_login: "Torna al login"
+      nav_impressum: "Note legali"
 
   nl:
     flag: "🇳🇱"
@@ -1587,3 +1593,4 @@ languages:
       verify_error_expired: "Verificatielink verlopen."
       verify_back_settings: "Terug naar instellingen"
       verify_back_login: "Terug naar inloggen"
+      nav_impressum: "Colofon"
