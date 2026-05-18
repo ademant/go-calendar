@@ -320,6 +320,30 @@ th.sorted-desc::after{content:" ↓";color:#1a6eb5}
       '</div></div>';
   }
 
+  function eventIcon(e){
+    // Priority for mixed-type events: festival > workshop > ball
+    var color, shape;
+    if      (e.fest) { color='#7c3aed'; shape='star';    }
+    else if (e.ws)   { color='#d97706'; shape='diamond'; }
+    else if (e.ball) { color='#1a6eb5'; shape='circle';  }
+    else             { color='#6b7280'; shape='circle';  }
+    if (e.x) color='#9e9e9e'; // cancelled → grey, keep shape
+
+    var inner;
+    if (shape==='star'){
+      // 5-pointed star centred at (12,12), outer r=5, inner r=2.2
+      inner='<path d="M12 7L13.3 10.2 16.8 10.5 14.1 12.7 14.9 16 12 14.2 9.1 16 9.9 12.7 7.2 10.5 10.7 10.2Z" fill="rgba(255,255,255,.85)"/>';
+    } else if (shape==='diamond'){
+      inner='<path d="M12 7L17 12 12 17 7 12Z" fill="rgba(255,255,255,.85)"/>';
+    } else {
+      inner='<circle cx="12" cy="12" r="4.5" fill="rgba(255,255,255,.85)"/>';
+    }
+
+    var pin='<path d="M12 2C6.5 2 2 6.5 2 12c0 7.8 10 20 10 20S22 19.8 22 12C22 6.5 17.5 2 12 2z" fill="'+color+'" stroke="rgba(0,0,0,.2)" stroke-width="1"/>';
+    var svg='<svg xmlns="http://www.w3.org/2000/svg" width="24" height="34" viewBox="0 0 24 34"'+(e.x?' opacity=".6"':'')+'>'+pin+inner+'</svg>';
+    return L.divIcon({html:svg,className:'',iconSize:[24,34],iconAnchor:[12,34],popupAnchor:[0,-36]});
+  }
+
   function initMap(){
     map = L.map('map-container').setView([50,10],5);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
@@ -329,7 +353,7 @@ th.sorted-desc::after{content:" ↓";color:#1a6eb5}
     clusterGroup = L.markerClusterGroup({maxClusterRadius:40});
     map.addLayer(clusterGroup);
     eventsGeo.forEach(function(e){
-      var m = L.marker([e.lat, e.lng]);
+      var m = L.marker([e.lat, e.lng], {icon: eventIcon(e)});
       m.bindPopup(buildPopup(e),{maxWidth:300});
       allMarkers[e.id] = m;
     });
