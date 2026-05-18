@@ -1,7 +1,10 @@
 {{template "base" .}}
 {{define "content"}}
 {{with .Data}}
-<h1>{{.Org.Name}}</h1>
+<div class="org-page-header">
+  <h1>{{.Org.Name}}</h1>
+  {{if and $.User (eq $.User.Role "admin")}}<a href="/admin/organizations/{{.Org.ID}}/edit" class="btn-edit-event">{{$.Strings.T "admin_edit"}}</a>{{end}}
+</div>
 
 {{with .Org.Description}}<p>{{.}}</p>{{end}}
 
@@ -55,6 +58,8 @@
 {{end}}{{/* .Data */}}
 
 <style>
+.org-page-header{display:flex;align-items:center;gap:.75rem;margin-bottom:.5rem}
+.org-page-header h1{margin:0}
 .org-links{display:flex;flex-wrap:wrap;gap:.5rem;margin-bottom:1.25rem}
 .org-link{display:inline-block;padding:.3rem .8rem;border-radius:20px;font-size:.85rem;font-weight:600;text-decoration:none;color:#fff}
 .org-link-web{background:#1a6eb5}

@@ -360,6 +360,21 @@ func (c *DansalClient) UpdateOrganization(ctx context.Context, id int, org Organ
 	return nil
 }
 
+func (c *DansalClient) DeleteOrganization(ctx context.Context, id int, token string) error {
+	resp, err := c.authed(ctx, http.MethodDelete, fmt.Sprintf("/api/v1/organizations/%d", id), token, nil)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode == http.StatusForbidden {
+		return fmt.Errorf("forbidden")
+	}
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent {
+		return fmt.Errorf("dansal API: %s", resp.Status)
+	}
+	return nil
+}
+
 func (c *DansalClient) CreateFetchSource(ctx context.Context, rawURL, typ string, tags []string, orgID *int, token string) (int, error) {
 	payload := map[string]interface{}{
 		"url":  rawURL,

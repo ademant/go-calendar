@@ -12,17 +12,32 @@
     <tr>
       <th>{{$.Strings.T "org_name"}}</th>
       <th>{{$.Strings.T "org_description"}}</th>
+      <th class="col-num">{{$.Strings.T "org_events_title"}}</th>
+      <th class="col-num">{{$.Strings.T "org_locations"}}</th>
+      <th class="col-num">{{$.Strings.T "org_feeds"}}</th>
       <th></th>
     </tr>
   </thead>
   <tbody>
-  {{range .Orgs}}
-  <tr class="{{if not $.Data.CanEdit}}row-muted{{end}}">
-    <td>{{.Name}}</td>
-    <td class="desc-cell">{{.Description}}</td>
-    <td class="col-actions">
+  {{range .Stats}}
+  <tr>
+    <td><a href="/org/{{.Slug}}">{{.Org.Name}}</a></td>
+    <td class="desc-cell">{{.Org.Description}}</td>
+    <td class="col-num">{{.EventCount}}</td>
+    <td class="col-num">{{.LocationCount}}</td>
+    <td class="col-num">{{len .FetchSources}}</td>
+    <td class="col-actions" style="white-space:nowrap">
       {{if $.Data.CanEdit}}
-      <a href="/admin/organizations/{{.ID}}/edit" class="btn-sm">{{$.Strings.T "admin_edit"}}</a>
+      <a href="/admin/organizations/{{.Org.ID}}/edit" class="btn-sm">{{$.Strings.T "admin_edit"}}</a>
+      {{if .FetchSources}}
+      <form method="post" action="/admin/organizations/{{.Org.ID}}/run-feeds" style="display:inline">
+        <button type="submit" class="btn-sm btn-run">{{$.Strings.T "fetch_run"}}</button>
+      </form>
+      {{end}}
+      <form method="post" action="/admin/organizations/{{.Org.ID}}/delete" style="display:inline"
+            onsubmit="return confirm('Delete?')">
+        <button type="submit" class="btn-sm btn-del">{{$.Strings.T "admin_delete"}}</button>
+      </form>
       {{end}}
     </td>
   </tr>
@@ -35,7 +50,11 @@
 <style>
 .page-header{display:flex;align-items:center;gap:1rem;margin-bottom:.5rem}
 .page-header h1{margin:0}
-.row-muted td{color:#999}
-.desc-cell{max-width:420px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.desc-cell{max-width:340px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.col-num{text-align:right;white-space:nowrap;width:70px}
+.btn-run{background:#e8f4ff;border-color:#b3d4f5;color:#1a6eb5}
+.btn-run:hover{background:#c5e3ff;color:#0d4a80}
+.btn-del{background:#fff0f0;border-color:#f5c6cb;color:#721c24}
+.btn-del:hover{background:#f8d7da;color:#491217}
 </style>
 {{end}}

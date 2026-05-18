@@ -40,8 +40,16 @@ func orgFromForm(r *http.Request) Organization {
 	}
 }
 
+type OrgStats struct {
+	Org           Organization
+	Slug          string
+	EventCount    int
+	LocationCount int
+	FetchSources  []FetchSource
+}
+
 type AdminOrgsData struct {
-	Orgs    []Organization
+	Stats   []OrgStats
 	CanEdit bool
 }
 
@@ -56,14 +64,49 @@ func adminOrgsHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n 
 		if !ok {
 			return
 		}
+		token := getSessionToken(r)
 		orgs, err := client.GetOrganizations(r.Context())
 		if err != nil {
 			http.Error(w, "could not load organizations", http.StatusBadGateway)
 			return
 		}
+		events, _ := client.GetEvents(r.Context(), "")
+		locs, _ := client.GetLocations(r.Context())
+		sources, _ := client.GetFetchSources(r.Context(), token)
+
+		evtCount := map[int]int{}
+		for _, e := range events {
+			if e.OrganizationID != nil {
+				evtCount[*e.OrganizationID]++
+			}
+		}
+		locCount := map[int]int{}
+		for _, l := range locs {
+			if l.OrganizationID != nil {
+				locCount[*l.OrganizationID]++
+			}
+		}
+		srcsByOrg := map[int][]FetchSource{}
+		for _, s := range sources {
+			if s.OrganizationID != nil {
+				srcsByOrg[*s.OrganizationID] = append(srcsByOrg[*s.OrganizationID], s)
+			}
+		}
+
+		stats := make([]OrgStats, len(orgs))
+		for i, o := range orgs {
+			stats[i] = OrgStats{
+				Org:           o,
+				Slug:          orgSlug(o.Name),
+				EventCount:    evtCount[o.ID],
+				LocationCount: locCount[o.ID],
+				FetchSources:  srcsByOrg[o.ID],
+			}
+		}
+
 		title := i18n.T(r, "admin_orgs_title")
 		renderTemplate(w, tmpls.adminOrgs, tmplData(r, cfg, i18n, title, AdminOrgsData{
-			Orgs:    orgs,
+			Stats:   stats,
 			CanEdit: user.Role == "admin",
 		}))
 	}
@@ -165,6 +208,54 @@ func adminOrgSaveHandler(cfg *Config, tmpls *Templates, client *DansalClient, i1
 				ErrorKey: "admin_save_error",
 			}))
 			return
+		}
+		http.Redirect(w, r, "/admin/organizations", http.StatusSeeOther)
+	}
+}
+
+func adminOrgDeleteHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		user, ok := requireLogin(w, r)
+		if !ok {
+			return
+		}
+		if user.Role != "admin" {
+			http.Error(w, "Forbidden", http.StatusForbidden)
+			return
+		}
+		id, err := strconv.Atoi(mux.Vars(r)["id"])
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		_ = client.DeleteOrganization(r.Context(), id, getSessionToken(r))
+		http.Redirect(w, r, "/admin/organizations", http.StatusSeeOther)
+	}
+}
+
+func adminOrgRunFeedsHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		_, ok := requireLogin(w, r)
+		if !ok {
+			return
+		}
+		id, err := strconv.Atoi(mux.Vars(r)["id"])
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		token := getSessionToken(r)
+		sources, err := client.GetFetchSources(r.Context(), token)
+		if err == nil {
+			var ids []int
+			for _, s := range sources {
+				if s.OrganizationID != nil && *s.OrganizationID == id {
+					ids = append(ids, s.ID)
+				}
+			}
+			if len(ids) > 0 {
+				_ = client.BulkRunFetchSources(r.Context(), ids, token)
+			}
 		}
 		http.Redirect(w, r, "/admin/organizations", http.StatusSeeOther)
 	}

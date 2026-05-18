@@ -66,6 +66,18 @@ type OrgData struct {
 	Handle string
 }
 
+type OrgListItem struct {
+	Org           Organization
+	Slug          string
+	EventCount    int
+	LocationCount int
+	FirstTown     string
+}
+
+type OrgsListData struct {
+	Items []OrgListItem
+}
+
 //go:embed templates
 var templateFS embed.FS
 
@@ -287,6 +299,7 @@ type Templates struct {
 	adminEventNew      *template.Template
 	adminEventEdit     *template.Template
 	impressum          *template.Template
+	orgs               *template.Template
 }
 
 func loadTemplates() *Templates {
@@ -320,6 +333,7 @@ func loadTemplates() *Templates {
 		adminEventNew:     load("admin_event_new"),
 		adminEventEdit:    load("admin_event_edit"),
 		impressum:         load("impressum"),
+		orgs:              load("orgs"),
 	}
 }
 
@@ -421,6 +435,49 @@ func orgFrontendHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *Dansa
 			Slug:   slug,
 			Handle: handle,
 		}))
+	}
+}
+
+func orgsHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		orgs, err := client.GetOrganizations(r.Context())
+		if err != nil {
+			http.Error(w, "could not load organizations", http.StatusBadGateway)
+			return
+		}
+		events, _ := client.GetEvents(r.Context(), "")
+		locs, _ := client.GetLocations(r.Context())
+
+		evtCount := map[int]int{}
+		for _, e := range events {
+			if e.OrganizationID != nil {
+				evtCount[*e.OrganizationID]++
+			}
+		}
+		locCount := map[int]int{}
+		firstTown := map[int]string{}
+		for _, l := range locs {
+			if l.OrganizationID != nil {
+				orgID := *l.OrganizationID
+				locCount[orgID]++
+				if firstTown[orgID] == "" && l.Town != "" {
+					firstTown[orgID] = l.Town
+				}
+			}
+		}
+
+		items := make([]OrgListItem, len(orgs))
+		for i, o := range orgs {
+			items[i] = OrgListItem{
+				Org:           o,
+				Slug:          orgSlug(o.Name),
+				EventCount:    evtCount[o.ID],
+				LocationCount: locCount[o.ID],
+				FirstTown:     firstTown[o.ID],
+			}
+		}
+		title := i18n.T(r, "orgs_title")
+		renderTemplate(w, tmpls.orgs, tmplData(r, cfg, i18n, title, OrgsListData{Items: items}))
 	}
 }
 

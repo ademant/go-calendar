@@ -1,0 +1,40 @@
+{{template "base" .}}
+{{define "content"}}
+<h1>{{.Strings.T "orgs_title"}}</h1>
+
+{{with .Data}}
+{{if .Items}}
+<div class="table-wrap">
+<table class="orgs-table">
+  <thead>
+    <tr>
+      <th>{{$.Strings.T "org_name"}}</th>
+      <th>{{$.Strings.T "col_location"}}</th>
+      <th class="col-num">{{$.Strings.T "org_locations"}}</th>
+      <th class="col-num">{{$.Strings.T "org_events_title"}}</th>
+    </tr>
+  </thead>
+  <tbody>
+  {{range .Items}}
+  <tr class="orgs-row" onclick="window.location.href='/org/{{.Slug}}'">
+    <td>{{.Org.Name}}</td>
+    <td>{{.FirstTown}}</td>
+    <td class="col-num">{{.LocationCount}}</td>
+    <td class="col-num">{{.EventCount}}</td>
+  </tr>
+  {{end}}
+  </tbody>
+</table>
+</div>
+{{end}}
+{{end}}
+
+<style>
+.orgs-table{width:100%;border-collapse:collapse;font-size:.9rem}
+.orgs-table th,.orgs-table td{padding:.5rem .65rem;text-align:left;border-bottom:1px solid #eee;vertical-align:top}
+.orgs-table thead th{background:#f4f6fb;font-weight:600;color:#333;white-space:nowrap}
+.orgs-table tbody tr{cursor:pointer}
+.orgs-table tbody tr:hover{background:#f0f4ff}
+.col-num{text-align:right!important;width:90px}
+</style>
+{{end}}
