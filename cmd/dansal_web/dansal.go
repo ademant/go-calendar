@@ -354,6 +354,32 @@ func (c *DansalClient) UpdateOrganization(ctx context.Context, id int, org Organ
 	return nil
 }
 
+func (c *DansalClient) CreateFetchSource(ctx context.Context, rawURL, typ string, tags []string, orgID *int, token string) (int, error) {
+	payload := map[string]interface{}{
+		"url":  rawURL,
+		"type": typ,
+		"tags": tags,
+	}
+	if orgID != nil {
+		payload["organization_id"] = *orgID
+	}
+	body, _ := json.Marshal(payload)
+	resp, err := c.authed(ctx, http.MethodPost, "/api/v1/fetchurl", token, body)
+	if err != nil {
+		return 0, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode == http.StatusForbidden {
+		return 0, fmt.Errorf("forbidden")
+	}
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
+		return 0, fmt.Errorf("dansal API: %s", resp.Status)
+	}
+	var events []interface{}
+	json.NewDecoder(resp.Body).Decode(&events)
+	return len(events), nil
+}
+
 func (c *DansalClient) GetFetchSources(ctx context.Context, token string) ([]FetchSource, error) {
 	resp, err := c.authed(ctx, http.MethodGet, "/api/v1/fetchurl", token, nil)
 	if err != nil {

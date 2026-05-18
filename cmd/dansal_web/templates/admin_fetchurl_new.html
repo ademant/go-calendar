@@ -1,0 +1,52 @@
+{{template "base" .}}
+{{define "content"}}
+<h1>{{.Strings.T "fetch_new_title"}}</h1>
+
+{{with .Data}}
+{{if .ErrorKey}}<p class="form-error">{{$.Strings.T .ErrorKey}}</p>{{end}}
+
+<form method="post" action="/admin/fetchurls/new" class="edit-form">
+  <div class="form-row">
+    <label for="url">{{$.Strings.T "fetch_url"}}</label>
+    <input type="url" id="url" name="url" value="{{.URL}}" required autofocus
+           placeholder="https://example.com/events.ics">
+  </div>
+  <div class="form-row">
+    <label for="type">{{$.Strings.T "fetch_type"}}</label>
+    <select id="type" name="type">
+      <option value="">{{$.Strings.T "fetch_type_auto"}}</option>
+      <option value="ical">iCal</option>
+      <option value="folkdance-json">Folkdance JSON</option>
+    </select>
+  </div>
+  <div class="form-row">
+    <label for="organization_id">{{$.Strings.T "fetch_org"}}</label>
+    <select id="organization_id" name="organization_id">
+      <option value="">— {{$.Strings.T "fetch_no_org"}} —</option>
+      {{range .Orgs}}<option value="{{.ID}}">{{.Name}}</option>{{end}}
+    </select>
+  </div>
+  <div class="form-row">
+    <label for="tags">{{$.Strings.T "fetch_tags"}}</label>
+    <input type="text" id="tags" name="tags" placeholder="folk, balfolk">
+  </div>
+  <div class="form-actions">
+    <button type="submit" class="btn-primary">{{$.Strings.T "fetch_add"}}</button>
+    <a href="/admin/fetchurls" class="btn-sm">{{$.Strings.T "admin_cancel"}}</a>
+  </div>
+</form>
+{{end}}
+
+<script>
+document.getElementById('url').addEventListener('blur', function() {
+  var u = this.value.toLowerCase();
+  var sel = document.getElementById('type');
+  if (sel.value !== '') return; // don't override an explicit choice
+  if (u.indexOf('.ics') !== -1 || u.indexOf('ical') !== -1 || u.indexOf('calendar') !== -1) {
+    sel.value = 'ical';
+  } else if (u.indexOf('folkdance') !== -1 || u.indexOf('.json') !== -1) {
+    sel.value = 'folkdance-json';
+  }
+});
+</script>
+{{end}}

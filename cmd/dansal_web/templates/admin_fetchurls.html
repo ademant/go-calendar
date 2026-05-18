@@ -1,6 +1,7 @@
 {{template "base" .}}
 {{define "content"}}
 <h1>{{.Strings.T "admin_fetchurls_title"}}</h1>
+<p><a href="/admin/fetchurls/new" class="btn-sm">+ {{.Strings.T "fetch_add"}}</a></p>
 
 <div id="toast" class="toast" role="status" aria-live="polite"></div>
 

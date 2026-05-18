@@ -352,6 +352,64 @@ func adminFetchurlsHandler(cfg *Config, tmpls *Templates, client *DansalClient, 
 	}
 }
 
+type AdminFetchurlNewData struct {
+	Orgs     []Organization
+	ErrorKey string
+	URL      string
+}
+
+func adminFetchurlNewPageHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		_, ok := requireLogin(w, r)
+		if !ok {
+			return
+		}
+		orgs, _ := client.GetOrganizations(r.Context())
+		title := i18n.T(r, "fetch_new_title")
+		renderTemplate(w, tmpls.adminFetchurlNew, tmplData(r, cfg, i18n, title, AdminFetchurlNewData{Orgs: orgs}))
+	}
+}
+
+func adminFetchurlNewPostHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		_, ok := requireLogin(w, r)
+		if !ok {
+			return
+		}
+		if err := r.ParseForm(); err != nil {
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+		rawURL := strings.TrimSpace(r.FormValue("url"))
+		typ := r.FormValue("type")
+		rawTags := strings.TrimSpace(r.FormValue("tags"))
+		var tags []string
+		for _, t := range strings.FieldsFunc(rawTags, func(r rune) bool { return r == ',' || r == ' ' }) {
+			if t = strings.TrimSpace(t); t != "" {
+				tags = append(tags, t)
+			}
+		}
+		var orgID *int
+		if v := r.FormValue("organization_id"); v != "" {
+			if n, err := strconv.Atoi(v); err == nil {
+				orgID = &n
+			}
+		}
+		token := getSessionToken(r)
+		if _, err := client.CreateFetchSource(r.Context(), rawURL, typ, tags, orgID, token); err != nil {
+			orgs, _ := client.GetOrganizations(r.Context())
+			title := i18n.T(r, "fetch_new_title")
+			renderTemplate(w, tmpls.adminFetchurlNew, tmplData(r, cfg, i18n, title, AdminFetchurlNewData{
+				Orgs:     orgs,
+				ErrorKey: "fetch_add_error",
+				URL:      rawURL,
+			}))
+			return
+		}
+		http.Redirect(w, r, "/admin/fetchurls", http.StatusSeeOther)
+	}
+}
+
 func adminFetchurlEditPageHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		_, ok := requireLogin(w, r)

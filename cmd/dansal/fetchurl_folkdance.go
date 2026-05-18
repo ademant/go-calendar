@@ -170,6 +170,7 @@ func importFromFolkdanceJSON(src FetchSource) ([]Event, bool, error) {
 
 	var allEvents []Event
 	allCreated := true
+	now := time.Now().UTC()
 
 	for _, fe := range payload.Events {
 		if fe.Name == "" {
@@ -190,6 +191,10 @@ func importFromFolkdanceJSON(src FetchSource) ([]Event, bool, error) {
 			if t, err := time.Parse("2006-01-02", fe.EndDate); err == nil {
 				endTime = t.Add(24*time.Hour - time.Second).UTC().Format(time.RFC3339)
 			}
+		}
+
+		if et, err := time.Parse(time.RFC3339, endTime); err == nil && et.Before(now) {
+			continue
 		}
 
 		// Merge feed styles with any tags configured on the source.

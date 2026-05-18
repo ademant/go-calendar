@@ -333,6 +333,7 @@ func importFromICalSource(src FetchSource) ([]Event, bool, error) {
 
 	var allEvents []Event
 	allCreated := true
+	now := time.Now().UTC()
 
 	for _, vevent := range cal.Events() {
 		prop := func(p ics.ComponentProperty) string {
@@ -381,6 +382,9 @@ func importFromICalSource(src FetchSource) ([]Event, bool, error) {
 		}
 
 		for _, occ := range occs {
+			if occ[1].Before(now) {
+				continue
+			}
 			// Recurring occurrences after the base get a timestamp-qualified UID
 			// so each instance deduplicates independently across re-imports.
 			uid := baseUID
