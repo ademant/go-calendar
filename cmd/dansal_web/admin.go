@@ -9,6 +9,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/gorilla/mux"
 )
@@ -805,7 +806,14 @@ func adminLocationSaveHandler(cfg *Config, tmpls *Templates, client *DansalClien
 // ── Events ────────────────────────────────────────────────────────────────────
 
 type AdminEventsData struct {
-	Events []Event
+	Events            []Event
+	Organizations     []Organization
+	Musicians         []Musician
+	FilterIncludePast bool
+	FilterOrgID       int
+	FilterDateFrom    string
+	FilterDateTo      string
+	FilterMusicianID  int
 }
 
 type AdminEventNewData struct {
@@ -821,13 +829,62 @@ func adminEventsHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18
 		if !ok {
 			return
 		}
-		events, err := client.GetAllEventsAdmin(r.Context(), getSessionToken(r))
+
+		q := r.URL.Query()
+		includePast := q.Get("include_past") == "1"
+		orgID, _ := strconv.Atoi(q.Get("org_id"))
+		musicianID, _ := strconv.Atoi(q.Get("musician_id"))
+		dateFrom := q.Get("date_from")
+		dateTo := q.Get("date_to")
+
+		params := url.Values{}
+		if includePast {
+			params.Set("include_past", "true")
+		}
+		if dateFrom != "" {
+			if t, err := time.Parse("2006-01-02", dateFrom); err == nil {
+				params.Set("start_time_after", strconv.FormatInt(t.Unix()-1, 10))
+			}
+		}
+		if dateTo != "" {
+			if t, err := time.Parse("2006-01-02", dateTo); err == nil {
+				params.Set("start_time_before", strconv.FormatInt(t.Add(24*time.Hour).Unix(), 10))
+			}
+		}
+		if musicianID != 0 {
+			params.Set("musician_id", strconv.Itoa(musicianID))
+		}
+
+		token := getSessionToken(r)
+		events, err := client.GetAdminEvents(r.Context(), token, params)
 		if err != nil {
 			http.Error(w, "could not load events", http.StatusBadGateway)
 			return
 		}
+		if orgID != 0 {
+			filtered := events[:0]
+			for _, e := range events {
+				if e.OrganizationID != nil && *e.OrganizationID == orgID {
+					filtered = append(filtered, e)
+				}
+			}
+			events = filtered
+		}
+
+		orgs, _ := client.GetOrganizations(r.Context())
+		musicians, _ := client.GetMusicians(r.Context())
+
 		title := i18n.T(r, "admin_events_title")
-		renderTemplate(w, tmpls.adminEvents, tmplData(r, cfg, i18n, title, AdminEventsData{Events: events}))
+		renderTemplate(w, tmpls.adminEvents, tmplData(r, cfg, i18n, title, AdminEventsData{
+			Events:            events,
+			Organizations:     orgs,
+			Musicians:         musicians,
+			FilterIncludePast: includePast,
+			FilterOrgID:       orgID,
+			FilterDateFrom:    dateFrom,
+			FilterDateTo:      dateTo,
+			FilterMusicianID:  musicianID,
+		}))
 	}
 }
 

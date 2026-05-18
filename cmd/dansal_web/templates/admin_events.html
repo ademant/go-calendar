@@ -6,7 +6,30 @@
 </div>
 
 {{with .Data}}
+<form method="get" action="/admin/events" class="event-filters">
+  <label class="filter-check">
+    <input type="checkbox" name="include_past" value="1" {{if .FilterIncludePast}}checked{{end}} onchange="this.form.submit()">
+    {{$.Strings.T "filter_include_past"}}
+  </label>
+  <select name="org_id" onchange="this.form.submit()">
+    <option value="">{{$.Strings.T "filter_all_orgs"}}</option>
+    {{range .Organizations}}
+    <option value="{{.ID}}" {{if eq .ID $.Data.FilterOrgID}}selected{{end}}>{{.Name}}</option>
+    {{end}}
+  </select>
+  <select name="musician_id" onchange="this.form.submit()">
+    <option value="">{{$.Strings.T "filter_all_musicians"}}</option>
+    {{range .Musicians}}
+    <option value="{{.ID}}" {{if eq .ID $.Data.FilterMusicianID}}selected{{end}}>{{.Bandname}}</option>
+    {{end}}
+  </select>
+  <input type="date" name="date_from" value="{{.FilterDateFrom}}" title="{{$.Strings.T "filter_from_label"}}" onchange="this.form.submit()">
+  <input type="date" name="date_to" value="{{.FilterDateTo}}" title="{{$.Strings.T "filter_to_label"}}" onchange="this.form.submit()">
+  <a href="/admin/events" class="btn-reset">{{$.Strings.T "filter_clear"}}</a>
+</form>
+
 {{if .Events}}
+<p class="result-count">{{len .Events}} {{$.Strings.T "admin_events_count"}}</p>
 <div class="table-wrap">
 <table class="event-table">
   <thead>
@@ -28,10 +51,11 @@
     <td>{{.LocationCountry}}</td>
     <td>
       {{if .IsCancelled}}<span class="badge cancelled">{{$.Strings.T "badge_cancelled"}}</span>
-      {{else if .IsPublished}}<span class="badge">✓</span>
-      {{else}}<span class="badge" style="background:#fff3cd;color:#856404">{{$.Strings.T "musician_unpublished"}}</span>{{end}}
+      {{else if .IsPublished}}<span class="badge pub">✓</span>
+      {{else}}<span class="badge unpub">{{$.Strings.T "musician_unpublished"}}</span>{{end}}
     </td>
     <td style="white-space:nowrap">
+      <a href="/admin/events/{{.ID}}/edit" class="btn-sm">{{$.Strings.T "admin_edit"}}</a>
       <a href="/events/{{.ID}}" class="btn-sm">{{$.Strings.T "btn_details"}}</a>
     </td>
   </tr>
@@ -45,11 +69,19 @@
 {{end}}
 
 <style>
+.event-filters{display:flex;flex-wrap:wrap;align-items:center;gap:.5rem;margin-bottom:1rem;padding:.6rem .75rem;background:#f4f6fb;border:1px solid #e0e4ef;border-radius:6px}
+.event-filters select,.event-filters input[type=date]{padding:.3rem .5rem;border:1px solid #ccc;border-radius:4px;font-size:.875rem;background:#fff}
+.filter-check{display:flex;align-items:center;gap:.3rem;font-size:.875rem;white-space:nowrap;cursor:pointer}
+.btn-reset{padding:.3rem .7rem;border:1px solid #ccc;border-radius:4px;font-size:.875rem;color:#555;text-decoration:none;background:#fff}
+.btn-reset:hover{background:#f0f0f0;border-color:#888}
+.result-count{font-size:.85rem;color:#666;margin:.25rem 0 .5rem}
 .table-wrap{overflow-x:auto}
 .event-table{width:100%;border-collapse:collapse;font-size:.9rem}
 .event-table th,.event-table td{padding:.5rem .65rem;text-align:left;border-bottom:1px solid #eee;vertical-align:top}
 .event-table thead th{background:#f4f6fb;font-weight:600;color:#333;white-space:nowrap}
 .event-table tbody tr:hover{background:#f9f9ff}
+.badge.pub{background:#d4edda;color:#155724}
+.badge.unpub{background:#fff3cd;color:#856404}
 .btn-sm{display:inline-block;padding:.2rem .5rem;border:1px solid #ccc;border-radius:3px;font-size:.8rem;text-decoration:none;color:#333}
 .btn-sm:hover{background:#f0f0f0}
 </style>

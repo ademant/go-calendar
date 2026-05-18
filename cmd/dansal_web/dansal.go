@@ -8,6 +8,7 @@ import (
 	"io"
 	"mime/multipart"
 	"net/http"
+	"net/url"
 	"strings"
 )
 
@@ -711,6 +712,23 @@ type TimetableEntryReq struct {
 
 func (c *DansalClient) GetAllEventsAdmin(ctx context.Context, token string) ([]Event, error) {
 	resp, err := c.authed(ctx, http.MethodGet, "/api/v1/events?include_past=true", token, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	var events []Event
+	if err := json.NewDecoder(resp.Body).Decode(&events); err != nil {
+		return nil, err
+	}
+	return events, nil
+}
+
+func (c *DansalClient) GetAdminEvents(ctx context.Context, token string, params url.Values) ([]Event, error) {
+	path := "/api/v1/events"
+	if len(params) > 0 {
+		path += "?" + params.Encode()
+	}
+	resp, err := c.authed(ctx, http.MethodGet, path, token, nil)
 	if err != nil {
 		return nil, err
 	}
