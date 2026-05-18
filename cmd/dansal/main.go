@@ -265,6 +265,7 @@ func startTokenCleanup() {
 			}
 			db.Exec("DELETE FROM verification_tokens WHERE expires_at < ?", time.Now().UTC().Format(time.RFC3339))
 			db.Exec("DELETE FROM magic_login_tokens WHERE expires_at < ?", time.Now().UTC().Format(time.RFC3339))
+			db.Exec("DELETE FROM contact_posts WHERE expires_at < ?", time.Now().UTC().Format(time.RFC3339))
 			// Sweep lastSeenCache: remove entries older than the maximum token lifetime.
 			expirationHours := 24
 			if config != nil && config.Server.TokenExpirationHours > 0 {
@@ -446,6 +447,24 @@ func migrateDB() {
 	)`)
 	db.Exec("CREATE INDEX IF NOT EXISTS idx_verification_tokens_token ON verification_tokens(token)")
 	db.Exec("ALTER TABLE users ADD COLUMN telegram_chat_id TEXT")
+	db.Exec(`CREATE TABLE IF NOT EXISTS contact_posts (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		event_id INTEGER NOT NULL,
+		type TEXT NOT NULL CHECK(type IN ('ride_offer','ride_request','sleep_offer','sleep_request')),
+		city TEXT NOT NULL,
+		persons INTEGER NOT NULL DEFAULT 1,
+		message TEXT DEFAULT '',
+		nickname TEXT NOT NULL,
+		email TEXT NOT NULL,
+		email_verified INTEGER DEFAULT 0,
+		verify_token TEXT UNIQUE,
+		delete_token TEXT UNIQUE,
+		expires_at DATETIME NOT NULL,
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE CASCADE
+	)`)
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_contact_posts_event_id ON contact_posts(event_id)")
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_contact_posts_verify_token ON contact_posts(verify_token)")
 }
 
 func createTables() error {
@@ -615,6 +634,24 @@ func createTables() error {
 		FOREIGN KEY (musician_id) REFERENCES musicians(id) ON DELETE CASCADE
 	);
 	CREATE INDEX IF NOT EXISTS idx_event_musicians_event_id ON event_musicians(event_id);
+	CREATE TABLE IF NOT EXISTS contact_posts (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		event_id INTEGER NOT NULL,
+		type TEXT NOT NULL CHECK(type IN ('ride_offer','ride_request','sleep_offer','sleep_request')),
+		city TEXT NOT NULL,
+		persons INTEGER NOT NULL DEFAULT 1,
+		message TEXT DEFAULT '',
+		nickname TEXT NOT NULL,
+		email TEXT NOT NULL,
+		email_verified INTEGER DEFAULT 0,
+		verify_token TEXT UNIQUE,
+		delete_token TEXT UNIQUE,
+		expires_at DATETIME NOT NULL,
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE CASCADE
+	);
+	CREATE INDEX IF NOT EXISTS idx_contact_posts_event_id ON contact_posts(event_id);
+	CREATE INDEX IF NOT EXISTS idx_contact_posts_verify_token ON contact_posts(verify_token);
 	CREATE INDEX IF NOT EXISTS idx_events_url            ON events(url) WHERE url IS NOT NULL;
 	CREATE INDEX IF NOT EXISTS idx_events_published_start ON events(is_published, start_time);
 	CREATE INDEX IF NOT EXISTS idx_events_title_location  ON events(title, location_id);
@@ -716,6 +753,13 @@ func main() {
 	// Telegram bot webhook (public, called by Telegram servers)
 	router.HandleFunc("/telegram/webhook", telegramWebhookHandler).Methods("POST")
 
+	// Contact board — public reads and post actions
+	router.HandleFunc("/api/v1/events/{id}/contact-posts", listContactPosts).Methods("GET")
+	router.HandleFunc("/api/v1/events/{id}/contact-posts", createContactPost).Methods("POST")
+	router.HandleFunc("/api/v1/contact-posts/verify/{token}", verifyContactPost).Methods("GET")
+	router.HandleFunc("/api/v1/contact-posts/delete/{token}", deleteContactPostByToken).Methods("GET")
+	router.HandleFunc("/api/v1/contact-posts/{id}/contact", contactPoster).Methods("POST")
+
 	// iCal feeds (public, no auth)
 	router.HandleFunc("/api/v1/events.ics", getEventsICS).Methods("GET")
 	router.HandleFunc("/api/v1/events/{id:[0-9]+}.ics", getEventICS).Methods("GET")
@@ -782,6 +826,11 @@ func main() {
 	userRoutes.HandleFunc("/{id}", deleteUser).Methods("DELETE")
 	userRoutes.HandleFunc("/{id}/verify", sendVerification).Methods("POST")
 	userRoutes.HandleFunc("/{id}/telegram/message", sendTelegramMessageToUser).Methods("POST")
+
+	// Contact board — protected delete (admin or org member)
+	contactRoutes := router.PathPrefix("/api/v1/contact-posts").Subrouter()
+	contactRoutes.Use(TokenMiddleware)
+	contactRoutes.HandleFunc("/{id}", deleteContactPost).Methods("DELETE")
 
 	// Organization endpoints (protected)
 	orgRoutes := router.PathPrefix("/api/v1/organizations").Subrouter()

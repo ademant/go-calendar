@@ -898,3 +898,95 @@ func (c *DansalClient) ConsumeVerification(ctx context.Context, token string) er
 	}
 	return nil
 }
+
+type OrgMember struct {
+	OrganizationID int    `json:"organization_id"`
+	UserID         int    `json:"user_id"`
+	Username       string `json:"username,omitempty"`
+}
+
+func (c *DansalClient) GetOrganizationMembers(ctx context.Context, orgID int, token string) ([]OrgMember, error) {
+	resp, err := c.authed(ctx, http.MethodGet, fmt.Sprintf("/api/v1/organizations/%d/members", orgID), token, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("dansal API: %s", resp.Status)
+	}
+	var members []OrgMember
+	return members, json.NewDecoder(resp.Body).Decode(&members)
+}
+
+// ── contact board ────────────────────────────────────────────────────────────
+
+type ContactPost struct {
+	ID        int    `json:"id"`
+	EventID   int    `json:"event_id"`
+	Type      string `json:"type"`
+	City      string `json:"city"`
+	Persons   int    `json:"persons"`
+	Message   string `json:"message,omitempty"`
+	Nickname  string `json:"nickname"`
+	CreatedAt string `json:"created_at"`
+}
+
+func (c *DansalClient) GetContactPosts(ctx context.Context, eventID int) ([]ContactPost, error) {
+	var posts []ContactPost
+	return posts, c.get(ctx, fmt.Sprintf("/api/v1/events/%d/contact-posts", eventID), &posts)
+}
+
+func (c *DansalClient) CreateContactPost(ctx context.Context, eventID int, post map[string]interface{}) error {
+	body, _ := json.Marshal(post)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost,
+		c.BaseURL+fmt.Sprintf("/api/v1/events/%d/contact-posts", eventID),
+		bytes.NewReader(body))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := c.HTTP.Do(req)
+	if err != nil {
+		return err
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusCreated {
+		return fmt.Errorf("dansal API: %s", resp.Status)
+	}
+	return nil
+}
+
+func (c *DansalClient) DeleteContactPost(ctx context.Context, id int, token string) error {
+	resp, err := c.authed(ctx, http.MethodDelete, fmt.Sprintf("/api/v1/contact-posts/%d", id), token, nil)
+	if err != nil {
+		return err
+	}
+	resp.Body.Close()
+	if resp.StatusCode == http.StatusForbidden {
+		return fmt.Errorf("forbidden")
+	}
+	if resp.StatusCode != http.StatusNoContent {
+		return fmt.Errorf("dansal API: %s", resp.Status)
+	}
+	return nil
+}
+
+func (c *DansalClient) ContactPoster(ctx context.Context, id int, email, message string) error {
+	body, _ := json.Marshal(map[string]string{"email": email, "message": message})
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost,
+		c.BaseURL+fmt.Sprintf("/api/v1/contact-posts/%d/contact", id),
+		bytes.NewReader(body))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := c.HTTP.Do(req)
+	if err != nil {
+		return err
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusNoContent {
+		return fmt.Errorf("dansal API: %s", resp.Status)
+	}
+	return nil
+}

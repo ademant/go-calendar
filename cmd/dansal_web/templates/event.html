@@ -184,6 +184,90 @@
 </div>
 {{end}}
 
+{{/* ── Contact board ──────────────────────────────────────────── */}}
+<section class="board-section">
+  <h2>{{$.Strings.T "board_title"}}</h2>
+
+  {{if .BoardPosted}}
+  <p class="msg msg-ok">{{$.Strings.T "board_posted_ok"}}</p>
+  {{end}}
+  {{if .BoardContacted}}
+  <p class="msg msg-ok">{{$.Strings.T "board_contacted_ok"}}</p>
+  {{end}}
+  {{if .BoardError}}
+  <p class="msg msg-error">{{$.Strings.T .BoardError}}</p>
+  {{end}}
+
+  {{if .ContactPosts}}
+  <div class="board-list">
+    {{range .ContactPosts}}
+    <div class="board-item">
+      <div class="board-item-header">
+        <span class="board-type-icon">{{if eq .Type "ride_offer"}}🚗{{else if eq .Type "ride_request"}}🚗{{else if eq .Type "sleep_offer"}}🏠{{else}}🏠{{end}}</span>
+        <span class="board-type-label">{{if eq .Type "ride_offer"}}{{$.Strings.T "board_ride_offer"}}{{else if eq .Type "ride_request"}}{{$.Strings.T "board_ride_request"}}{{else if eq .Type "sleep_offer"}}{{$.Strings.T "board_sleep_offer"}}{{else}}{{$.Strings.T "board_sleep_request"}}{{end}}</span>
+        <span class="board-city">{{.City}}</span>
+        <span class="board-persons">· {{.Persons}} {{$.Strings.T "board_persons"}}</span>
+        <span class="board-nick">· {{.Nickname}}</span>
+      </div>
+      {{if .Message}}<p class="board-message">{{.Message}}</p>{{end}}
+      <div class="board-actions">
+        <button class="btn-contact-toggle" data-target="contact-form-{{.ID}}">{{$.Strings.T "board_contact_btn"}}</button>
+        {{if $.Data.CanManageBoard}}
+        <form method="post" action="/events/{{$.Data.Event.ID}}/board/{{.ID}}/delete" style="display:inline" onsubmit="return confirm('{{$.Strings.T "board_delete_confirm"}}')">
+          <button type="submit" class="btn-board-del">{{$.Strings.T "board_delete_btn"}}</button>
+        </form>
+        {{end}}
+      </div>
+      <form id="contact-form-{{.ID}}" class="board-contact-form hidden" method="post" action="/events/{{$.Data.Event.ID}}/board/{{.ID}}/contact">
+        <input type="email" name="email" required placeholder="{{$.Strings.T "board_your_email"}}">
+        <textarea name="message" required rows="3" placeholder="{{$.Strings.T "board_your_message"}}"></textarea>
+        <button type="submit">{{$.Strings.T "board_send_btn"}}</button>
+      </form>
+    </div>
+    {{end}}
+  </div>
+  {{else}}
+  <p class="board-empty">{{$.Strings.T "board_empty"}}</p>
+  {{end}}
+
+  <details class="board-post-details">
+    <summary>{{$.Strings.T "board_post_summary"}}</summary>
+    <form class="board-post-form" method="post" action="/events/{{.Event.ID}}/board">
+      <div class="board-form-row">
+        <label>{{$.Strings.T "board_type_label"}}</label>
+        <select name="type" required>
+          <option value="ride_offer">{{$.Strings.T "board_ride_offer"}}</option>
+          <option value="ride_request">{{$.Strings.T "board_ride_request"}}</option>
+          <option value="sleep_offer">{{$.Strings.T "board_sleep_offer"}}</option>
+          <option value="sleep_request">{{$.Strings.T "board_sleep_request"}}</option>
+        </select>
+      </div>
+      <div class="board-form-row">
+        <label>{{$.Strings.T "board_city_label"}}</label>
+        <input type="text" name="city" required placeholder="{{$.Strings.T "board_city_placeholder"}}">
+      </div>
+      <div class="board-form-row">
+        <label>{{$.Strings.T "board_persons_label"}}</label>
+        <input type="number" name="persons" value="1" min="1" max="20" style="width:5rem">
+      </div>
+      <div class="board-form-row">
+        <label>{{$.Strings.T "board_message_label"}}</label>
+        <textarea name="message" rows="2" placeholder="{{$.Strings.T "board_message_placeholder"}}"></textarea>
+      </div>
+      <div class="board-form-row">
+        <label>{{$.Strings.T "board_nickname_label"}}</label>
+        <input type="text" name="nickname" required placeholder="{{$.Strings.T "board_nickname_placeholder"}}">
+      </div>
+      <div class="board-form-row">
+        <label>{{$.Strings.T "board_email_label"}}</label>
+        <input type="email" name="email" required placeholder="{{$.Strings.T "board_email_placeholder"}}">
+        <span class="board-hint">{{$.Strings.T "board_email_hint"}}</span>
+      </div>
+      <button type="submit" class="btn-board-submit">{{$.Strings.T "board_submit_btn"}}</button>
+    </form>
+  </details>
+</section>
+
 {{end}}{{/* .Data */}}
 
 <style>
@@ -231,7 +315,53 @@
 .evt-map{height:160px;border-radius:4px;overflow:hidden;margin-top:.5rem;background:#e8e8e8}
 .btn-booking{display:block;text-align:center;padding:.5rem 1rem;background:#1a6eb5;color:#fff;border-radius:4px;font-size:.9rem;font-weight:600;text-decoration:none}
 .btn-booking:hover{background:#0d4a80;color:#fff}
+.board-section{margin-top:2rem;background:#fff;border:1px solid #ddd;border-radius:6px;padding:1.25rem}
+.board-section h2{font-size:1.05rem;font-weight:700;color:#1a1a2e;text-transform:uppercase;letter-spacing:.04em;margin-bottom:.9rem}
+.board-list{display:flex;flex-direction:column;gap:.75rem;margin-bottom:1rem}
+.board-item{border:1px solid #e4e4e4;border-radius:6px;padding:.8rem 1rem}
+.board-item-header{display:flex;flex-wrap:wrap;align-items:center;gap:.4rem;font-size:.92rem}
+.board-type-icon{font-size:1rem}
+.board-type-label{font-weight:600;color:#1a1a2e}
+.board-city{color:#555}
+.board-persons{color:#888;font-size:.86rem}
+.board-nick{color:#888;font-size:.86rem}
+.board-message{margin:.5rem 0 .6rem;font-size:.9rem;color:#333;white-space:pre-wrap}
+.board-actions{display:flex;gap:.5rem;flex-wrap:wrap;margin-top:.4rem}
+.btn-contact-toggle{padding:.3rem .75rem;background:#e8f0fe;color:#1a6eb5;border:1px solid #c8d4f5;border-radius:4px;font-size:.85rem;cursor:pointer}
+.btn-contact-toggle:hover{background:#d0e0fc}
+.btn-board-del{padding:.3rem .75rem;background:#fce8e8;color:#b00;border:1px solid #f5c6c6;border-radius:4px;font-size:.85rem;cursor:pointer}
+.btn-board-del:hover{background:#f5c6c6}
+.board-contact-form{margin-top:.65rem;display:flex;flex-direction:column;gap:.45rem}
+.board-contact-form input,.board-contact-form textarea{padding:.4rem .6rem;border:1px solid #ccc;border-radius:4px;font-size:.9rem;font-family:inherit;width:100%}
+.board-contact-form button{align-self:flex-start;padding:.4rem .9rem;background:#1a6eb5;color:#fff;border:none;border-radius:4px;font-size:.88rem;cursor:pointer}
+.board-contact-form button:hover{background:#0d4a80}
+.hidden{display:none}
+.board-empty{color:#888;font-size:.9rem}
+.board-post-details{margin-top:1rem}
+.board-post-details summary{cursor:pointer;font-weight:600;font-size:.92rem;color:#1a6eb5;list-style:none;padding:.4rem 0}
+.board-post-details summary::-webkit-details-marker{display:none}
+.board-post-details summary::before{content:"+ ";font-weight:700}
+.board-post-details[open] summary::before{content:"− "}
+.board-post-form{margin-top:.75rem;display:flex;flex-direction:column;gap:.5rem}
+.board-form-row{display:flex;flex-direction:column;gap:.2rem}
+.board-form-row label{font-size:.82rem;font-weight:600;color:#555}
+.board-form-row input,.board-form-row select,.board-form-row textarea{padding:.4rem .6rem;border:1px solid #ccc;border-radius:4px;font-size:.9rem;font-family:inherit;width:100%}
+.board-hint{font-size:.78rem;color:#888}
+.btn-board-submit{align-self:flex-start;padding:.45rem 1.1rem;background:#1a6eb5;color:#fff;border:none;border-radius:4px;font-size:.9rem;cursor:pointer;margin-top:.25rem}
+.btn-board-submit:hover{background:#0d4a80}
+.msg{border-radius:4px;padding:.6rem .9rem;font-size:.9rem;margin-bottom:.75rem}
+.msg-ok{background:#d4edda;color:#155724;border:1px solid #c3e6cb}
+.msg-error{background:#f8d7da;color:#721c24;border:1px solid #f5c6cb}
 </style>
+
+<script>
+document.querySelectorAll('.btn-contact-toggle').forEach(function(btn){
+  btn.addEventListener('click',function(){
+    var form=document.getElementById(btn.dataset.target);
+    if(form) form.classList.toggle('hidden');
+  });
+});
+</script>
 
 {{if .Event.LocationLat}}
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">

@@ -54,9 +54,14 @@ type IndexData struct {
 }
 
 type EventData struct {
-	Event   Event
-	Org     *Organization
-	OrgSlug string
+	Event          Event
+	Org            *Organization
+	OrgSlug        string
+	ContactPosts   []ContactPost
+	CanManageBoard bool   // admin or org member
+	BoardPosted    bool   // form submitted successfully
+	BoardContacted bool   // contact message forwarded
+	BoardError     string // i18n key for error
 }
 
 type OrgData struct {
@@ -387,7 +392,40 @@ func eventHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18
 			}
 		}
 
-		renderTemplate(w, tmpls.event, tmplData(r, cfg, i18n, event.Title, EventData{Event: event, Org: org, OrgSlug: slug}))
+		posts, _ := client.GetContactPosts(r.Context(), id)
+
+		canManage := false
+		if su := getSessionUser(r); su != nil {
+			if su.Role == "admin" {
+				canManage = true
+			} else if event.OrganizationID != nil {
+				token := getSessionToken(r)
+				members, err := client.GetOrganizationMembers(r.Context(), *event.OrganizationID, token)
+				if err == nil {
+					for _, m := range members {
+						if m.UserID == su.ID {
+							canManage = true
+							break
+						}
+					}
+				}
+			}
+		}
+
+		boardPosted := r.URL.Query().Get("board_posted") == "1"
+		boardContacted := r.URL.Query().Get("board_contacted") == "1"
+		boardError := r.URL.Query().Get("board_error")
+
+		renderTemplate(w, tmpls.event, tmplData(r, cfg, i18n, event.Title, EventData{
+			Event:          event,
+			Org:            org,
+			OrgSlug:        slug,
+			ContactPosts:   posts,
+			CanManageBoard: canManage,
+			BoardPosted:    boardPosted,
+			BoardContacted: boardContacted,
+			BoardError:     boardError,
+		}))
 	}
 }
 
