@@ -1,0 +1,341 @@
+package main
+
+import (
+	"database/sql"
+	"encoding/json"
+	"fmt"
+	"log"
+	"net/http"
+	"strconv"
+	"strings"
+	"time"
+
+	"github.com/gorilla/mux"
+)
+
+type Booking struct {
+	ID        int    `json:"id"`
+	EventID   int    `json:"event_id"`
+	Name      string `json:"name"`
+	Email     string `json:"email,omitempty"`
+	Persons   int    `json:"persons"`
+	Message   string `json:"message,omitempty"`
+	Status    string `json:"status"`
+	QRToken   string `json:"qr_token,omitempty"`
+	CreatedAt string `json:"created_at"`
+}
+
+// bookingVerifyExpiry returns now + VerificationExpiryHours.
+func bookingVerifyExpiry() time.Time {
+	h := config.Server.VerificationExpiryHours
+	if h <= 0 {
+		h = 24
+	}
+	return time.Now().UTC().Add(time.Duration(h) * time.Hour)
+}
+
+// bookingLongExpiry returns the event's end_time + 90 days (for confirmed bookings).
+func bookingLongExpiry(eventID int) time.Time {
+	var endTimeStr string
+	if err := db.QueryRow("SELECT end_time FROM events WHERE id=?", eventID).Scan(&endTimeStr); err == nil {
+		if ts, err := strconv.ParseInt(strings.TrimSpace(endTimeStr), 10, 64); err == nil {
+			return time.Unix(ts, 0).UTC().Add(90 * 24 * time.Hour)
+		}
+	}
+	return time.Now().UTC().Add(90 * 24 * time.Hour)
+}
+
+// bookingAuthCheck fetches the event_id for a booking and verifies the caller
+// is admin or org member. Returns (eventID, ok).
+func bookingAuthCheck(w http.ResponseWriter, bookingID, callerID int, callerRole string) (int, bool) {
+	var eventID int
+	err := db.QueryRow("SELECT event_id FROM bookings WHERE id=?", bookingID).Scan(&eventID)
+	if err == sql.ErrNoRows {
+		http.Error(w, "booking not found", http.StatusNotFound)
+		return 0, false
+	}
+	if err != nil {
+		http.Error(w, "internal server error", http.StatusInternalServerError)
+		return 0, false
+	}
+	if callerRole != RoleAdmin && !isOrgMemberOfEvent(callerID, eventID) {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return 0, false
+	}
+	return eventID, true
+}
+
+// GET /api/v1/events/{id}/bookings
+// Requires auth. Org member or admin only.
+func listBookings(w http.ResponseWriter, r *http.Request) {
+	callerID, _ := strconv.Atoi(r.Header.Get("X-User-ID"))
+	callerRole := r.Header.Get("X-User-Role")
+
+	eventID, err := strconv.Atoi(mux.Vars(r)["id"])
+	if err != nil {
+		http.Error(w, "invalid event id", http.StatusBadRequest)
+		return
+	}
+	if callerRole != RoleAdmin && !isOrgMemberOfEvent(callerID, eventID) {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+
+	rows, err := db.Query(
+		`SELECT id, event_id, name, email, persons, COALESCE(message,''), status, COALESCE(qr_token,''), created_at
+		 FROM bookings WHERE event_id=? ORDER BY created_at ASC`, eventID,
+	)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	out := []Booking{}
+	for rows.Next() {
+		var b Booking
+		if err := rows.Scan(&b.ID, &b.EventID, &b.Name, &b.Email, &b.Persons, &b.Message, &b.Status, &b.QRToken, &b.CreatedAt); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		out = append(out, b)
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(out)
+}
+
+// POST /api/v1/events/{id}/bookings
+// Public. Creates a pending booking and sends an email verification link.
+func createBooking(w http.ResponseWriter, r *http.Request) {
+	eventID, err := strconv.Atoi(mux.Vars(r)["id"])
+	if err != nil {
+		http.Error(w, "invalid event id", http.StatusBadRequest)
+		return
+	}
+
+	// Check event exists and booking is enabled.
+	var bookingEnabled int
+	err = db.QueryRow("SELECT COALESCE(booking_enabled,0) FROM events WHERE id=?", eventID).Scan(&bookingEnabled)
+	if err == sql.ErrNoRows {
+		http.Error(w, "event not found", http.StatusNotFound)
+		return
+	}
+	if err != nil {
+		http.Error(w, "internal server error", http.StatusInternalServerError)
+		return
+	}
+	if bookingEnabled == 0 {
+		http.Error(w, "booking is not enabled for this event", http.StatusForbidden)
+		return
+	}
+
+	var req struct {
+		Name    string `json:"name"`
+		Email   string `json:"email"`
+		Persons int    `json:"persons"`
+		Message string `json:"message"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "invalid request body", http.StatusBadRequest)
+		return
+	}
+	req.Name = strings.TrimSpace(req.Name)
+	req.Email = strings.TrimSpace(req.Email)
+	req.Message = strings.TrimSpace(req.Message)
+	if req.Name == "" || req.Email == "" {
+		http.Error(w, "name and email are required", http.StatusBadRequest)
+		return
+	}
+	if !strings.Contains(req.Email, "@") {
+		http.Error(w, "invalid email address", http.StatusBadRequest)
+		return
+	}
+	if req.Persons < 1 {
+		req.Persons = 1
+	}
+
+	verifyToken, err := generateVerificationToken()
+	if err != nil {
+		http.Error(w, "failed to generate token", http.StatusInternalServerError)
+		return
+	}
+
+	expiresAt := bookingVerifyExpiry()
+
+	result, err := db.Exec(
+		`INSERT INTO bookings (event_id, name, email, persons, message, verify_token, expires_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?)`,
+		eventID, req.Name, req.Email, req.Persons, req.Message, verifyToken, expiresAt.Format(time.RFC3339),
+	)
+	if err != nil {
+		http.Error(w, "failed to create booking", http.StatusInternalServerError)
+		return
+	}
+	id, _ := result.LastInsertId()
+
+	base := strings.TrimRight(config.Server.BaseURL, "/")
+	verifyURL := base + "/api/v1/bookings/verify/" + verifyToken
+	body := fmt.Sprintf(
+		"Hello %s,\n\nThank you for your booking request. Please confirm your email address by clicking this link:\n\n  %s\n\nThis link expires in %d hours.\n\nIf you did not make this booking request, please ignore this email.\n",
+		req.Name, verifyURL, config.Server.VerificationExpiryHours,
+	)
+	if err := SendEmail(req.Email, "Confirm your booking", body); err != nil {
+		log.Printf("bookings: verify email failed for booking %d: %v", id, err)
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"id":      id,
+		"message": "A confirmation email has been sent. Your booking will be registered once verified.",
+	})
+}
+
+// GET /api/v1/bookings/verify/{token}
+// Public. Marks the booking as confirmed and generates a QR token.
+func verifyBooking(w http.ResponseWriter, r *http.Request) {
+	token := mux.Vars(r)["token"]
+
+	var id, eventID int
+	var expiresAt string
+	err := db.QueryRow(
+		"SELECT id, event_id, expires_at FROM bookings WHERE verify_token=? AND status='pending'", token,
+	).Scan(&id, &eventID, &expiresAt)
+	if err == sql.ErrNoRows {
+		http.Error(w, "invalid or already used verification link", http.StatusNotFound)
+		return
+	}
+	if err != nil {
+		http.Error(w, "internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	exp, err := parseTokenExpiration(expiresAt)
+	if err != nil || time.Now().After(exp) {
+		db.Exec("DELETE FROM bookings WHERE id=?", id)
+		http.Error(w, "verification link has expired", http.StatusGone)
+		return
+	}
+
+	qrToken, err := generateVerificationToken()
+	if err != nil {
+		http.Error(w, "failed to generate QR token", http.StatusInternalServerError)
+		return
+	}
+
+	longExpiry := bookingLongExpiry(eventID)
+	db.Exec(
+		"UPDATE bookings SET status='confirmed', verify_token=NULL, qr_token=?, expires_at=? WHERE id=?",
+		qrToken, longExpiry.Format(time.RFC3339), id,
+	)
+	log.Printf("bookings: verified booking %d for event %d", id, eventID)
+
+	base := strings.TrimRight(config.Server.BaseURL, "/")
+	checkinURL := base + "/checkin/" + qrToken
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{
+		"status":    "confirmed",
+		"qr_token":  qrToken,
+		"checkin_url": checkinURL,
+	})
+}
+
+// PATCH /api/v1/bookings/{id}/status
+// Requires auth. Org member or admin only. Accepts {"status":"approved"|"cancelled"}.
+func updateBookingStatus(w http.ResponseWriter, r *http.Request) {
+	callerID, _ := strconv.Atoi(r.Header.Get("X-User-ID"))
+	callerRole := r.Header.Get("X-User-Role")
+
+	bookingID, err := strconv.Atoi(mux.Vars(r)["id"])
+	if err != nil {
+		http.Error(w, "invalid booking id", http.StatusBadRequest)
+		return
+	}
+
+	if _, ok := bookingAuthCheck(w, bookingID, callerID, callerRole); !ok {
+		return
+	}
+
+	var req struct {
+		Status string `json:"status"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "invalid request body", http.StatusBadRequest)
+		return
+	}
+	if req.Status != "approved" && req.Status != "cancelled" {
+		http.Error(w, "status must be 'approved' or 'cancelled'", http.StatusBadRequest)
+		return
+	}
+
+	res, err := db.Exec("UPDATE bookings SET status=? WHERE id=?", req.Status, bookingID)
+	if err != nil {
+		http.Error(w, "failed to update booking", http.StatusInternalServerError)
+		return
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		http.Error(w, "booking not found", http.StatusNotFound)
+		return
+	}
+	log.Printf("bookings: booking %d set to %s by user %d", bookingID, req.Status, callerID)
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// GET /api/v1/bookings/checkin/{qr_token}
+// Requires auth. Org member or admin only. Returns booking details and marks as checked_in.
+func checkinBooking(w http.ResponseWriter, r *http.Request) {
+	callerID, _ := strconv.Atoi(r.Header.Get("X-User-ID"))
+	callerRole := r.Header.Get("X-User-Role")
+
+	qrToken := mux.Vars(r)["qr_token"]
+
+	var b Booking
+	err := db.QueryRow(
+		`SELECT id, event_id, name, persons, COALESCE(message,''), status, created_at
+		 FROM bookings WHERE qr_token=?`, qrToken,
+	).Scan(&b.ID, &b.EventID, &b.Name, &b.Persons, &b.Message, &b.Status, &b.CreatedAt)
+	if err == sql.ErrNoRows {
+		http.Error(w, "booking not found", http.StatusNotFound)
+		return
+	}
+	if err != nil {
+		http.Error(w, "internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	if callerRole != RoleAdmin && !isOrgMemberOfEvent(callerID, b.EventID) {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+
+	if b.Status == "approved" || b.Status == "confirmed" {
+		db.Exec("UPDATE bookings SET status='checked_in' WHERE id=?", b.ID)
+		b.Status = "checked_in"
+		log.Printf("bookings: booking %d checked in by user %d", b.ID, callerID)
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(b)
+}
+
+// DELETE /api/v1/bookings/{id}
+// Requires auth. Org member or admin only.
+func deleteBooking(w http.ResponseWriter, r *http.Request) {
+	callerID, _ := strconv.Atoi(r.Header.Get("X-User-ID"))
+	callerRole := r.Header.Get("X-User-Role")
+
+	bookingID, err := strconv.Atoi(mux.Vars(r)["id"])
+	if err != nil {
+		http.Error(w, "invalid booking id", http.StatusBadRequest)
+		return
+	}
+
+	if _, ok := bookingAuthCheck(w, bookingID, callerID, callerRole); !ok {
+		return
+	}
+
+	db.Exec("DELETE FROM bookings WHERE id=?", bookingID)
+	log.Printf("bookings: booking %d deleted by user %d", bookingID, callerID)
+	w.WriteHeader(http.StatusNoContent)
+}

@@ -266,6 +266,7 @@ func startTokenCleanup() {
 			db.Exec("DELETE FROM verification_tokens WHERE expires_at < ?", time.Now().UTC().Format(time.RFC3339))
 			db.Exec("DELETE FROM magic_login_tokens WHERE expires_at < ?", time.Now().UTC().Format(time.RFC3339))
 			db.Exec("DELETE FROM contact_posts WHERE expires_at < ?", time.Now().UTC().Format(time.RFC3339))
+			db.Exec("DELETE FROM bookings WHERE status='pending' AND expires_at < ?", time.Now().UTC().Format(time.RFC3339))
 			// Sweep lastSeenCache: remove entries older than the maximum token lifetime.
 			expirationHours := 24
 			if config != nil && config.Server.TokenExpirationHours > 0 {
@@ -468,6 +469,23 @@ func migrateDB() {
 	db.Exec("ALTER TABLE events ADD COLUMN availability TEXT DEFAULT ''")
 	db.Exec("ALTER TABLE events ADD COLUMN tickets_total INTEGER DEFAULT 0")
 	db.Exec("ALTER TABLE events ADD COLUMN booking_enabled INTEGER DEFAULT 0")
+	db.Exec(`CREATE TABLE IF NOT EXISTS bookings (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		event_id INTEGER NOT NULL,
+		name TEXT NOT NULL,
+		email TEXT NOT NULL,
+		persons INTEGER NOT NULL DEFAULT 1,
+		message TEXT DEFAULT '',
+		status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','confirmed','approved','checked_in','cancelled')),
+		verify_token TEXT UNIQUE,
+		qr_token TEXT UNIQUE,
+		expires_at DATETIME NOT NULL,
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE CASCADE
+	)`)
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_bookings_event_id ON bookings(event_id)")
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_bookings_verify_token ON bookings(verify_token)")
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_bookings_qr_token ON bookings(qr_token)")
 }
 
 func createTables() error {
@@ -655,6 +673,23 @@ func createTables() error {
 	);
 	CREATE INDEX IF NOT EXISTS idx_contact_posts_event_id ON contact_posts(event_id);
 	CREATE INDEX IF NOT EXISTS idx_contact_posts_verify_token ON contact_posts(verify_token);
+	CREATE TABLE IF NOT EXISTS bookings (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		event_id INTEGER NOT NULL,
+		name TEXT NOT NULL,
+		email TEXT NOT NULL,
+		persons INTEGER NOT NULL DEFAULT 1,
+		message TEXT DEFAULT '',
+		status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','confirmed','approved','checked_in','cancelled')),
+		verify_token TEXT UNIQUE,
+		qr_token TEXT UNIQUE,
+		expires_at DATETIME NOT NULL,
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE CASCADE
+	);
+	CREATE INDEX IF NOT EXISTS idx_bookings_event_id ON bookings(event_id);
+	CREATE INDEX IF NOT EXISTS idx_bookings_verify_token ON bookings(verify_token);
+	CREATE INDEX IF NOT EXISTS idx_bookings_qr_token ON bookings(qr_token);
 	CREATE INDEX IF NOT EXISTS idx_events_url            ON events(url) WHERE url IS NOT NULL;
 	CREATE INDEX IF NOT EXISTS idx_events_published_start ON events(is_published, start_time);
 	CREATE INDEX IF NOT EXISTS idx_events_title_location  ON events(title, location_id);
@@ -763,6 +798,10 @@ func main() {
 	router.HandleFunc("/api/v1/contact-posts/delete/{token}", deleteContactPostByToken).Methods("GET")
 	router.HandleFunc("/api/v1/contact-posts/{id}/contact", contactPoster).Methods("POST")
 
+	// Bookings — public create + verify
+	router.HandleFunc("/api/v1/events/{id}/bookings", createBooking).Methods("POST")
+	router.HandleFunc("/api/v1/bookings/verify/{token}", verifyBooking).Methods("GET")
+
 	// iCal feeds (public, no auth)
 	router.HandleFunc("/api/v1/events.ics", getEventsICS).Methods("GET")
 	router.HandleFunc("/api/v1/events/{id:[0-9]+}.ics", getEventICS).Methods("GET")
@@ -834,6 +873,18 @@ func main() {
 	contactRoutes := router.PathPrefix("/api/v1/contact-posts").Subrouter()
 	contactRoutes.Use(TokenMiddleware)
 	contactRoutes.HandleFunc("/{id}", deleteContactPost).Methods("DELETE")
+
+	// Bookings — protected management (admin or org member)
+	bookingRoutes := router.PathPrefix("/api/v1/bookings").Subrouter()
+	bookingRoutes.Use(TokenMiddleware)
+	bookingRoutes.HandleFunc("/checkin/{qr_token}", checkinBooking).Methods("GET")
+	bookingRoutes.HandleFunc("/{id}/status", updateBookingStatus).Methods("PATCH")
+	bookingRoutes.HandleFunc("/{id}", deleteBooking).Methods("DELETE")
+
+	// Bookings list on event (protected)
+	eventBookingRoutes := router.PathPrefix("/api/v1/events").Subrouter()
+	eventBookingRoutes.Use(TokenMiddleware)
+	eventBookingRoutes.HandleFunc("/{id}/bookings", listBookings).Methods("GET")
 
 	// Organization endpoints (protected)
 	orgRoutes := router.PathPrefix("/api/v1/organizations").Subrouter()
