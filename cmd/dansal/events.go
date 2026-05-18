@@ -33,6 +33,7 @@ type Event struct {
 	EndTime        string   `json:"end_time"`
 	HasBall        bool     `json:"has_ball"`
 	HasWorkshop    bool     `json:"has_workshop"`
+	HasFestival    bool     `json:"has_festival"`
 	IsCancelled    bool     `json:"is_cancelled"`
 	Tags           []string `json:"tags"`
 	IsPublished    bool     `json:"is_published"`
@@ -71,7 +72,26 @@ type EventPatchRequest struct {
 	IsPublished    *bool    `json:"is_published"`
 	HasBall        *bool    `json:"has_ball"`
 	HasWorkshop    *bool    `json:"has_workshop"`
+	HasFestival    *bool    `json:"has_festival"`
 	Pricing        *Pricing `json:"pricing"`
+}
+
+type EventUpdateRequest struct {
+	Title          string               `json:"title"`
+	Description    string               `json:"description"`
+	StartTime      string               `json:"start_time"`
+	EndTime        string               `json:"end_time"`
+	HasBall        bool                 `json:"has_ball"`
+	HasWorkshop    bool                 `json:"has_workshop"`
+	HasFestival    bool                 `json:"has_festival"`
+	IsCancelled    bool                 `json:"is_cancelled"`
+	IsPublished    bool                 `json:"is_published"`
+	Tags           []string             `json:"tags"`
+	URL            string               `json:"url"`
+	OrganizationID *int                 `json:"organization_id"`
+	Location       EventLocationRequest `json:"location"`
+	Pricing        *Pricing             `json:"pricing"`
+	Musicians      []int                `json:"musicians"`
 }
 
 type EventCreateRequest struct {
@@ -82,6 +102,7 @@ type EventCreateRequest struct {
 	EndTime            string               `json:"end_time"`
 	HasBall            bool                 `json:"has_ball"`
 	HasWorkshop        bool                 `json:"has_workshop"`
+	HasFestival        bool                 `json:"has_festival"`
 	IsCancelled        bool                 `json:"is_cancelled"`
 	Tags               []string             `json:"tags"`
 	URL                string               `json:"url,omitempty"`
@@ -133,7 +154,7 @@ var timeFormats = []string{
 }
 
 // SELECT used by all event list / single-event queries
-const eventListSelect = `SELECT e.id, e.uid, e.title, e.description, e.start_time, e.end_time, e.has_ball, e.has_workshop, e.is_cancelled, e.tags, e.is_published, e.short_code, COALESCE(e.url,''), COALESCE(e.source,''), e.created_at, COALESCE(l.location,''), e.organization_id, COALESCE(e.pricing,''), e.location_id, COALESCE(l.town,''), COALESCE(l.country,''), COALESCE(l.latitude,''), COALESCE(l.longitude,'') FROM events e LEFT JOIN locations l ON e.location_id = l.id`
+const eventListSelect = `SELECT e.id, e.uid, e.title, e.description, e.start_time, e.end_time, e.has_ball, e.has_workshop, e.has_festival, e.is_cancelled, e.tags, e.is_published, e.short_code, COALESCE(e.url,''), COALESCE(e.source,''), e.created_at, COALESCE(l.location,''), e.organization_id, COALESCE(e.pricing,''), e.location_id, COALESCE(l.town,''), COALESCE(l.country,''), COALESCE(l.latitude,''), COALESCE(l.longitude,'') FROM events e LEFT JOIN locations l ON e.location_id = l.id`
 
 // ── low-level helpers ──────────────────────────────────────────────────────
 
@@ -174,12 +195,12 @@ type scanner interface {
 // scanEventRow decodes one row from the eventListSelect query.
 func scanEventRow(s scanner) (Event, error) {
 	var event Event
-	var hasBallInt, hasWorkshopInt, isCancelledInt, isPublishedInt int
+	var hasBallInt, hasWorkshopInt, hasFestivalInt, isCancelledInt, isPublishedInt int
 	var startEpoch, endEpoch int64
 	var orgID, locID sql.NullInt64
 	var uid sql.NullString
 	if err := s.Scan(&event.ID, &uid, &event.Title, &event.Description, &startEpoch, &endEpoch,
-		&hasBallInt, &hasWorkshopInt, &isCancelledInt, &event.TagsJSON, &isPublishedInt,
+		&hasBallInt, &hasWorkshopInt, &hasFestivalInt, &isCancelledInt, &event.TagsJSON, &isPublishedInt,
 		&event.ShortCode, &event.URL, &event.Source, &event.CreatedAt, &event.Location, &orgID,
 		&event.PricingJSON, &locID, &event.LocationTown, &event.LocationCountry,
 		&event.LocationLat, &event.LocationLng); err != nil {
@@ -192,6 +213,7 @@ func scanEventRow(s scanner) (Event, error) {
 	event.EndTime = epochToLocal(endEpoch)
 	event.HasBall = hasBallInt == 1
 	event.HasWorkshop = hasWorkshopInt == 1
+	event.HasFestival = hasFestivalInt == 1
 	event.IsCancelled = isCancelledInt == 1
 	event.IsPublished = isPublishedInt == 1
 	event.ImageURL = eventImageURL(event.ID)
@@ -218,18 +240,18 @@ func scanEventRow(s scanner) (Event, error) {
 // fetchEventByID loads a single event by primary key, including location fields via JOIN.
 func fetchEventByID(q querier, id int) (Event, error) {
 	var event Event
-	var hasBallInt, hasWorkshopInt, isCancelledInt, isPublishedInt int
+	var hasBallInt, hasWorkshopInt, hasFestivalInt, isCancelledInt, isPublishedInt int
 	var startEpoch, endEpoch int64
 	var orgID, locID sql.NullInt64
 	var uid sql.NullString
 	err := q.QueryRow(
 		`SELECT e.id, e.uid, e.title, e.description, e.start_time, e.end_time, e.has_ball, e.has_workshop,
-		 e.is_cancelled, e.tags, e.is_published, e.short_code, COALESCE(e.url,''), COALESCE(e.source,''),
+		 e.has_festival, e.is_cancelled, e.tags, e.is_published, e.short_code, COALESCE(e.url,''), COALESCE(e.source,''),
 		 e.created_at, e.organization_id, COALESCE(e.pricing,''), e.location_id,
 		 COALESCE(l.location,''), COALESCE(l.town,''), COALESCE(l.country,'')
 		 FROM events e LEFT JOIN locations l ON e.location_id = l.id WHERE e.id = ?`, id,
 	).Scan(&event.ID, &uid, &event.Title, &event.Description, &startEpoch, &endEpoch,
-		&hasBallInt, &hasWorkshopInt, &isCancelledInt, &event.TagsJSON, &isPublishedInt,
+		&hasBallInt, &hasWorkshopInt, &hasFestivalInt, &isCancelledInt, &event.TagsJSON, &isPublishedInt,
 		&event.ShortCode, &event.URL, &event.Source, &event.CreatedAt, &orgID, &event.PricingJSON,
 		&locID, &event.Location, &event.LocationTown, &event.LocationCountry)
 	if uid.Valid {
@@ -242,6 +264,7 @@ func fetchEventByID(q querier, id int) (Event, error) {
 	event.EndTime = epochToLocal(endEpoch)
 	event.HasBall = hasBallInt == 1
 	event.HasWorkshop = hasWorkshopInt == 1
+	event.HasFestival = hasFestivalInt == 1
 	event.IsCancelled = isCancelledInt == 1
 	event.IsPublished = isPublishedInt == 1
 	event.ImageURL = eventImageURL(event.ID)
@@ -340,6 +363,10 @@ func applyEventFilters(r *http.Request, query *string, args *[]interface{}) {
 		*query += " AND e.has_workshop = ?"
 		*args = append(*args, boolParam(v))
 	}
+	if v := q.Get("has_festival"); v != "" {
+		*query += " AND e.has_festival = ?"
+		*args = append(*args, boolParam(v))
+	}
 	if tag := q.Get("tag"); tag != "" {
 		*query += " AND EXISTS (SELECT 1 FROM json_each(e.tags) WHERE value = ?)"
 		*args = append(*args, tag)
@@ -404,7 +431,7 @@ func urlVal(s string) interface{} {
 // Deduplication order: UID exact match → URL exact match → title+location+time fuzzy match (±3 h).
 // The URL and fuzzy tiers run whenever the previous tier misses, so two feeds that
 // publish the same event with different UIDs (or none) converge to a single row.
-func insertEvent(q querier, title, description string, startTime, endTime int64, locationID int64, hasBall, hasWorkshop, isCancelled bool, tags []string, isPublished bool, organizationID *int, uid, url, source string, sourceLastModified int64, pricing *Pricing) (int, string, bool, error) {
+func insertEvent(q querier, title, description string, startTime, endTime int64, locationID int64, hasBall, hasWorkshop, hasFestival, isCancelled bool, tags []string, isPublished bool, organizationID *int, uid, url, source string, sourceLastModified int64, pricing *Pricing) (int, string, bool, error) {
 	var existingID int
 	var existingShortCode string
 	var existingSourceLastModified int64
@@ -461,8 +488,8 @@ func insertEvent(q querier, title, description string, startTime, endTime int64,
 			slmArg = sourceLastModified
 		}
 		_, err := q.Exec(
-			"UPDATE events SET description=?, start_time=?, end_time=?, location_id=?, has_ball=?, has_workshop=?, is_cancelled=?, tags=?, is_published=?, url=?, source_last_modified=?, pricing=? WHERE id=?",
-			description, startTime, endTime, locationID, hasBall, hasWorkshop, isCancelled, string(tagsJSON), isPublished, urlVal(url), slmArg, pricingArg, existingID,
+			"UPDATE events SET description=?, start_time=?, end_time=?, location_id=?, has_ball=?, has_workshop=?, has_festival=?, is_cancelled=?, tags=?, is_published=?, url=?, source_last_modified=?, pricing=? WHERE id=?",
+			description, startTime, endTime, locationID, hasBall, hasWorkshop, hasFestival, isCancelled, string(tagsJSON), isPublished, urlVal(url), slmArg, pricingArg, existingID,
 		)
 		if err != nil {
 			return 0, "", false, err
@@ -494,8 +521,8 @@ func insertEvent(q querier, title, description string, startTime, endTime int64,
 			sourceArg = source
 		}
 		result, err = q.Exec(
-			"INSERT INTO events (uid, title, description, start_time, end_time, location_id, has_ball, has_workshop, is_cancelled, tags, is_published, organization_id, short_code, url, source, source_last_modified, pricing) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-			uidArg, title, description, startTime, endTime, locationID, hasBall, hasWorkshop, isCancelled, string(tagsJSON), isPublished, orgIDArg, shortCode, urlVal(url), sourceArg, slmArg, pricingArg,
+			"INSERT INTO events (uid, title, description, start_time, end_time, location_id, has_ball, has_workshop, has_festival, is_cancelled, tags, is_published, organization_id, short_code, url, source, source_last_modified, pricing) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+			uidArg, title, description, startTime, endTime, locationID, hasBall, hasWorkshop, hasFestival, isCancelled, string(tagsJSON), isPublished, orgIDArg, shortCode, urlVal(url), sourceArg, slmArg, pricingArg,
 		)
 		if err == nil {
 			break
@@ -544,7 +571,7 @@ func createEventFromRequest(q querier, req EventCreateRequest, locationID int64,
 			return nil, false, fmt.Errorf("end_time: %w", err)
 		}
 
-		id, shortCode, created, err := insertEvent(q, req.Title, entry.description, startTime, endTime, locationID, req.HasBall, req.HasWorkshop, req.IsCancelled, req.Tags, isPublished, req.OrganizationID, req.UID, req.URL, req.Source, req.SourceLastModified, req.Pricing)
+		id, shortCode, created, err := insertEvent(q, req.Title, entry.description, startTime, endTime, locationID, req.HasBall, req.HasWorkshop, req.HasFestival, req.IsCancelled, req.Tags, isPublished, req.OrganizationID, req.UID, req.URL, req.Source, req.SourceLastModified, req.Pricing)
 		if err != nil {
 			return nil, false, err
 		}
@@ -833,6 +860,10 @@ func patchEvents(w http.ResponseWriter, r *http.Request) {
 	if req.HasWorkshop != nil {
 		setClauses = append(setClauses, "has_workshop = ?")
 		setArgs = append(setArgs, *req.HasWorkshop)
+	}
+	if req.HasFestival != nil {
+		setClauses = append(setClauses, "has_festival = ?")
+		setArgs = append(setArgs, *req.HasFestival)
 	}
 	if req.Pricing != nil {
 		pricingJSON, _ := json.Marshal(req.Pricing)
@@ -1257,6 +1288,118 @@ func publishEvent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// PUT /api/v1/events/{id} — full event update
+func updateEvent(w http.ResponseWriter, r *http.Request) {
+	userRole := r.Header.Get("X-User-Role")
+	if userRole != RoleAdmin && userRole != RoleUser {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
+	callerID, _ := strconv.Atoi(r.Header.Get("X-User-ID"))
+	id, err := strconv.Atoi(mux.Vars(r)["id"])
+	if err != nil {
+		http.Error(w, "invalid id", http.StatusBadRequest)
+		return
+	}
+
+	var req EventUpdateRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "invalid request body", http.StatusBadRequest)
+		return
+	}
+	if req.Title == "" {
+		http.Error(w, "title is required", http.StatusBadRequest)
+		return
+	}
+
+	var existingOrgID sql.NullInt64
+	if err := db.QueryRow("SELECT organization_id FROM events WHERE id = ?", id).Scan(&existingOrgID); err == sql.ErrNoRows {
+		http.Error(w, "Event not found", http.StatusNotFound)
+		return
+	} else if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if userRole != RoleAdmin {
+		if !existingOrgID.Valid || !isOrgMember(callerID, int(existingOrgID.Int64)) {
+			http.Error(w, "Forbidden", http.StatusForbidden)
+			return
+		}
+	}
+
+	startTime, err := parseTimeToUnix(req.StartTime)
+	if err != nil {
+		http.Error(w, "invalid start_time: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+	endTime, err := parseTimeToUnix(req.EndTime)
+	if err != nil {
+		endTime = startTime
+	}
+
+	tx, err := db.Begin()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	defer tx.Rollback()
+
+	locationID, err := ensureLocation(tx, req.Location)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	tagsJSON, _ := json.Marshal(req.Tags)
+	var pricingArg interface{}
+	if req.Pricing != nil {
+		if b, err := json.Marshal(req.Pricing); err == nil {
+			pricingArg = string(b)
+		}
+	}
+	var orgIDArg interface{}
+	if req.OrganizationID != nil {
+		orgIDArg = *req.OrganizationID
+	}
+
+	if _, err := tx.Exec(
+		`UPDATE events SET title=?, description=?, start_time=?, end_time=?, location_id=?,
+		 has_ball=?, has_workshop=?, has_festival=?, is_cancelled=?, is_published=?,
+		 tags=?, url=?, organization_id=?, pricing=? WHERE id=?`,
+		req.Title, req.Description, startTime, endTime, locationID,
+		req.HasBall, req.HasWorkshop, req.HasFestival, req.IsCancelled, req.IsPublished,
+		string(tagsJSON), urlVal(req.URL), orgIDArg, pricingArg, id,
+	); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	tx.Exec("DELETE FROM event_musicians WHERE event_id = ?", id)
+	for _, musicianID := range req.Musicians {
+		tx.Exec("INSERT OR IGNORE INTO event_musicians (event_id, musician_id) VALUES (?, ?)", id, musicianID)
+	}
+
+	if err := tx.Commit(); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	event, err := fetchEventByID(db, id)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if musicians, err := fetchEventMusicians(id); err == nil {
+		event.Musicians = musicians
+	}
+	if timetable, err := fetchTimetable(id); err == nil {
+		event.Timetable = timetable
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(event)
 }
 
 // DELETE /api/v1/events/{id}

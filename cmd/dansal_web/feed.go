@@ -123,7 +123,7 @@ func feedTypeHandler(cfg *Config, client *DansalClient, feedType string) http.Ha
 					events = append(events, e)
 				}
 			case "festival":
-				if !e.HasBall && !e.HasWorkshop {
+				if e.HasFestival {
 					events = append(events, e)
 				}
 			}

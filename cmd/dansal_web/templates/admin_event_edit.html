@@ -1,6 +1,6 @@
 {{template "base" .}}
 {{define "content"}}
-<h1>{{.Strings.T "admin_event_new_title"}}</h1>
+<h1>{{.Strings.T "admin_event_edit_title"}}</h1>
 
 {{with .Data}}
 {{if .ErrorKey}}<p class="form-error" role="alert">{{$.Strings.T .ErrorKey}}</p>{{end}}
@@ -10,6 +10,7 @@
   <!-- Image -->
   <section class="form-section">
     <h2>{{$.Strings.T "evt_image"}}</h2>
+    {{with .Event.ImageURL}}<img src="{{.}}" alt="" id="existing-image" style="max-height:200px;border-radius:4px;margin-bottom:.5rem;display:block">{{end}}
     <div id="drop-zone" class="drop-zone">
       <input type="file" id="image" name="image" accept="image/*" style="display:none">
       <div id="drop-label" class="drop-label">
@@ -25,37 +26,91 @@
     <h2>{{$.Strings.T "evt_basic_info"}}</h2>
 
     <label for="title">{{$.Strings.T "evt_title"}} *</label>
-    <input id="title" type="text" name="title" required placeholder="{{$.Strings.T "evt_title_placeholder"}}">
+    <input id="title" type="text" name="title" required value="{{.Event.Title}}" placeholder="{{$.Strings.T "evt_title_placeholder"}}">
 
     <div class="field-row">
       <div>
         <label for="date">{{$.Strings.T "evt_date"}}</label>
-        <input id="date" type="date" name="date">
+        <input id="date" type="date" name="date" value="{{isoDate .Event.StartTime}}">
       </div>
       <div>
         <label for="start_time">{{$.Strings.T "evt_start"}}</label>
-        <input id="start_time" type="time" name="start_time">
+        <input id="start_time" type="time" name="start_time" value="{{isoTime .Event.StartTime}}">
       </div>
       <div>
         <label for="end_time">{{$.Strings.T "evt_end"}}</label>
-        <input id="end_time" type="time" name="end_time">
+        <input id="end_time" type="time" name="end_time" value="{{isoTime .Event.EndTime}}">
       </div>
     </div>
 
     <div class="check-row">
-      <label class="check-label"><input type="checkbox" name="has_ball"> {{$.Strings.T "filter_type_ball"}}</label>
-      <label class="check-label"><input type="checkbox" name="has_workshop"> {{$.Strings.T "filter_type_workshop"}}</label>
-      <label class="check-label"><input type="checkbox" name="has_festival"> {{$.Strings.T "filter_type_festival"}}</label>
+      <label class="check-label"><input type="checkbox" name="has_ball"{{if .Event.HasBall}} checked{{end}}> {{$.Strings.T "filter_type_ball"}}</label>
+      <label class="check-label"><input type="checkbox" name="has_workshop"{{if .Event.HasWorkshop}} checked{{end}}> {{$.Strings.T "filter_type_workshop"}}</label>
+      <label class="check-label"><input type="checkbox" name="has_festival"{{if .Event.HasFestival}} checked{{end}}> {{$.Strings.T "filter_type_festival"}}</label>
+      <label class="check-label"><input type="checkbox" name="is_cancelled"{{if .Event.IsCancelled}} checked{{end}}> {{$.Strings.T "badge_cancelled"}}</label>
+      <label class="check-label"><input type="checkbox" name="is_published"{{if .Event.IsPublished}} checked{{end}}> {{$.Strings.T "evt_published"}}</label>
     </div>
 
     <label for="description">{{$.Strings.T "evt_description"}}</label>
-    <textarea id="description" name="description" rows="5"></textarea>
+    <textarea id="description" name="description" rows="5">{{.Event.Description}}</textarea>
 
     <label for="url">{{$.Strings.T "evt_website"}}</label>
-    <input id="url" type="url" name="url" placeholder="https://...">
+    <input id="url" type="url" name="url" value="{{.Event.URL}}" placeholder="https://...">
 
     <label for="tags">{{$.Strings.T "evt_tags"}} <span class="field-hint">({{$.Strings.T "evt_tags_hint"}})</span></label>
-    <input id="tags" type="text" name="tags" placeholder="balfolk, workshop, festival">
+    <input id="tags" type="text" name="tags" value="{{join .Event.Tags}}" placeholder="balfolk, workshop, festival">
+  </section>
+
+  <!-- Musicians -->
+  <section class="form-section">
+    <h2>{{$.Strings.T "evt_musicians"}}</h2>
+    <div id="selected-musicians">
+      {{range .Event.Musicians}}
+      <div class="musician-chip" data-id="{{.ID}}">
+        <span>{{.Bandname}}</span>
+        <button type="button" class="btn-chip-del" onclick="removeMusician(this)" title="Remove">×</button>
+        <input type="hidden" name="musician_ids" value="{{.ID}}">
+      </div>
+      {{end}}
+    </div>
+    <div class="ac-wrap">
+      <input id="musician-search" type="text" placeholder="{{$.Strings.T "evt_musician_search"}}" autocomplete="off" oninput="searchMusicians(this.value)">
+      <div id="ac-list" class="ac-list" hidden></div>
+    </div>
+    <script>
+    var allMusicians = [{{range .Musicians}}{id:{{.ID}},name:{{jsStr .Bandname}}},{{end}}];
+    function selectedIDs(){
+      return Array.from(document.querySelectorAll('#selected-musicians input[name=musician_ids]')).map(function(i){return parseInt(i.value,10);});
+    }
+    function searchMusicians(q){
+      var list=document.getElementById('ac-list');
+      q=q.trim();
+      if(q.length<2){list.hidden=true;return;}
+      var sel=selectedIDs();
+      var results=allMusicians.filter(function(m){
+        return m.name.toLowerCase().indexOf(q.toLowerCase())>=0 && sel.indexOf(m.id)<0;
+      }).slice(0,8);
+      if(results.length===0){list.hidden=true;return;}
+      list.innerHTML=results.map(function(m){
+        return '<div class="ac-item" onclick="addMusician('+m.id+','+JSON.stringify(m.name)+')" tabindex="0">'+m.name+'</div>';
+      }).join('');
+      list.hidden=false;
+    }
+    function addMusician(id,name){
+      var wrap=document.getElementById('selected-musicians');
+      var chip=document.createElement('div');
+      chip.className='musician-chip';
+      chip.dataset.id=id;
+      chip.innerHTML='<span>'+name+'</span><button type="button" class="btn-chip-del" onclick="removeMusician(this)" title="Remove">×</button><input type="hidden" name="musician_ids" value="'+id+'">';
+      wrap.appendChild(chip);
+      document.getElementById('musician-search').value='';
+      document.getElementById('ac-list').hidden=true;
+    }
+    function removeMusician(btn){btn.closest('.musician-chip').remove();}
+    document.addEventListener('click',function(e){
+      if(!e.target.closest('.ac-wrap'))document.getElementById('ac-list').hidden=true;
+    });
+    </script>
   </section>
 
   <!-- Organisation -->
@@ -64,15 +119,15 @@
     <label for="org_choice">{{$.Strings.T "evt_org_select"}}</label>
     <select id="org_choice" name="org_choice" onchange="toggleOrgNew()">
       <option value="">— {{$.Strings.T "evt_none"}} —</option>
-      <option value="existing">{{$.Strings.T "evt_org_existing"}}</option>
+      <option value="existing"{{if .Event.OrganizationID}} selected{{end}}>{{$.Strings.T "evt_org_existing"}}</option>
       <option value="new">{{$.Strings.T "evt_org_new"}}</option>
     </select>
 
-    <div id="org-existing" hidden>
+    <div id="org-existing"{{if not .Event.OrganizationID}} hidden{{end}}>
       <label for="org_id">{{$.Strings.T "evt_org_select_existing"}}</label>
       <select id="org_id" name="org_id">
         <option value="">—</option>
-        {{range .Organizations}}<option value="{{.ID}}">{{.Name}}</option>{{end}}
+        {{range .Organizations}}<option value="{{.ID}}"{{if and $.Data.Event.OrganizationID (eq .ID (derefInt $.Data.Event.OrganizationID))}} selected{{end}}>{{.Name}}</option>{{end}}
       </select>
     </div>
 
@@ -88,15 +143,15 @@
     <label for="loc_choice">{{$.Strings.T "evt_loc_select"}}</label>
     <select id="loc_choice" name="loc_choice" onchange="toggleLocNew()">
       <option value="">— {{$.Strings.T "evt_none"}} —</option>
-      <option value="existing">{{$.Strings.T "evt_loc_existing"}}</option>
+      <option value="existing"{{if .Event.Location}} selected{{end}}>{{$.Strings.T "evt_loc_existing"}}</option>
       <option value="new">{{$.Strings.T "evt_loc_new"}}</option>
     </select>
 
-    <div id="loc-existing" hidden>
+    <div id="loc-existing"{{if not .Event.Location}} hidden{{end}}>
       <label for="loc_id">{{$.Strings.T "evt_loc_select_existing"}}</label>
       <select id="loc_id" name="loc_id">
         <option value="">—</option>
-        {{range .Locations}}<option value="{{.ID}}">{{.Location}}{{if .Town}}, {{.Town}}{{end}}</option>{{end}}
+        {{range .Locations}}<option value="{{.ID}}"{{if eq .Location $.Data.Event.Location}} selected{{end}}>{{.Location}}{{if .Town}}, {{.Town}}{{end}}</option>{{end}}
       </select>
     </div>
 
@@ -125,6 +180,8 @@
           <input id="new_loc_lng" type="text" name="new_loc_lng" placeholder="0.1278">
         </div>
       </div>
+      <button type="button" class="btn-secondary btn-sm-secondary" onclick="geocodeLocation()" id="geo-btn">{{$.Strings.T "loc_geocode_btn"}}</button>
+      <span id="geo-status" style="font-size:.82rem;color:#888;margin-left:.5rem"></span>
     </div>
   </section>
 
@@ -133,28 +190,34 @@
     <h2>{{$.Strings.T "evt_admission"}}</h2>
     <label for="pricing_type">{{$.Strings.T "evt_pricing_type"}}</label>
     <select id="pricing_type" name="pricing_type" onchange="togglePricing()">
-      <option value="none">— {{$.Strings.T "evt_none"}} —</option>
-      <option value="free">{{$.Strings.T "evt_free"}}</option>
-      <option value="donation">{{$.Strings.T "evt_donation"}}</option>
-      <option value="single">{{$.Strings.T "evt_pricing_single"}}</option>
-      <option value="multiple">{{$.Strings.T "evt_pricing_multiple"}}</option>
+      <option value="none"{{if not .Event.Pricing}} selected{{end}}>— {{$.Strings.T "evt_none"}} —</option>
+      <option value="free"{{if and .Event.Pricing (eq .Event.Pricing.Type "free")}} selected{{end}}>{{$.Strings.T "evt_free"}}</option>
+      <option value="donation"{{if and .Event.Pricing (eq .Event.Pricing.Type "donation")}} selected{{end}}>{{$.Strings.T "evt_donation"}}</option>
+      <option value="single"{{if and .Event.Pricing (eq .Event.Pricing.Type "single")}} selected{{end}}>{{$.Strings.T "evt_pricing_single"}}</option>
+      <option value="multiple"{{if and .Event.Pricing (eq .Event.Pricing.Type "multiple")}} selected{{end}}>{{$.Strings.T "evt_pricing_multiple"}}</option>
     </select>
 
-    <div id="pricing-single" hidden class="field-row">
+    <div id="pricing-single"{{if not (and .Event.Pricing (eq .Event.Pricing.Type "single"))}} hidden{{end}} class="field-row">
       <div>
         <label for="pricing_amount">{{$.Strings.T "evt_pricing_amount"}}</label>
-        <input id="pricing_amount" type="number" name="pricing_amount" min="0" step="0.01" placeholder="10.00">
+        <input id="pricing_amount" type="number" name="pricing_amount" min="0" step="0.01" value="{{with .Event.Pricing}}{{if eq .Type "single"}}{{.Amount}}{{end}}{{end}}" placeholder="10.00">
       </div>
       <div>
         <label for="pricing_currency">{{$.Strings.T "evt_pricing_currency"}}</label>
-        <input id="pricing_currency" type="text" name="pricing_currency" placeholder="EUR" style="max-width:80px">
+        <input id="pricing_currency" type="text" name="pricing_currency" value="{{with .Event.Pricing}}{{.Currency}}{{end}}" placeholder="EUR" style="max-width:80px">
       </div>
     </div>
 
-    <div id="pricing-multiple" hidden>
+    <div id="pricing-multiple"{{if not (and .Event.Pricing (eq .Event.Pricing.Type "multiple"))}} hidden{{end}}>
       <table class="growing-table" id="pricing-table">
         <thead><tr><th>{{$.Strings.T "evt_pricing_label"}}</th><th>{{$.Strings.T "evt_pricing_amount"}}</th></tr></thead>
         <tbody id="pricing-body">
+          {{with .Event.Pricing}}{{if eq .Type "multiple"}}{{range .Prices}}
+          <tr>
+            <td><input type="text" name="pl_label" value="{{.Label}}" oninput="growPricingTable(this)"></td>
+            <td><input type="number" name="pl_amount" min="0" step="0.01" value="{{.Amount}}"></td>
+          </tr>
+          {{end}}{{end}}{{end}}
           <tr>
             <td><input type="text" name="pl_label" placeholder="Standard" oninput="growPricingTable(this)"></td>
             <td><input type="number" name="pl_amount" min="0" step="0.01" placeholder="10.00"></td>
@@ -179,6 +242,16 @@
         </tr>
       </thead>
       <tbody id="tt-body">
+        {{range .Event.Timetable}}
+        <tr class="tt-row">
+          <td><input type="time" name="tt_start" value="{{.StartTime}}"></td>
+          <td><input type="time" name="tt_end" value="{{.EndTime}}"></td>
+          <td><input type="text" name="tt_title" value="{{.Title}}" oninput="growTTTable(this)"></td>
+          <td><input type="text" name="tt_desc" value="{{.Description}}"></td>
+          <td><input type="text" name="tt_room" value="{{.Room}}"></td>
+          <td><button type="button" class="btn-del-row" onclick="delRow(this)" title="Remove">×</button></td>
+        </tr>
+        {{end}}
         <tr class="tt-row">
           <td><input type="time" name="tt_start"></td>
           <td><input type="time" name="tt_end"></td>
@@ -193,7 +266,7 @@
 
   <div class="form-actions">
     <button type="submit" class="btn-primary">{{$.Strings.T "admin_save"}}</button>
-    <a href="/admin/events" class="btn-secondary">{{$.Strings.T "admin_cancel"}}</a>
+    <a href="/events/{{.Event.ID}}" class="btn-secondary">{{$.Strings.T "admin_cancel"}}</a>
   </div>
 </form>
 {{end}}
@@ -210,7 +283,7 @@
 .field-row{display:flex;gap:.75rem;flex-wrap:wrap}
 .field-row>div{flex:1;min-width:120px}
 .field-hint{font-weight:400;color:#888;font-size:.82rem}
-.check-row{display:flex;gap:1.5rem;margin:.5rem 0}
+.check-row{display:flex;gap:1.5rem;margin:.5rem 0;flex-wrap:wrap}
 .check-label{display:flex;align-items:center;gap:.4rem;font-size:.92rem;cursor:pointer}
 .check-label input{width:auto}
 .drop-zone{border:2px dashed #ccc;border-radius:6px;padding:1.5rem;text-align:center;cursor:pointer;transition:border-color .2s}
@@ -231,6 +304,16 @@
 .btn-primary:hover{background:#0d4a80}
 .btn-secondary{padding:.45rem 1.2rem;background:#f5f5f5;color:#333;border:1px solid #ccc;border-radius:4px;font-size:.95rem;text-decoration:none;cursor:pointer}
 .btn-secondary:hover{background:#e8e8e8}
+/* musician autocomplete */
+.ac-wrap{position:relative;margin-top:.4rem}
+.ac-wrap input{width:100%;padding:.4rem .55rem;border:1px solid #ccc;border-radius:4px;font-size:.92rem}
+.ac-list{position:absolute;top:100%;left:0;right:0;background:#fff;border:1px solid #ccc;border-radius:0 0 4px 4px;max-height:220px;overflow-y:auto;z-index:50}
+.ac-item{padding:.4rem .7rem;cursor:pointer;font-size:.9rem}
+.ac-item:hover,.ac-item:focus{background:#f0f4ff;outline:none}
+#selected-musicians{display:flex;flex-wrap:wrap;gap:.4rem;margin-bottom:.5rem;min-height:1rem}
+.musician-chip{display:inline-flex;align-items:center;gap:.3rem;background:#e8eaf6;border-radius:20px;padding:.2rem .6rem .2rem .8rem;font-size:.85rem}
+.btn-chip-del{background:none;border:none;cursor:pointer;color:#777;font-size:1rem;padding:0;line-height:1}
+.btn-chip-del:hover{color:#c0392b}
 </style>
 
 <script>
@@ -248,6 +331,32 @@ function togglePricing(){
   var v=document.getElementById('pricing_type').value;
   document.getElementById('pricing-single').hidden=(v!=='single');
   document.getElementById('pricing-multiple').hidden=(v!=='multiple');
+}
+
+// Nominatim geocoding
+function geocodeLocation(){
+  var name=document.getElementById('new_loc_name').value.trim();
+  var town=document.getElementById('new_loc_town').value.trim();
+  var country=document.getElementById('new_loc_country').value.trim();
+  var q=[name,town,country].filter(Boolean).join(', ');
+  if(!q){document.getElementById('geo-status').textContent='Please enter a location name first';return;}
+  var btn=document.getElementById('geo-btn');
+  var status=document.getElementById('geo-status');
+  btn.disabled=true;
+  status.textContent='Searching…';
+  fetch('https://nominatim.openstreetmap.org/search?format=json&limit=1&q='+encodeURIComponent(q),{headers:{'Accept':'application/json'}})
+    .then(function(r){return r.json();})
+    .then(function(data){
+      if(data&&data.length>0){
+        document.getElementById('new_loc_lat').value=parseFloat(data[0].lat).toFixed(6);
+        document.getElementById('new_loc_lng').value=parseFloat(data[0].lon).toFixed(6);
+        status.textContent='✓ '+data[0].display_name;
+      } else {
+        status.textContent='Not found';
+      }
+    })
+    .catch(function(){status.textContent='Geocoding failed';})
+    .finally(function(){btn.disabled=false;});
 }
 
 // Growing timetable

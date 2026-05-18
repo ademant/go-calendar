@@ -11,6 +11,7 @@
 
 <div class="evt-header">
   <h1>{{.Title}}</h1>
+  {{if $.User}}<a href="/admin/events/{{.ID}}/edit" class="btn-edit-event">{{$.Strings.T "admin_edit"}}</a>{{end}}
   {{if .IsCancelled}}<p><span class="badge cancelled">{{$.Strings.T "evt_cancelled"}}</span></p>{{end}}
   <div class="evt-header-meta">
     {{if .StartTime}}<span class="evt-time">{{formatTime $.LangCode .StartTime}}{{if .EndTime}} – {{formatTime $.LangCode .EndTime}}{{end}}</span>{{end}}
@@ -65,10 +66,11 @@
   </div>
 
   <aside class="evt-sidebar">
-    {{if or .HasBall .HasWorkshop}}
+    {{if or .HasBall (or .HasWorkshop .HasFestival)}}
     <div class="sidebar-block">
       {{if .HasBall}}<span class="badge">{{$.Strings.T "filter_type_ball"}}</span>{{end}}
       {{if .HasWorkshop}}<span class="badge">{{$.Strings.T "filter_type_workshop"}}</span>{{end}}
+      {{if .HasFestival}}<span class="badge">{{$.Strings.T "filter_type_festival"}}</span>{{end}}
     </div>
     {{end}}
 
@@ -122,6 +124,8 @@
 .evt-hero img{width:100%;height:auto;max-height:420px;object-fit:cover;display:block;opacity:.95}
 .evt-header{padding:1.25rem 0 .75rem}
 .evt-header h1{margin-bottom:.35rem}
+.btn-edit-event{display:inline-block;padding:.25rem .7rem;background:#f0f0f0;border:1px solid #ccc;border-radius:4px;font-size:.82rem;color:#333;text-decoration:none;margin-left:.6rem;vertical-align:middle}
+.btn-edit-event:hover{background:#e4e4e4;border-color:#aaa}
 .evt-header-meta{display:flex;flex-wrap:wrap;align-items:center;gap:.35rem;color:#555;font-size:.95rem}
 .evt-sep{color:#bbb}
 .evt-time{font-weight:600;color:#1a1a2e}

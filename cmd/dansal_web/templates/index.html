@@ -14,6 +14,7 @@
   <button type="button" class="type-btn type-active" data-type="">{{$.Strings.T "filter_all_types"}}</button>
   <button type="button" class="type-btn" data-type="ball">{{$.Strings.T "filter_type_ball"}}</button>
   <button type="button" class="type-btn" data-type="workshop">{{$.Strings.T "filter_type_workshop"}}</button>
+  <button type="button" class="type-btn" data-type="festival">{{$.Strings.T "filter_type_festival"}}</button>
 </div>
 
 <!-- Map -->
@@ -65,6 +66,7 @@
       data-country="{{.LocationCountry}}"
       data-ball="{{if .HasBall}}1{{else}}0{{end}}"
       data-workshop="{{if .HasWorkshop}}1{{else}}0{{end}}"
+      data-festival="{{if .HasFestival}}1{{else}}0{{end}}"
       data-organizer="{{$org}}"
       data-tags="{{range .Tags}}{{.}} {{end}}"
       data-id="{{.ID}}"
@@ -83,6 +85,7 @@
     <td class="col-type">
       {{if .HasBall}}<span class="badge">{{$.Strings.T "filter_type_ball"}}</span>{{end}}
       {{if .HasWorkshop}}<span class="badge workshop">{{$.Strings.T "filter_type_workshop"}}</span>{{end}}
+      {{if .HasFestival}}<span class="badge festival">{{$.Strings.T "filter_type_festival"}}</span>{{end}}
       {{range .Tags}}<span class="tag">{{.}}</span>{{end}}
     </td>
     <td class="col-org">
@@ -165,6 +168,7 @@ th.sorted-desc::after{content:" ↓";color:#1a6eb5}
 .btn-sm{display:inline-block;padding:.2rem .5rem;border:1px solid #ccc;border-radius:3px;font-size:.8rem;text-decoration:none;color:#333;margin-right:.2rem}
 .btn-sm:hover{background:#f0f0f0;color:#000}
 .badge.workshop{background:#fff3cd;color:#856404}
+.badge.festival{background:#d4edda;color:#155724}
 .date-main{display:block}
 .pagination-bar{display:flex;align-items:center;gap:1rem;margin-top:1rem}
 #page-info{color:#666;font-size:.9rem}
@@ -388,6 +392,7 @@ th.sorted-desc::after{content:" ↓";color:#1a6eb5}
       if(country && r.dataset.country.toLowerCase()!==country) return false;
       if(currentType==='ball'     && r.dataset.ball    !=='1') return false;
       if(currentType==='workshop' && r.dataset.workshop!=='1') return false;
+      if(currentType==='festival' && r.dataset.festival!=='1') return false;
       return true;
     });
 

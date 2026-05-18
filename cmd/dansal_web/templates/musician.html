@@ -37,6 +37,7 @@
     {{if .IsCancelled}}<span class="badge cancelled">{{$.Strings.T "badge_cancelled"}}</span>{{end}}
     {{if .HasBall}}<span class="badge">{{$.Strings.T "filter_type_ball"}}</span>{{end}}
     {{if .HasWorkshop}}<span class="badge">{{$.Strings.T "filter_type_workshop"}}</span>{{end}}
+    {{if .HasFestival}}<span class="badge">{{$.Strings.T "filter_type_festival"}}</span>{{end}}
   </div>
   {{if .Tags}}<div>{{range .Tags}}<span class="tag">#{{.}}</span>{{end}}</div>{{end}}
   {{if .URL}}<div class="event-actions"><a href="{{.URL}}" class="evt-ext-link" target="_blank" rel="noopener">{{$.Strings.T "btn_website"}} ↗</a></div>{{end}}

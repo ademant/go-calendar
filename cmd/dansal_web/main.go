@@ -63,6 +63,8 @@ func main() {
 	r.HandleFunc("/admin/events", adminEventsHandler(cfg, tmpls, client, i18n)).Methods("GET")
 	r.HandleFunc("/admin/events/new", adminEventNewPageHandler(cfg, tmpls, client, i18n)).Methods("GET")
 	r.HandleFunc("/admin/events/new", adminEventCreateHandler(cfg, tmpls, client, i18n)).Methods("POST")
+	r.HandleFunc("/admin/events/{id}/edit", adminEventEditPageHandler(cfg, tmpls, client, i18n)).Methods("GET")
+	r.HandleFunc("/admin/events/{id}/edit", adminEventSaveHandler(cfg, tmpls, client, i18n)).Methods("POST")
 
 	r.HandleFunc("/admin/organizations", adminOrgsHandler(cfg, tmpls, client, i18n)).Methods("GET")
 	r.HandleFunc("/admin/organizations/new", adminOrgNewPageHandler(cfg, tmpls, i18n)).Methods("GET")

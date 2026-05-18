@@ -159,6 +159,19 @@ var tmplFuncMap = template.FuncMap{
 		}
 		return s
 	},
+	"isoTime": func(s string) string {
+		if t, ok := parseTime(s); ok {
+			return t.Format("15:04")
+		}
+		return ""
+	},
+	"join": func(ss []string) string {
+		return strings.Join(ss, ", ")
+	},
+	"jsStr": func(s string) template.JS {
+		b, _ := json.Marshal(s)
+		return template.JS(b)
+	},
 	"derefInt": func(p *int) int {
 		if p == nil {
 			return 0
@@ -258,6 +271,7 @@ type Templates struct {
 	adminMusicianEdit  *template.Template
 	adminEvents        *template.Template
 	adminEventNew      *template.Template
+	adminEventEdit     *template.Template
 	impressum          *template.Template
 }
 
@@ -290,6 +304,7 @@ func loadTemplates() *Templates {
 		adminMusicianEdit: load("admin_musician_edit"),
 		adminEvents:       load("admin_events"),
 		adminEventNew:     load("admin_event_new"),
+		adminEventEdit:    load("admin_event_edit"),
 		impressum:         load("impressum"),
 	}
 }
