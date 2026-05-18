@@ -7,6 +7,7 @@
   {{if .ErrorKey}}<p class="login-error" role="alert">{{$.Strings.T .ErrorKey}}</p>{{end}}
   {{if .MagicSent}}<p class="login-info" role="status">{{$.Strings.T "login_magic_sent"}}</p>{{end}}
   <form method="post" action="/login" class="login-form" autocomplete="on">
+    {{with .Next}}<input type="hidden" name="next" value="{{.}}">{{end}}
     <label for="username">{{$.Strings.T "login_username"}}</label>
     <input id="username" type="text" name="username" value="{{.Username}}"
            required autofocus autocomplete="username">

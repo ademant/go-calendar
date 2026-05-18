@@ -5,6 +5,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"net/url"
 	"sort"
 	"strconv"
 	"strings"
@@ -16,7 +17,8 @@ import (
 func requireLogin(w http.ResponseWriter, r *http.Request) (*SessionUser, bool) {
 	u := getSessionUser(r)
 	if u == nil {
-		http.Redirect(w, r, "/login", http.StatusSeeOther)
+		next := r.URL.RequestURI()
+		http.Redirect(w, r, "/login?next="+url.QueryEscape(next), http.StatusSeeOther)
 		return nil, false
 	}
 	return u, true

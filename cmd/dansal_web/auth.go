@@ -2,6 +2,7 @@ package main
 
 import (
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/gorilla/mux"
@@ -11,6 +12,15 @@ type LoginPageData struct {
 	ErrorKey  string
 	Username  string
 	MagicSent bool
+	Next      string
+}
+
+// safeNext returns next if it is a local path, otherwise "/".
+func safeNext(next string) string {
+	if next != "" && strings.HasPrefix(next, "/") && !strings.HasPrefix(next, "//") {
+		return next
+	}
+	return "/"
 }
 
 func loginPageHandler(cfg *Config, tmpls *Templates, i18n *I18n) http.HandlerFunc {
@@ -22,6 +32,7 @@ func loginPageHandler(cfg *Config, tmpls *Templates, i18n *I18n) http.HandlerFun
 		title := i18n.T(r, "login_title")
 		renderTemplate(w, tmpls.login, tmplData(r, cfg, i18n, title, LoginPageData{
 			MagicSent: r.URL.Query().Get("magic_sent") == "1",
+			Next:      r.URL.Query().Get("next"),
 		}))
 	}
 }
@@ -34,6 +45,7 @@ func loginHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18
 		}
 		username := r.FormValue("username")
 		password := r.FormValue("password")
+		next := safeNext(r.FormValue("next"))
 
 		lr, err := client.Login(r.Context(), username, password)
 		if err != nil {
@@ -41,6 +53,7 @@ func loginHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18
 			renderTemplate(w, tmpls.login, tmplData(r, cfg, i18n, title, LoginPageData{
 				ErrorKey: "login_error_invalid",
 				Username: username,
+				Next:     r.FormValue("next"),
 			}))
 			return
 		}
@@ -56,7 +69,7 @@ func loginHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18
 			Role:     lr.User.Role,
 		}, expiresAt)
 
-		http.Redirect(w, r, "/", http.StatusSeeOther)
+		http.Redirect(w, r, next, http.StatusSeeOther)
 	}
 }
 
