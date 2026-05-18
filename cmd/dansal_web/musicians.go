@@ -14,6 +14,7 @@ type MusiciansPageData struct {
 type MusicianPageData struct {
 	Musician Musician
 	Events   []Event
+	Slug     string
 }
 
 func musiciansHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {
@@ -45,6 +46,7 @@ func musicianHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *
 		renderTemplate(w, tmpls.musician, tmplData(r, cfg, i18n, title, MusicianPageData{
 			Musician: musician,
 			Events:   events,
+			Slug:     orgSlug(musician.Bandname),
 		}))
 	}
 }

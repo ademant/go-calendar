@@ -18,6 +18,13 @@
 </div>
 {{end}}
 
+<div class="feed-links">
+  <strong>{{$.Strings.T "feed_subscribe"}}:</strong>
+  <a href="/feed/musician/{{.Slug}}/events.ical" class="feed-link">iCal</a>
+  <a href="/feed/musician/{{.Slug}}/events.rss"  class="feed-link">RSS</a>
+  <a href="/feed/musician/{{.Slug}}/events.json" class="feed-link">JSON</a>
+</div>
+
 <h2>{{$.Strings.T "musician_upcoming_events"}}</h2>
 {{if .Events}}
 <ul class="event-list">
@@ -51,5 +58,8 @@
 .m-link-facebook{background:#1877f2}.m-link-facebook:hover{background:#0d5ab5}
 .m-link-soundcloud{background:#ff5500}.m-link-soundcloud:hover{background:#cc4400}
 .m-link-mb{background:#ba2025}.m-link-mb:hover{background:#8a1519}
+.feed-links{margin:1rem 0;font-size:.85rem;color:#666}
+.feed-link{display:inline-block;margin-left:.4rem;padding:.15rem .5rem;border:1px solid #ccc;border-radius:3px;font-size:.8rem;color:#555;text-decoration:none}
+.feed-link:hover{border-color:#888;color:#222}
 </style>
 {{end}}

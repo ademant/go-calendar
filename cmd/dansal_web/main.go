@@ -39,6 +39,16 @@ func main() {
 	r.HandleFunc("/musicians", musiciansHandler(cfg, tmpls, client, i18n)).Methods("GET")
 	r.HandleFunc("/musicians/{id}", musicianHandler(cfg, tmpls, client, i18n)).Methods("GET")
 	r.HandleFunc("/impressum", impressumHandler(cfg, tmpls, i18n)).Methods("GET")
+
+	// Feed exports — order: specific before generic
+	r.HandleFunc("/feed/org/{slug}/events.{format}", feedOrgHandler(cfg, db, client)).Methods("GET")
+	r.HandleFunc("/feed/musician/{slug}/events.{format}", feedMusicianHandler(cfg, client)).Methods("GET")
+	r.HandleFunc("/feed/location/{slug}/events.{format}", feedLocationHandler(cfg, client)).Methods("GET")
+	r.HandleFunc("/feed/ball/events.{format}", feedTypeHandler(cfg, client, "ball")).Methods("GET")
+	r.HandleFunc("/feed/workshop/events.{format}", feedTypeHandler(cfg, client, "workshop")).Methods("GET")
+	r.HandleFunc("/feed/festival/events.{format}", feedTypeHandler(cfg, client, "festival")).Methods("GET")
+	r.HandleFunc("/feed/events.{format}", feedMainHandler(cfg, client)).Methods("GET")
+
 	r.HandleFunc("/login", loginPageHandler(cfg, tmpls, i18n)).Methods("GET")
 	r.HandleFunc("/login", loginHandler(cfg, tmpls, client, i18n)).Methods("POST")
 	r.HandleFunc("/logout", logoutHandler(cfg, client)).Methods("POST")
