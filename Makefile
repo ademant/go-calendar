@@ -13,13 +13,13 @@ SYSTEMDDIR := /etc/systemd/system
 build: build-dansal build-dansal_web build-dansal_admin
 
 build-dansal:
-	go build $(LDFLAGS) -o dansal ./cmd/dansal
+	go build $(LDFLAGS) -buildvcs=false -o dansal ./cmd/dansal
 
 build-dansal_web:
-	go build -o dansal_web ./cmd/dansal_web
+	go build -buildvcs=false -o dansal_web ./cmd/dansal_web
 
 build-dansal_admin:
-	go build -o dansal_admin ./cmd/dansal_admin
+	go build -buildvcs=false -o dansal_admin ./cmd/dansal_admin
 
 run: build-dansal
 	./dansal --config ./config.yaml
@@ -48,6 +48,11 @@ install: build
 	install -m 755 dansal_admin  $(BINDIR)/dansal_admin
 	# systemd unit
 	install -m 644 dansal.service $(SYSTEMDDIR)/dansal.service
+	# Ensure the database file is owned by the service user even if it was
+	# previously created as root (e.g. during testing).
+	touch $(STATEDIR)/calendar.db
+	chown $(SERVICE):$(SERVICE) $(STATEDIR)/calendar.db
+	chmod 640 $(STATEDIR)/calendar.db
 	systemctl daemon-reload
 	systemctl enable --now $(SERVICE)
 	# fail2ban
