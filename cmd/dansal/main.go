@@ -465,6 +465,8 @@ func migrateDB() {
 	)`)
 	db.Exec("CREATE INDEX IF NOT EXISTS idx_contact_posts_event_id ON contact_posts(event_id)")
 	db.Exec("CREATE INDEX IF NOT EXISTS idx_contact_posts_verify_token ON contact_posts(verify_token)")
+	db.Exec("ALTER TABLE events ADD COLUMN availability TEXT DEFAULT ''")
+	db.Exec("ALTER TABLE events ADD COLUMN tickets_total INTEGER DEFAULT 0")
 }
 
 func createTables() error {

@@ -13,6 +13,8 @@
   <h1>{{.Title}}</h1>
   {{if $.User}}<a href="/admin/events/{{.ID}}/edit" class="btn-edit-event">{{$.Strings.T "admin_edit"}}</a>{{end}}
   {{if .IsCancelled}}<p><span class="badge cancelled">{{$.Strings.T "evt_cancelled"}}</span></p>{{end}}
+  {{if eq .Availability "limited"}}<p><span class="badge avail-limited">{{$.Strings.T "badge_limited"}}</span></p>{{end}}
+  {{if eq .Availability "sold_out"}}<p><span class="badge avail-sold-out">{{$.Strings.T "badge_sold_out"}}</span></p>{{end}}
   <div class="evt-header-meta">
     {{if .StartTime}}
     <span class="evt-time">

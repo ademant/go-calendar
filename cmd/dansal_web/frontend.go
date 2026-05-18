@@ -225,18 +225,20 @@ var tmplFuncMap = template.FuncMap{
 	},
 	"eventsGeoJSON": func(events []Event) template.JS {
 		type geoEvent struct {
-			ID        int     `json:"id"`
-			Title     string  `json:"t"`
-			Start     string  `json:"s"`
-			Location  string  `json:"loc,omitempty"`
-			Town      string  `json:"town,omitempty"`
-			Country   string  `json:"c,omitempty"`
-			Lat       float64 `json:"lat"`
-			Lng       float64 `json:"lng"`
-			URL       string  `json:"url,omitempty"`
-			Ball      bool    `json:"ball,omitempty"`
-			Workshop  bool    `json:"ws,omitempty"`
-			Cancelled bool    `json:"x,omitempty"`
+			ID           int     `json:"id"`
+			Title        string  `json:"t"`
+			Start        string  `json:"s"`
+			Location     string  `json:"loc,omitempty"`
+			Town         string  `json:"town,omitempty"`
+			Country      string  `json:"c,omitempty"`
+			Lat          float64 `json:"lat"`
+			Lng          float64 `json:"lng"`
+			URL          string  `json:"url,omitempty"`
+			Ball         bool    `json:"ball,omitempty"`
+			Workshop     bool    `json:"ws,omitempty"`
+			Festival     bool    `json:"fest,omitempty"`
+			Cancelled    bool    `json:"x,omitempty"`
+			Availability string  `json:"av,omitempty"`
 		}
 		var geo []geoEvent
 		for _, e := range events {
@@ -249,7 +251,8 @@ var tmplFuncMap = template.FuncMap{
 				ID: e.ID, Title: e.Title, Start: e.StartTime,
 				Location: e.Location, Town: e.LocationTown, Country: e.LocationCountry,
 				Lat: lat, Lng: lng, URL: e.URL,
-				Ball: e.HasBall, Workshop: e.HasWorkshop, Cancelled: e.IsCancelled,
+				Ball: e.HasBall, Workshop: e.HasWorkshop, Festival: e.HasFestival,
+				Cancelled: e.IsCancelled, Availability: e.Availability,
 			})
 		}
 		if geo == nil {

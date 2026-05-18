@@ -59,7 +59,7 @@
   <tbody id="event-tbody">
   {{range .Events}}
   {{$org := orgName $orgMap .OrganizationID}}
-  <tr class="event-row"
+  <tr class="event-row{{if .IsCancelled}} is-cancelled{{end}}"
       data-date="{{isoDate .StartTime}}"
       data-title="{{.Title}}"
       data-location="{{if .Location}}{{.Location}}{{else}}{{.LocationTown}}{{end}}"
@@ -71,12 +71,17 @@
       data-tags="{{range .Tags}}{{.}} {{end}}"
       data-id="{{.ID}}"
       data-start="{{.StartTime}}"
-      data-town="{{.LocationTown}}">
+      data-town="{{.LocationTown}}"
+      data-availability="{{.Availability}}">
     <td class="col-date">
       <span class="date-main">{{formatDate $.LangCode .StartTime}}</span>
       {{if .IsCancelled}}<span class="badge cancelled">{{$.Strings.T "badge_cancelled"}}</span>{{end}}
     </td>
-    <td><a href="/events/{{.ID}}">{{.Title}}</a></td>
+    <td>
+      <a href="/events/{{.ID}}"{{if .IsCancelled}} class="title-cancelled"{{end}}>{{.Title}}</a>
+      {{if eq .Availability "limited"}}<span class="badge avail-limited">{{$.Strings.T "badge_limited"}}</span>{{end}}
+      {{if eq .Availability "sold_out"}}<span class="badge avail-sold-out">{{$.Strings.T "badge_sold_out"}}</span>{{end}}
+    </td>
     <td class="col-venue">
       {{if .Location}}<span class="venue">{{.Location}}</span>{{end}}
       {{if .LocationTown}}<span class="town">{{.LocationTown}}</span>{{end}}
@@ -169,6 +174,9 @@ th.sorted-desc::after{content:" ↓";color:#1a6eb5}
 .btn-sm:hover{background:#f0f0f0;color:#000}
 .badge.workshop{background:#fff3cd;color:#856404}
 .badge.festival{background:#d4edda;color:#155724}
+.badge.avail-limited{background:#fff3cd;color:#856404}
+.badge.avail-sold-out{background:#f8d7da;color:#721c24}
+.is-cancelled td a.title-cancelled{text-decoration:line-through;color:#999}
 .date-main{display:block}
 .pagination-bar{display:flex;align-items:center;gap:1rem;margin-top:1rem}
 #page-info{color:#666;font-size:.9rem}
@@ -188,6 +196,8 @@ th.sorted-desc::after{content:" ↓";color:#1a6eb5}
 .cal-evt{display:block;background:#fff;border:1px solid #b3d4f5;border-radius:4px;padding:.3rem .4rem;margin-bottom:.3rem;text-decoration:none;color:#1a1a2e;font-size:.82rem}
 .cal-evt:hover{background:#e8f0fe;border-color:#1a6eb5}
 .cal-evt.cal-cancelled{background:#f8d7da;border-color:#f5c6cb;opacity:.75}
+.cal-evt.cal-limited{border-left:3px solid #ffc107}
+.cal-evt.cal-sold-out{border-left:3px solid #dc3545}
 .cal-evt b{display:block;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .cal-evt small{display:block;color:#666;font-size:.78rem}
 .cal-town{color:#888!important}
@@ -264,7 +274,9 @@ th.sorted-desc::after{content:" ↓";color:#1a6eb5}
           var time=start.length>=16?start.slice(11,16):'';
           var org=r.dataset.organizer||r.dataset.title;
           var town=r.dataset.town||'';
-          var cls='cal-evt'+(r.querySelector('.badge.cancelled')?' cal-cancelled':'');
+          var avail=r.dataset.availability||'';
+          var cls='cal-evt'+(r.classList.contains('is-cancelled')?' cal-cancelled':'')+
+            (avail==='sold_out'?' cal-sold-out':avail==='limited'?' cal-limited':'');
           return '<a href="/events/'+r.dataset.id+'" class="'+cls+'">'+
             '<b>'+escHtml(org)+'</b>'+
             (time?'<small>'+escHtml(time)+'</small>':'')+
@@ -292,8 +304,11 @@ th.sorted-desc::after{content:" ↓";color:#1a6eb5}
     var place=[e.loc,e.town,e.c].filter(Boolean).join(', ');
     var badges='';
     if(e.ball) badges+='<span class="badge" style="margin-right:.2rem">Ball</span>';
-    if(e.ws)   badges+='<span class="badge" style="background:#fff3cd;color:#856404">Workshop</span>';
+    if(e.ws)   badges+='<span class="badge" style="background:#fff3cd;color:#856404;margin-right:.2rem">Workshop</span>';
+    if(e.fest) badges+='<span class="badge" style="background:#d4edda;color:#155724;margin-right:.2rem">Festival</span>';
     if(e.x)    badges+='<span class="badge cancelled">Abgesagt</span>';
+    if(e.av==='limited')  badges+='<span class="badge avail-limited" style="margin-left:.2rem">&#x26A0;</span>';
+    if(e.av==='sold_out') badges+='<span class="badge avail-sold-out" style="margin-left:.2rem">&#x26D4;</span>';
     return '<div style="min-width:200px;max-width:280px">'+
       '<strong style="font-size:.95rem;display:block;margin-bottom:.25rem">'+escHtml(e.t)+'</strong>'+
       (time?'<div style="font-size:.82rem;color:#555;margin-bottom:.2rem">'+escHtml(time)+'</div>':'')+

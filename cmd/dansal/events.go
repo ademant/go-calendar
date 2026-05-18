@@ -58,6 +58,8 @@ type Event struct {
 	LocationLat     string           `json:"location_lat,omitempty"`
 	LocationLng     string           `json:"location_lng,omitempty"`
 	BookingURL      string           `json:"booking_url,omitempty"`
+	Availability    string           `json:"availability,omitempty"`
+	TicketsTotal    int              `json:"tickets_total,omitempty"`
 	TagsJSON        string           `json:"-"`
 	PricingJSON     string           `json:"-"`
 }
@@ -91,6 +93,8 @@ type EventUpdateRequest struct {
 	WorkshopDifficulty   string               `json:"workshop_difficulty,omitempty"`
 	IsCancelled          bool                 `json:"is_cancelled"`
 	BookingURL           string               `json:"booking_url,omitempty"`
+	Availability         string               `json:"availability,omitempty"`
+	TicketsTotal         int                  `json:"tickets_total,omitempty"`
 	IsPublished    bool                 `json:"is_published"`
 	Tags           []string             `json:"tags"`
 	URL            string               `json:"url"`
@@ -162,7 +166,7 @@ var timeFormats = []string{
 }
 
 // SELECT used by all event list / single-event queries
-const eventListSelect = `SELECT e.id, e.uid, e.title, e.description, e.start_time, e.end_time, e.has_ball, e.has_workshop, e.has_festival, e.is_cancelled, e.tags, e.is_published, e.short_code, COALESCE(e.url,''), COALESCE(e.source,''), e.created_at, COALESCE(l.location,''), COALESCE(l.address,''), COALESCE(l.zipcode,''), e.organization_id, COALESCE(e.pricing,''), e.location_id, COALESCE(l.town,''), COALESCE(l.country,''), COALESCE(l.latitude,''), COALESCE(l.longitude,''), COALESCE(e.workshop_difficulty,''), COALESCE(e.booking_url,'') FROM events e LEFT JOIN locations l ON e.location_id = l.id`
+const eventListSelect = `SELECT e.id, e.uid, e.title, e.description, e.start_time, e.end_time, e.has_ball, e.has_workshop, e.has_festival, e.is_cancelled, e.tags, e.is_published, e.short_code, COALESCE(e.url,''), COALESCE(e.source,''), e.created_at, COALESCE(l.location,''), COALESCE(l.address,''), COALESCE(l.zipcode,''), e.organization_id, COALESCE(e.pricing,''), e.location_id, COALESCE(l.town,''), COALESCE(l.country,''), COALESCE(l.latitude,''), COALESCE(l.longitude,''), COALESCE(e.workshop_difficulty,''), COALESCE(e.booking_url,''), COALESCE(e.availability,''), COALESCE(e.tickets_total,0) FROM events e LEFT JOIN locations l ON e.location_id = l.id`
 
 // ── low-level helpers ──────────────────────────────────────────────────────
 
@@ -220,7 +224,8 @@ func scanEventRow(s scanner) (Event, error) {
 		&event.ShortCode, &event.URL, &event.Source, &event.CreatedAt, &event.Location,
 		&event.LocationAddress, &event.LocationZipcode, &orgID,
 		&event.PricingJSON, &locID, &event.LocationTown, &event.LocationCountry,
-		&event.LocationLat, &event.LocationLng, &event.WorkshopDifficulty, &event.BookingURL); err != nil {
+		&event.LocationLat, &event.LocationLng, &event.WorkshopDifficulty, &event.BookingURL,
+		&event.Availability, &event.TicketsTotal); err != nil {
 		return Event{}, err
 	}
 	if uid.Valid {
@@ -1386,10 +1391,12 @@ func updateEvent(w http.ResponseWriter, r *http.Request) {
 	if _, err := tx.Exec(
 		`UPDATE events SET title=?, description=?, start_time=?, end_time=?, location_id=?,
 		 has_ball=?, has_workshop=?, has_festival=?, is_cancelled=?, is_published=?,
-		 workshop_difficulty=?, tags=?, url=?, booking_url=?, organization_id=?, pricing=? WHERE id=?`,
+		 workshop_difficulty=?, tags=?, url=?, booking_url=?, organization_id=?, pricing=?,
+		 availability=?, tickets_total=? WHERE id=?`,
 		req.Title, req.Description, startTime, endTime, locationID,
 		req.HasBall, req.HasWorkshop, req.HasFestival, req.IsCancelled, req.IsPublished,
-		req.WorkshopDifficulty, string(tagsJSON), urlVal(req.URL), urlVal(req.BookingURL), orgIDArg, pricingArg, id,
+		req.WorkshopDifficulty, string(tagsJSON), urlVal(req.URL), urlVal(req.BookingURL), orgIDArg, pricingArg,
+		req.Availability, req.TicketsTotal, id,
 	); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return

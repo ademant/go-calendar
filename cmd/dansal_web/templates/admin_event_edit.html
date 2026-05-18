@@ -70,6 +70,16 @@
 
     <label for="tags">{{$.Strings.T "evt_tags"}} <span class="field-hint">({{$.Strings.T "evt_tags_hint"}})</span></label>
     <input id="tags" type="text" name="tags" value="{{join .Event.Tags}}" placeholder="balfolk, workshop, festival">
+
+    <label for="availability">{{$.Strings.T "evt_availability"}}</label>
+    <select id="availability" name="availability">
+      <option value=""{{if eq .Event.Availability ""}} selected{{end}}>{{$.Strings.T "avail_normal"}}</option>
+      <option value="limited"{{if eq .Event.Availability "limited"}} selected{{end}}>{{$.Strings.T "avail_limited"}}</option>
+      <option value="sold_out"{{if eq .Event.Availability "sold_out"}} selected{{end}}>{{$.Strings.T "avail_sold_out"}}</option>
+    </select>
+
+    <label for="tickets_total">{{$.Strings.T "evt_tickets_total"}}</label>
+    <input id="tickets_total" type="number" name="tickets_total" value="{{.Event.TicketsTotal}}" min="0" placeholder="0">
   </section>
 
   <!-- Musicians -->

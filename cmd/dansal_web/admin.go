@@ -1386,6 +1386,7 @@ func adminEventSaveHandler(cfg *Config, tmpls *Templates, client *DansalClient, 
 			}
 		}
 
+		ticketsTotal, _ := strconv.Atoi(r.FormValue("tickets_total"))
 		req := EventUpdateReq{
 			Title:              strings.TrimSpace(r.FormValue("title")),
 			Description:        strings.TrimSpace(r.FormValue("description")),
@@ -1397,6 +1398,8 @@ func adminEventSaveHandler(cfg *Config, tmpls *Templates, client *DansalClient, 
 			WorkshopDifficulty: r.FormValue("workshop_difficulty"),
 			BookingURL:         strings.TrimSpace(r.FormValue("booking_url")),
 			IsCancelled:        r.FormValue("is_cancelled") == "on",
+			Availability:       r.FormValue("availability"),
+			TicketsTotal:       ticketsTotal,
 			IsPublished:        r.FormValue("is_published") == "on",
 			Tags:               tags,
 			URL:                strings.TrimSpace(r.FormValue("url")),
