@@ -17,11 +17,40 @@ import (
 	"github.com/gorilla/mux"
 )
 
-var slugRe = regexp.MustCompile(`[^a-z0-9\-]`)
+var (
+	slugTranslit = strings.NewReplacer(
+		"Ä", "a", "ä", "a",
+		"Ö", "o", "ö", "o",
+		"Ü", "u", "ü", "u",
+		"ß", "ss",
+		"À", "a", "à", "a", "Â", "a", "â", "a",
+		"Á", "a", "á", "a", "Ã", "a", "ã", "a",
+		"Å", "a", "å", "a",
+		"Æ", "ae", "æ", "ae",
+		"Ç", "c", "ç", "c",
+		"È", "e", "è", "e", "É", "e", "é", "e",
+		"Ê", "e", "ê", "e", "Ë", "e", "ë", "e",
+		"Î", "i", "î", "i", "Ï", "i", "ï", "i",
+		"Í", "i", "í", "i", "Ì", "i", "ì", "i",
+		"Ñ", "n", "ñ", "n",
+		"Ô", "o", "ô", "o", "Ó", "o", "ó", "o",
+		"Ò", "o", "ò", "o", "Õ", "o", "õ", "o",
+		"Ø", "o", "ø", "o",
+		"Œ", "oe", "œ", "oe",
+		"Ù", "u", "ù", "u", "Û", "u", "û", "u",
+		"Ú", "u", "ú", "u",
+		"Ý", "y", "ý", "y", "ÿ", "y",
+		"'", "", "’", "", // apostrophes (e.g. Breton c'h)
+	)
+	slugRe      = regexp.MustCompile(`[^a-z0-9\-]`)
+	slugDashRe  = regexp.MustCompile(`-{2,}`)
+)
 
 func orgSlug(name string) string {
-	s := strings.ToLower(name)
+	s := slugTranslit.Replace(name)
+	s = strings.ToLower(s)
 	s = slugRe.ReplaceAllString(s, "-")
+	s = slugDashRe.ReplaceAllString(s, "-")
 	s = strings.Trim(s, "-")
 	return s
 }
