@@ -14,10 +14,10 @@ nav{background:#1a1a2e;color:#fff;padding:.4rem 1rem;margin:0 -1rem 0;display:fl
 .nav-brand:hover{opacity:.85}
 .site-banner{margin:0 -1rem 1.5rem;overflow:hidden;background:#f7f2e8}
 .site-banner img{width:100%;height:auto;display:block}
-.nav-lang{display:flex;gap:.25rem;align-items:center}
-.lang-btn{background:transparent;border:none;cursor:pointer;font-size:1.1rem;padding:.1rem .2rem;border-radius:3px;opacity:.5;line-height:1}
-.lang-btn:hover{opacity:1;background:rgba(255,255,255,.1)}
-.lang-btn.lang-active{opacity:1}
+.nav-lang{display:flex;align-items:center}
+.lang-select{background:#2a2a4a;color:#c0c8ff;border:1px solid #4a4a7a;border-radius:4px;padding:.2rem .4rem;font-size:.9rem;cursor:pointer}
+.lang-select:hover{border-color:#c0c8ff}
+.lang-select:focus{outline:none;border-color:#fff}
 .nav-links{display:flex;gap:1rem;flex:1}
 .nav-links a{color:#c0c8ff;text-decoration:none;font-size:.95rem}
 .nav-links a:hover{color:#fff;text-decoration:underline}
@@ -55,7 +55,9 @@ footer{text-align:center;color:#999;font-size:.8rem;margin-top:2rem;padding-top:
 <nav>
   <a class="nav-brand" href="/"><img src="/logo.svg" alt="{{.Domain}}"></a>
   <div class="nav-lang">
-    {{range .Languages}}<a href="/lang?code={{.Code}}" class="lang-btn{{if .Active}} lang-active{{end}}" title="{{.Name}}">{{.Flag}}</a>{{end}}
+    <select class="lang-select" aria-label="Language" onchange="location.href='/lang?code='+this.value">
+      {{range .Languages}}<option value="{{.Code}}"{{if .Active}} selected{{end}}>{{.Flag}} {{.Name}}</option>{{end}}
+    </select>
   </div>
   <div class="nav-links">
     <a href="/">{{.Strings.T "nav_events"}}</a>
