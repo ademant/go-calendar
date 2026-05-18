@@ -68,7 +68,8 @@
       data-organizer="{{$org}}"
       data-tags="{{range .Tags}}{{.}} {{end}}"
       data-id="{{.ID}}"
-      data-start="{{.StartTime}}">
+      data-start="{{.StartTime}}"
+      data-town="{{.LocationTown}}">
     <td class="col-date">
       <span class="date-main">{{formatDate $.LangCode .StartTime}}</span>
       {{if .IsCancelled}}<span class="badge cancelled">{{$.Strings.T "badge_cancelled"}}</span>{{end}}
@@ -169,6 +170,7 @@ th.sorted-desc::after{content:" ↓";color:#1a6eb5}
 .cal-evt.cal-cancelled{background:#f8d7da;border-color:#f5c6cb;opacity:.75}
 .cal-evt b{display:block;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .cal-evt small{display:block;color:#666;font-size:.78rem}
+.cal-town{color:#888!important}
 @media(max-width:640px){
   .col-org,.col-actions{display:none}
   .event-table td:nth-child(6),.event-table td:nth-child(7){display:none}
@@ -187,6 +189,7 @@ th.sorted-desc::after{content:" ↓";color:#1a6eb5}
   var shown = 0;
   var sortCol = 'date', sortDir = 1;
   var weekOffset = 0;
+  var weekKeys = [];
   var currentType = '';
 
   function pad(n){ return n < 10 ? '0'+n : ''+n; }
@@ -210,6 +213,7 @@ th.sorted-desc::after{content:" ↓";color:#1a6eb5}
       var d=new Date(ws); d.setDate(d.getDate()+i);
       days.push(d); keys.push(dateToIso(d));
     }
+    weekKeys = keys;
     var today = todayIso();
     var lang = document.documentElement.lang || 'de';
 
@@ -239,10 +243,12 @@ th.sorted-desc::after{content:" ↓";color:#1a6eb5}
           var start=r.dataset.start||'';
           var time=start.length>=16?start.slice(11,16):'';
           var org=r.dataset.organizer||r.dataset.title;
+          var town=r.dataset.town||'';
           var cls='cal-evt'+(r.querySelector('.badge.cancelled')?' cal-cancelled':'');
           return '<a href="/events/'+r.dataset.id+'" class="'+cls+'">'+
             '<b>'+escHtml(org)+'</b>'+
-            (time?'<small>'+time+'</small>':'')+
+            (time?'<small>'+escHtml(time)+'</small>':'')+
+            (town?'<small class="cal-town">'+escHtml(town)+'</small>':'')+
             '</a>';
         }).join('')+
         '</td>';
@@ -251,8 +257,8 @@ th.sorted-desc::after{content:" ↓";color:#1a6eb5}
 
     var wv = document.getElementById('week-view');
     wv.innerHTML = html;
-    document.getElementById('week-prev').addEventListener('click',function(){ weekOffset--; renderWeek(); });
-    document.getElementById('week-next').addEventListener('click',function(){ weekOffset++; renderWeek(); });
+    document.getElementById('week-prev').addEventListener('click',function(){ weekOffset--; renderWeek(); updateMapMarkers(); });
+    document.getElementById('week-next').addEventListener('click',function(){ weekOffset++; renderWeek(); updateMapMarkers(); });
   }
 
   // ── Map ───────────────────────────────────────────────────────────────────
@@ -305,9 +311,13 @@ th.sorted-desc::after{content:" ↓";color:#1a6eb5}
     clusterGroup.clearLayers();
     var visIds={};
     visible.forEach(function(r){ visIds[parseInt(r.dataset.id)]=true; });
+    var weekSet={};
+    weekKeys.forEach(function(k){ weekSet[k]=true; });
     var layers=[];
     eventsGeo.forEach(function(e){
-      if(allMarkers[e.id] && visIds[e.id]) layers.push(allMarkers[e.id]);
+      if(!allMarkers[e.id] || !visIds[e.id]) return;
+      var eDate=(e.s||'').slice(0,10);
+      if(weekSet[eDate]) layers.push(allMarkers[e.id]);
     });
     var noCoords = document.getElementById('map-no-coords');
     if(layers.length===0){
@@ -382,11 +392,11 @@ th.sorted-desc::after{content:" ↓";color:#1a6eb5}
     document.getElementById('f-info').textContent =
       visible.length+' '+(visible.length!==1?I18N.events:I18N.event);
 
+    // Week view first so weekKeys is populated before the map reads it
+    renderWeek();
+
     // Map
     updateMapMarkers();
-
-    // Week view
-    renderWeek();
 
     // Table
     rows.forEach(function(r){ r.classList.add('row-filtered'); });
