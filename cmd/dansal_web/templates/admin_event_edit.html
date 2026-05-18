@@ -80,6 +80,9 @@
 
     <label for="tickets_total">{{$.Strings.T "evt_tickets_total"}}</label>
     <input id="tickets_total" type="number" name="tickets_total" value="{{.Event.TicketsTotal}}" min="0" placeholder="0">
+
+    <label class="check-label"><input type="checkbox" name="booking_enabled"{{if .Event.BookingEnabled}} checked{{end}}> {{$.Strings.T "evt_booking_enabled"}}</label>
+    <span class="field-hint">{{$.Strings.T "evt_booking_enabled_hint"}}</span>
   </section>
 
   <!-- Musicians -->

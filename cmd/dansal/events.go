@@ -60,6 +60,7 @@ type Event struct {
 	BookingURL      string           `json:"booking_url,omitempty"`
 	Availability    string           `json:"availability,omitempty"`
 	TicketsTotal    int              `json:"tickets_total,omitempty"`
+	BookingEnabled  bool             `json:"booking_enabled,omitempty"`
 	TagsJSON        string           `json:"-"`
 	PricingJSON     string           `json:"-"`
 }
@@ -95,6 +96,7 @@ type EventUpdateRequest struct {
 	BookingURL           string               `json:"booking_url,omitempty"`
 	Availability         string               `json:"availability,omitempty"`
 	TicketsTotal         int                  `json:"tickets_total,omitempty"`
+	BookingEnabled       bool                 `json:"booking_enabled,omitempty"`
 	IsPublished    bool                 `json:"is_published"`
 	Tags           []string             `json:"tags"`
 	URL            string               `json:"url"`
@@ -166,7 +168,7 @@ var timeFormats = []string{
 }
 
 // SELECT used by all event list / single-event queries
-const eventListSelect = `SELECT e.id, e.uid, e.title, e.description, e.start_time, e.end_time, e.has_ball, e.has_workshop, e.has_festival, e.is_cancelled, e.tags, e.is_published, e.short_code, COALESCE(e.url,''), COALESCE(e.source,''), e.created_at, COALESCE(l.location,''), COALESCE(l.address,''), COALESCE(l.zipcode,''), e.organization_id, COALESCE(e.pricing,''), e.location_id, COALESCE(l.town,''), COALESCE(l.country,''), COALESCE(l.latitude,''), COALESCE(l.longitude,''), COALESCE(e.workshop_difficulty,''), COALESCE(e.booking_url,''), COALESCE(e.availability,''), COALESCE(e.tickets_total,0) FROM events e LEFT JOIN locations l ON e.location_id = l.id`
+const eventListSelect = `SELECT e.id, e.uid, e.title, e.description, e.start_time, e.end_time, e.has_ball, e.has_workshop, e.has_festival, e.is_cancelled, e.tags, e.is_published, e.short_code, COALESCE(e.url,''), COALESCE(e.source,''), e.created_at, COALESCE(l.location,''), COALESCE(l.address,''), COALESCE(l.zipcode,''), e.organization_id, COALESCE(e.pricing,''), e.location_id, COALESCE(l.town,''), COALESCE(l.country,''), COALESCE(l.latitude,''), COALESCE(l.longitude,''), COALESCE(e.workshop_difficulty,''), COALESCE(e.booking_url,''), COALESCE(e.availability,''), COALESCE(e.tickets_total,0), COALESCE(e.booking_enabled,0) FROM events e LEFT JOIN locations l ON e.location_id = l.id`
 
 // ── low-level helpers ──────────────────────────────────────────────────────
 
@@ -215,7 +217,7 @@ type scanner interface {
 // scanEventRow decodes one row from the eventListSelect query.
 func scanEventRow(s scanner) (Event, error) {
 	var event Event
-	var hasBallInt, hasWorkshopInt, hasFestivalInt, isCancelledInt, isPublishedInt int
+	var hasBallInt, hasWorkshopInt, hasFestivalInt, isCancelledInt, isPublishedInt, bookingEnabledInt int
 	var startEpoch, endEpoch int64
 	var orgID, locID sql.NullInt64
 	var uid sql.NullString
@@ -225,7 +227,7 @@ func scanEventRow(s scanner) (Event, error) {
 		&event.LocationAddress, &event.LocationZipcode, &orgID,
 		&event.PricingJSON, &locID, &event.LocationTown, &event.LocationCountry,
 		&event.LocationLat, &event.LocationLng, &event.WorkshopDifficulty, &event.BookingURL,
-		&event.Availability, &event.TicketsTotal); err != nil {
+		&event.Availability, &event.TicketsTotal, &bookingEnabledInt); err != nil {
 		return Event{}, err
 	}
 	if uid.Valid {
@@ -262,7 +264,7 @@ func scanEventRow(s scanner) (Event, error) {
 // fetchEventByID loads a single event by primary key, including location fields via JOIN.
 func fetchEventByID(q querier, id int) (Event, error) {
 	var event Event
-	var hasBallInt, hasWorkshopInt, hasFestivalInt, isCancelledInt, isPublishedInt int
+	var hasBallInt, hasWorkshopInt, hasFestivalInt, isCancelledInt, isPublishedInt, bookingEnabledInt int
 	var startEpoch, endEpoch int64
 	var orgID, locID sql.NullInt64
 	var uid sql.NullString
@@ -271,13 +273,15 @@ func fetchEventByID(q querier, id int) (Event, error) {
 		 e.has_festival, e.is_cancelled, e.tags, e.is_published, e.short_code, COALESCE(e.url,''), COALESCE(e.source,''),
 		 e.created_at, e.organization_id, COALESCE(e.pricing,''), e.location_id,
 		 COALESCE(l.location,''), COALESCE(l.address,''), COALESCE(l.zipcode,''),
-		 COALESCE(l.town,''), COALESCE(l.country,''), COALESCE(e.workshop_difficulty,''), COALESCE(e.booking_url,'')
+		 COALESCE(l.town,''), COALESCE(l.country,''), COALESCE(e.workshop_difficulty,''), COALESCE(e.booking_url,''),
+		 COALESCE(e.availability,''), COALESCE(e.tickets_total,0), COALESCE(e.booking_enabled,0)
 		 FROM events e LEFT JOIN locations l ON e.location_id = l.id WHERE e.id = ?`, id,
 	).Scan(&event.ID, &uid, &event.Title, &event.Description, &startEpoch, &endEpoch,
 		&hasBallInt, &hasWorkshopInt, &hasFestivalInt, &isCancelledInt, &event.TagsJSON, &isPublishedInt,
 		&event.ShortCode, &event.URL, &event.Source, &event.CreatedAt, &orgID, &event.PricingJSON,
 		&locID, &event.Location, &event.LocationAddress, &event.LocationZipcode,
-		&event.LocationTown, &event.LocationCountry, &event.WorkshopDifficulty, &event.BookingURL)
+		&event.LocationTown, &event.LocationCountry, &event.WorkshopDifficulty, &event.BookingURL,
+		&event.Availability, &event.TicketsTotal, &bookingEnabledInt)
 	if uid.Valid {
 		event.UID = uid.String
 	}
@@ -291,6 +295,7 @@ func fetchEventByID(q querier, id int) (Event, error) {
 	event.HasFestival = hasFestivalInt == 1
 	event.IsCancelled = isCancelledInt == 1
 	event.IsPublished = isPublishedInt == 1
+	event.BookingEnabled = bookingEnabledInt == 1
 	event.ImageURL = eventImageURL(event.ID)
 	if orgID.Valid {
 		v := int(orgID.Int64)
@@ -1392,11 +1397,11 @@ func updateEvent(w http.ResponseWriter, r *http.Request) {
 		`UPDATE events SET title=?, description=?, start_time=?, end_time=?, location_id=?,
 		 has_ball=?, has_workshop=?, has_festival=?, is_cancelled=?, is_published=?,
 		 workshop_difficulty=?, tags=?, url=?, booking_url=?, organization_id=?, pricing=?,
-		 availability=?, tickets_total=? WHERE id=?`,
+		 availability=?, tickets_total=?, booking_enabled=? WHERE id=?`,
 		req.Title, req.Description, startTime, endTime, locationID,
 		req.HasBall, req.HasWorkshop, req.HasFestival, req.IsCancelled, req.IsPublished,
 		req.WorkshopDifficulty, string(tagsJSON), urlVal(req.URL), urlVal(req.BookingURL), orgIDArg, pricingArg,
-		req.Availability, req.TicketsTotal, id,
+		req.Availability, req.TicketsTotal, req.BookingEnabled, id,
 	); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
