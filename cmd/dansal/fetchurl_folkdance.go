@@ -308,10 +308,17 @@ func detectFetchType(rawURL string) string {
 	if folkdanceJSONProbe(rawURL) {
 		return "folkdance-json"
 	}
+	lower := strings.ToLower(rawURL)
+	if strings.Contains(lower, "rss") || strings.Contains(lower, "atom") ||
+		strings.HasSuffix(lower, ".xml") || strings.Contains(lower, "/feed") {
+		return "rss"
+	}
 	ct := httpContentType(rawURL)
 	switch ct {
 	case "application/json":
 		return "folkdance-json"
+	case "application/rss+xml", "application/atom+xml", "application/xml", "text/xml":
+		return "rss"
 	default:
 		return "ical"
 	}
@@ -319,5 +326,5 @@ func detectFetchType(rawURL string) string {
 
 // validFetchType returns true for recognised fetch type strings.
 func validFetchType(t string) bool {
-	return t == "ical" || t == "folkdance-json"
+	return t == "ical" || t == "folkdance-json" || t == "rss"
 }

@@ -16,6 +16,7 @@
     <select id="type" name="type">
       <option value="">{{$.Strings.T "fetch_type_auto"}}</option>
       <option value="ical">iCal</option>
+      <option value="rss">{{$.Strings.T "fetch_type_rss"}}</option>
       <option value="folkdance-json">Folkdance JSON</option>
     </select>
   </div>
@@ -46,6 +47,9 @@ document.getElementById('url').addEventListener('blur', function() {
     sel.value = 'ical';
   } else if (u.indexOf('folkdance') !== -1 || u.indexOf('.json') !== -1) {
     sel.value = 'folkdance-json';
+  } else if (u.indexOf('rss') !== -1 || u.indexOf('atom') !== -1 ||
+             u.indexOf('/feed') !== -1 || u.lastIndexOf('.xml') === u.length - 4) {
+    sel.value = 'rss';
   }
 });
 </script>

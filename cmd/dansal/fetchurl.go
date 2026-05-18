@@ -300,10 +300,14 @@ func patchFetchSource(w http.ResponseWriter, r *http.Request) {
 
 // importFromSource dispatches to the correct importer based on src.Type.
 func importFromSource(src FetchSource) ([]Event, bool, error) {
-	if src.Type == "folkdance-json" {
+	switch src.Type {
+	case "folkdance-json":
 		return importFromFolkdanceJSON(src)
+	case "rss":
+		return importFromRSSSource(src)
+	default:
+		return importFromICalSource(src)
 	}
-	return importFromICalSource(src)
 }
 
 // importFromICalSource fetches an iCal URL and imports its events into the DB.
@@ -470,7 +474,7 @@ func fetchURL(w http.ResponseWriter, r *http.Request) {
 		req.Type = detectFetchType(req.URL)
 	}
 	if !validFetchType(req.Type) {
-		http.Error(w, "Unsupported type; use 'ical' or 'folkdance-json'", http.StatusBadRequest)
+		http.Error(w, "Unsupported type; use 'ical', 'rss', or 'folkdance-json'", http.StatusBadRequest)
 		return
 	}
 
@@ -810,7 +814,7 @@ func fetchURLByID(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if !validFetchType(src.Type) {
-		http.Error(w, "Unsupported type; use 'ical' or 'folkdance-json'", http.StatusBadRequest)
+		http.Error(w, "Unsupported type; use 'ical', 'rss', or 'folkdance-json'", http.StatusBadRequest)
 		return
 	}
 
