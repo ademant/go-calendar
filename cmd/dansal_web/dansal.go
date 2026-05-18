@@ -200,7 +200,7 @@ func (c *DansalClient) Logout(ctx context.Context, token string) error {
 }
 
 func (c *DansalClient) GetEvents(ctx context.Context, after string) ([]Event, error) {
-	path := "/api/v1/events?is_published=true&include_past=true"
+	path := "/api/v1/events?is_published=true"
 	if after != "" {
 		path += "&start_time_after=" + after
 	}
