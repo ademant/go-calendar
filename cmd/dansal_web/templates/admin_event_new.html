@@ -44,8 +44,16 @@
 
     <div class="check-row">
       <label class="check-label"><input type="checkbox" name="has_ball"> {{$.Strings.T "filter_type_ball"}}</label>
-      <label class="check-label"><input type="checkbox" name="has_workshop"> {{$.Strings.T "filter_type_workshop"}}</label>
+      <label class="check-label"><input type="checkbox" name="has_workshop" id="has_workshop" onchange="toggleWorkshopDifficulty()"> {{$.Strings.T "filter_type_workshop"}}</label>
       <label class="check-label"><input type="checkbox" name="has_festival"> {{$.Strings.T "filter_type_festival"}}</label>
+    </div>
+    <div id="workshop-difficulty" hidden style="margin-top:.5rem">
+      <label>{{$.Strings.T "workshop_difficulty_label"}}</label>
+      <div class="check-row">
+        <label class="check-label"><input type="radio" name="workshop_difficulty" value="beginner"> {{$.Strings.T "workshop_difficulty_beginner"}}</label>
+        <label class="check-label"><input type="radio" name="workshop_difficulty" value="advanced"> {{$.Strings.T "workshop_difficulty_advanced"}}</label>
+        <label class="check-label"><input type="radio" name="workshop_difficulty" value="profi"> {{$.Strings.T "workshop_difficulty_profi"}}</label>
+      </div>
     </div>
 
     <label for="description">{{$.Strings.T "evt_description"}}</label>
@@ -240,6 +248,9 @@
 </style>
 
 <script>
+function toggleWorkshopDifficulty(){
+  document.getElementById('workshop-difficulty').hidden=!document.getElementById('has_workshop').checked;
+}
 function toggleOrgNew(){
   var v=document.getElementById('org_choice').value;
   document.getElementById('org-existing').hidden=(v!=='existing');

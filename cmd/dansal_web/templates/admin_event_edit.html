@@ -45,10 +45,18 @@
 
     <div class="check-row">
       <label class="check-label"><input type="checkbox" name="has_ball"{{if .Event.HasBall}} checked{{end}}> {{$.Strings.T "filter_type_ball"}}</label>
-      <label class="check-label"><input type="checkbox" name="has_workshop"{{if .Event.HasWorkshop}} checked{{end}}> {{$.Strings.T "filter_type_workshop"}}</label>
+      <label class="check-label"><input type="checkbox" name="has_workshop" id="has_workshop"{{if .Event.HasWorkshop}} checked{{end}} onchange="toggleWorkshopDifficulty()"> {{$.Strings.T "filter_type_workshop"}}</label>
       <label class="check-label"><input type="checkbox" name="has_festival"{{if .Event.HasFestival}} checked{{end}}> {{$.Strings.T "filter_type_festival"}}</label>
       <label class="check-label"><input type="checkbox" name="is_cancelled"{{if .Event.IsCancelled}} checked{{end}}> {{$.Strings.T "badge_cancelled"}}</label>
       <label class="check-label"><input type="checkbox" name="is_published"{{if .Event.IsPublished}} checked{{end}}> {{$.Strings.T "evt_published"}}</label>
+    </div>
+    <div id="workshop-difficulty"{{if not .Event.HasWorkshop}} hidden{{end}} style="margin-top:.5rem">
+      <label>{{$.Strings.T "workshop_difficulty_label"}}</label>
+      <div class="check-row">
+        <label class="check-label"><input type="radio" name="workshop_difficulty" value="beginner"{{if eq .Event.WorkshopDifficulty "beginner"}} checked{{end}}> {{$.Strings.T "workshop_difficulty_beginner"}}</label>
+        <label class="check-label"><input type="radio" name="workshop_difficulty" value="advanced"{{if eq .Event.WorkshopDifficulty "advanced"}} checked{{end}}> {{$.Strings.T "workshop_difficulty_advanced"}}</label>
+        <label class="check-label"><input type="radio" name="workshop_difficulty" value="profi"{{if eq .Event.WorkshopDifficulty "profi"}} checked{{end}}> {{$.Strings.T "workshop_difficulty_profi"}}</label>
+      </div>
     </div>
 
     <label for="description">{{$.Strings.T "evt_description"}}</label>
@@ -326,6 +334,9 @@
 </style>
 
 <script>
+function toggleWorkshopDifficulty(){
+  document.getElementById('workshop-difficulty').hidden=!document.getElementById('has_workshop').checked;
+}
 function toggleOrgNew(){
   var v=document.getElementById('org_choice').value;
   document.getElementById('org-existing').hidden=(v!=='existing');

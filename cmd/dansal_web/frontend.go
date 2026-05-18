@@ -94,7 +94,6 @@ var locMonths = map[string][12]string{
 	"es": {"Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"},
 	"it": {"Gen", "Feb", "Mar", "Apr", "Mag", "Giu", "Lug", "Ago", "Set", "Ott", "Nov", "Dic"},
 	"nl": {"Jan", "Feb", "Mrt", "Apr", "Mei", "Jun", "Jul", "Aug", "Sep", "Okt", "Nov", "Dec"},
-	"br": {"Gen", "C'hw", "Meu", "Ebr", "Mae", "Mez", "Gou", "Eos", "Gwe", "Her", "Du", "Ker"},
 }
 var locWeekdays = map[string][7]string{
 	"br": {"Sul.", "Lun.", "Meur.", "Merc'h.", "Yaou.", "Gwen.", "Sad."},
@@ -104,7 +103,6 @@ var locWeekdays = map[string][7]string{
 	"es": {"Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"},
 	"it": {"Dom", "Lun", "Mar", "Mer", "Gio", "Ven", "Sab"},
 	"nl": {"Zo", "Ma", "Di", "Wo", "Do", "Vr", "Za"},
-	"br": {"Sul", "Lun", "Meu", "Mer", "Yao", "Gwe", "Sad"},
 }
 
 func locMonth(lang string, m time.Month) string {

@@ -23,10 +23,11 @@ type Event struct {
 	Description     string     `json:"description"`
 	StartTime       string     `json:"start_time"`
 	EndTime         string     `json:"end_time"`
-	HasBall         bool       `json:"has_ball"`
-	HasWorkshop     bool       `json:"has_workshop"`
-	HasFestival     bool       `json:"has_festival"`
-	IsCancelled     bool       `json:"is_cancelled"`
+	HasBall              bool       `json:"has_ball"`
+	HasWorkshop          bool       `json:"has_workshop"`
+	HasFestival          bool       `json:"has_festival"`
+	WorkshopDifficulty   string     `json:"workshop_difficulty,omitempty"`
+	IsCancelled          bool       `json:"is_cancelled"`
 	Tags            []string   `json:"tags"`
 	IsPublished     bool       `json:"is_published"`
 	ShortCode       string     `json:"short_code"`
@@ -661,14 +662,15 @@ func (c *DansalClient) UseMagicLogin(ctx context.Context, token string) (*LoginR
 // ── event creation types ───────────────────────────────────────────────────
 
 type EventCreateReq struct {
-	Title          string      `json:"title"`
-	Description    string      `json:"description,omitempty"`
-	StartTime      string      `json:"start_time"`
-	EndTime        string      `json:"end_time,omitempty"`
-	HasBall        bool        `json:"has_ball"`
-	HasWorkshop    bool        `json:"has_workshop"`
-	HasFestival    bool        `json:"has_festival"`
-	Tags           []string    `json:"tags,omitempty"`
+	Title                string      `json:"title"`
+	Description          string      `json:"description,omitempty"`
+	StartTime            string      `json:"start_time"`
+	EndTime              string      `json:"end_time,omitempty"`
+	HasBall              bool        `json:"has_ball"`
+	HasWorkshop          bool        `json:"has_workshop"`
+	HasFestival          bool        `json:"has_festival"`
+	WorkshopDifficulty   string      `json:"workshop_difficulty,omitempty"`
+	Tags                 []string    `json:"tags,omitempty"`
 	URL            string      `json:"url,omitempty"`
 	OrganizationID *int        `json:"organization_id,omitempty"`
 	Pricing        *Pricing    `json:"pricing,omitempty"`
@@ -676,14 +678,15 @@ type EventCreateReq struct {
 }
 
 type EventUpdateReq struct {
-	Title          string      `json:"title"`
-	Description    string      `json:"description,omitempty"`
-	StartTime      string      `json:"start_time"`
-	EndTime        string      `json:"end_time,omitempty"`
-	HasBall        bool        `json:"has_ball"`
-	HasWorkshop    bool        `json:"has_workshop"`
-	HasFestival    bool        `json:"has_festival"`
-	IsCancelled    bool        `json:"is_cancelled"`
+	Title                string      `json:"title"`
+	Description          string      `json:"description,omitempty"`
+	StartTime            string      `json:"start_time"`
+	EndTime              string      `json:"end_time,omitempty"`
+	HasBall              bool        `json:"has_ball"`
+	HasWorkshop          bool        `json:"has_workshop"`
+	HasFestival          bool        `json:"has_festival"`
+	WorkshopDifficulty   string      `json:"workshop_difficulty,omitempty"`
+	IsCancelled          bool        `json:"is_cancelled"`
 	IsPublished    bool        `json:"is_published"`
 	Tags           []string    `json:"tags,omitempty"`
 	URL            string      `json:"url,omitempty"`

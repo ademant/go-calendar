@@ -432,6 +432,7 @@ func migrateDB() {
 	db.Exec("ALTER TABLE organizations ADD COLUMN mastodon TEXT")
 	db.Exec("ALTER TABLE organizations ADD COLUMN facebook TEXT")
 	db.Exec("ALTER TABLE organizations ADD COLUMN contact_email TEXT")
+	db.Exec("ALTER TABLE events ADD COLUMN workshop_difficulty TEXT DEFAULT ''")
 	migrateUsersRoles()
 	db.Exec(`CREATE TABLE IF NOT EXISTS verification_tokens (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
