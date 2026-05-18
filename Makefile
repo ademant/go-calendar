@@ -46,6 +46,9 @@ install: build
 	# binaries
 	install -m 755 dansal        $(BINDIR)/dansal
 	install -m 755 dansal_admin  $(BINDIR)/dansal_admin
+	# preflight helper
+	install -d -m 755 /usr/lib/dansal
+	install -m 755 packaging/preflight /usr/lib/dansal/preflight
 	# systemd unit
 	install -m 644 dansal.service $(SYSTEMDDIR)/dansal.service
 	# Ensure the database file is owned by the service user even if it was
@@ -97,6 +100,7 @@ deb: build-dansal build-dansal_web build-dansal_admin
 	# Package tree
 	mkdir -p $(DEB_DIR)/DEBIAN
 	mkdir -p $(DEB_DIR)/usr/bin
+	mkdir -p $(DEB_DIR)/usr/lib/dansal
 	mkdir -p $(DEB_DIR)/$(SYSTEMDDIR)
 	mkdir -p $(DEB_DIR)/etc/dansal
 	mkdir -p $(DEB_DIR)/etc/fail2ban/filter.d
@@ -109,6 +113,8 @@ deb: build-dansal build-dansal_web build-dansal_admin
 	install -m 755 packaging/postinst                $(DEB_DIR)/DEBIAN/postinst
 	install -m 755 packaging/prerm                   $(DEB_DIR)/DEBIAN/prerm
 	install -m 755 packaging/postrm                  $(DEB_DIR)/DEBIAN/postrm
+	# Preflight helper
+	install -m 755 packaging/preflight               $(DEB_DIR)/usr/lib/dansal/preflight
 	# Binaries
 	install -m 755 dansal                            $(DEB_DIR)/usr/bin/dansal
 	install -m 755 dansal_web                        $(DEB_DIR)/usr/bin/dansal-web

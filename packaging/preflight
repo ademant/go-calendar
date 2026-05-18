@@ -1,0 +1,58 @@
+#!/bin/sh
+# Pre-flight checks run by systemd as ExecStartPre before dansal starts.
+# Verifies that all files and directories the service needs are accessible.
+# Each failed check emits a specific error line; exits non-zero to block startup.
+
+set -u
+
+ERRORS=0
+ME=$(id -un)
+
+fail() {
+    printf 'PREFLIGHT: %s\n' "$*" >&2
+    ERRORS=$((ERRORS + 1))
+}
+
+stat_info() {
+    stat -c 'owner=%U group=%G mode=%a' "$1" 2>/dev/null || printf '(stat failed)'
+}
+
+check_dir_writable() {
+    path="$1"
+    if [ ! -d "$path" ]; then
+        fail "$path: directory does not exist"
+    elif [ ! -w "$path" ]; then
+        fail "$path: not writable by $ME — $(stat_info "$path")"
+    fi
+}
+
+check_file_readable() {
+    path="$1"
+    if [ ! -f "$path" ]; then
+        fail "$path: file does not exist"
+    elif [ ! -r "$path" ]; then
+        fail "$path: not readable by $ME — $(stat_info "$path")"
+    fi
+}
+
+check_file_writable() {
+    path="$1"
+    if [ ! -e "$path" ]; then
+        parent=$(dirname "$path")
+        if [ ! -w "$parent" ]; then
+            fail "$path: does not exist and parent directory not writable by $ME — $(stat_info "$parent")"
+        fi
+    elif [ ! -w "$path" ]; then
+        fail "$path: not writable by $ME — $(stat_info "$path")"
+    fi
+}
+
+check_dir_writable  /var/lib/dansal
+check_dir_writable  /var/lib/dansal/images
+check_file_writable /var/lib/dansal/calendar.db
+check_file_readable /etc/dansal/config.yaml
+
+[ "$ERRORS" -eq 0 ] && exit 0
+
+printf 'PREFLIGHT: %d check(s) failed — dansal will not start\n' "$ERRORS" >&2
+exit 1
