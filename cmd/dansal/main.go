@@ -445,6 +445,7 @@ func migrateDB() {
 		FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 	)`)
 	db.Exec("CREATE INDEX IF NOT EXISTS idx_verification_tokens_token ON verification_tokens(token)")
+	db.Exec("ALTER TABLE users ADD COLUMN telegram_chat_id TEXT")
 }
 
 func createTables() error {
@@ -712,6 +713,9 @@ func main() {
 	router.HandleFunc("/api/v1/verify/{token}", consumeVerification).Methods("GET")
 	router.HandleFunc("/api/v1/invites/{token}", useInvite).Methods("POST")
 
+	// Telegram bot webhook (public, called by Telegram servers)
+	router.HandleFunc("/telegram/webhook", telegramWebhookHandler).Methods("POST")
+
 	// iCal feeds (public, no auth)
 	router.HandleFunc("/api/v1/events.ics", getEventsICS).Methods("GET")
 	router.HandleFunc("/api/v1/events/{id:[0-9]+}.ics", getEventICS).Methods("GET")
@@ -777,6 +781,7 @@ func main() {
 	userRoutes.HandleFunc("/{id}", updateUser).Methods("PUT")
 	userRoutes.HandleFunc("/{id}", deleteUser).Methods("DELETE")
 	userRoutes.HandleFunc("/{id}/verify", sendVerification).Methods("POST")
+	userRoutes.HandleFunc("/{id}/telegram/message", sendTelegramMessageToUser).Methods("POST")
 
 	// Organization endpoints (protected)
 	orgRoutes := router.PathPrefix("/api/v1/organizations").Subrouter()

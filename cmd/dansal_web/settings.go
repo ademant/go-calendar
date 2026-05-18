@@ -7,11 +7,12 @@ import (
 )
 
 type SettingsData struct {
-	User       UserInfo
-	ErrorKey   string
-	Saved      bool
-	VerifySent bool
-	Verified   bool
+	User            UserInfo
+	ErrorKey        string
+	Saved           bool
+	VerifySent      bool
+	Verified        bool
+	TelegramDeepLink string
 }
 
 func settingsPageHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {
@@ -88,6 +89,32 @@ func settingsSendVerifyHandler(cfg *Config, tmpls *Templates, client *DansalClie
 			return
 		}
 		http.Redirect(w, r, "/settings?verify_sent=1", http.StatusSeeOther)
+	}
+}
+
+func settingsTelegramVerifyHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		su, ok := requireLogin(w, r)
+		if !ok {
+			return
+		}
+		token := getSessionToken(r)
+		baseURL := cfg.publicBaseURL()
+
+		deepLink, err := client.GetTelegramVerifyLink(r.Context(), su.ID, baseURL, token)
+		u, _ := client.GetUser(r.Context(), su.ID, token)
+		title := i18n.T(r, "settings_title")
+		if err != nil {
+			renderTemplate(w, tmpls.settings, tmplData(r, cfg, i18n, title, SettingsData{
+				User:     u,
+				ErrorKey: "settings_verify_error",
+			}))
+			return
+		}
+		renderTemplate(w, tmpls.settings, tmplData(r, cfg, i18n, title, SettingsData{
+			User:             u,
+			TelegramDeepLink: deepLink,
+		}))
 	}
 }
 

@@ -58,6 +58,7 @@ func main() {
 	r.HandleFunc("/settings", settingsPageHandler(cfg, tmpls, client, i18n)).Methods("GET")
 	r.HandleFunc("/settings", settingsUpdateHandler(cfg, tmpls, client, i18n)).Methods("POST")
 	r.HandleFunc("/settings/verify", settingsSendVerifyHandler(cfg, tmpls, client, i18n)).Methods("POST")
+	r.HandleFunc("/settings/verify-telegram", settingsTelegramVerifyHandler(cfg, tmpls, client, i18n)).Methods("POST")
 	r.HandleFunc("/magic", magicRequestHandler(cfg, tmpls, client, i18n)).Methods("POST")
 	r.HandleFunc("/api/v1/login/magic/{token}", magicLoginHandler(cfg, tmpls, client, i18n)).Methods("GET")
 	r.HandleFunc("/api/v1/verify/{token}", verifyEmailHandler(cfg, tmpls, client, i18n)).Methods("GET")

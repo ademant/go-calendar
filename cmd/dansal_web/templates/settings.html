@@ -41,8 +41,17 @@
     </div>
 
     <h2>{{$.Strings.T "settings_contacts"}}</h2>
-    <label for="telegram">{{$.Strings.T "settings_telegram"}}</label>
-    <input id="telegram" type="text" name="telegram" value="{{.User.Telegram}}" placeholder="@handle">
+    <div class="field-row">
+      <label for="telegram" style="min-width:0">{{$.Strings.T "settings_telegram"}}</label>
+      <input id="telegram" type="text" name="telegram" value="{{.User.Telegram}}" placeholder="@handle" style="flex:1">
+      {{if .User.Telegram}}
+        {{if .User.TelegramVerified}}
+          <span class="badge badge-ok">{{$.Strings.T "settings_email_verified"}}</span>
+        {{else}}
+          <span class="badge badge-warn">{{$.Strings.T "settings_email_not_verified"}}</span>
+        {{end}}
+      {{end}}
+    </div>
 
     <label for="matrix">{{$.Strings.T "settings_matrix"}}</label>
     <input id="matrix" type="text" name="matrix" value="{{.User.Matrix}}" placeholder="@user:server.org">
@@ -65,6 +74,20 @@
     <form method="post" action="/settings/verify">
       <button type="submit" class="btn-secondary">{{$.Strings.T "settings_send_verify"}}</button>
     </form>
+  </div>
+  {{end}}{{end}}
+
+  {{if .User.Telegram}}{{if not .User.TelegramVerified}}
+  <div class="settings-card">
+    <h2>{{$.Strings.T "settings_verify_telegram_heading"}}</h2>
+    <p class="hint">{{$.Strings.T "settings_verify_telegram_hint"}}</p>
+    {{if .TelegramDeepLink}}
+      <a href="{{.TelegramDeepLink}}" target="_blank" rel="noopener" class="btn-telegram">{{$.Strings.T "settings_telegram_open_bot"}}</a>
+    {{else}}
+      <form method="post" action="/settings/verify-telegram">
+        <button type="submit" class="btn-secondary">{{$.Strings.T "settings_verify_telegram_btn"}}</button>
+      </form>
+    {{end}}
   </div>
   {{end}}{{end}}
   {{end}}
@@ -95,5 +118,7 @@
 .hint{font-size:.88rem;color:#666;margin-bottom:.6rem}
 .btn-secondary{padding:.4rem .9rem;background:#fff;color:#1a6eb5;border:1px solid #1a6eb5;border-radius:4px;font-size:.9rem;cursor:pointer}
 .btn-secondary:hover{background:#e8f0fe}
+.btn-telegram{display:inline-block;padding:.4rem .9rem;background:#0088cc;color:#fff;border-radius:4px;font-size:.9rem;text-decoration:none}
+.btn-telegram:hover{background:#006699}
 </style>
 {{end}}

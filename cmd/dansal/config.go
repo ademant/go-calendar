@@ -32,6 +32,7 @@ type ServerConfig struct {
 	VerificationExpiryHours    int    `yaml:"verification_expiry_hours"`
 	BaseURL                    string `yaml:"base_url"`
 	TelegramBotToken           string `yaml:"telegram_bot_token"`
+	TelegramBotName            string `yaml:"telegram_bot_name"`
 	MatrixHomeserver           string `yaml:"matrix_homeserver"`
 	MatrixAccessToken          string `yaml:"matrix_access_token"`
 	MagicLoginExpirySecs int      `yaml:"magic_login_expiry_secs"`

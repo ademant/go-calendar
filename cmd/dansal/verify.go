@@ -127,12 +127,26 @@ func sendVerification(w http.ResponseWriter, r *http.Request) {
 		vURL = buildVerifyURL(r, token)
 	}
 
+	// Telegram uses a deep link: the bot cannot push to users who haven't started it.
+	// Return the link so the frontend can show it to the user.
+	if req.Channel == "telegram" {
+		botName := config.Server.TelegramBotName
+		if botName == "" {
+			db.Exec("DELETE FROM verification_tokens WHERE token=?", token)
+			http.Error(w, "telegram_bot_name not configured", http.StatusInternalServerError)
+			return
+		}
+		deepLink := "https://t.me/" + botName + "?start=" + token
+		log.Printf("verify: generated telegram deep link for user %d (%s)", targetID, user.Username)
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]string{"deep_link": deepLink})
+		return
+	}
+
 	var sendErr error
 	switch req.Channel {
 	case "email":
 		sendErr = sendEmailVerification(user, vURL)
-	case "telegram":
-		sendErr = sendTelegramVerification(user, vURL)
 	case "matrix":
 		sendErr = sendMatrixVerification(user, vURL)
 	}

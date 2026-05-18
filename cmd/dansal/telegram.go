@@ -1,0 +1,168 @@
+package main
+
+import (
+	"bytes"
+	"database/sql"
+	"encoding/json"
+	"fmt"
+	"log"
+	"net/http"
+	"strconv"
+	"strings"
+	"time"
+
+	"github.com/gorilla/mux"
+)
+
+// sendTelegramMessage sends a plain-text message to a Telegram chat.
+// chatID is the numeric Telegram chat/user ID stored as a string.
+func sendTelegramMessage(chatID, text string) error {
+	botToken := config.Server.TelegramBotToken
+	if botToken == "" {
+		return fmt.Errorf("telegram_bot_token not configured")
+	}
+	payload, _ := json.Marshal(map[string]any{
+		"chat_id": chatID,
+		"text":    text,
+	})
+	apiURL := "https://api.telegram.org/bot" + botToken + "/sendMessage"
+	client := &http.Client{Timeout: 15 * time.Second}
+	resp, err := client.Post(apiURL, "application/json", bytes.NewReader(payload))
+	if err != nil {
+		return fmt.Errorf("telegram API: %w", err)
+	}
+	defer resp.Body.Close()
+	var result struct {
+		OK          bool   `json:"ok"`
+		Description string `json:"description"`
+	}
+	json.NewDecoder(resp.Body).Decode(&result)
+	if !result.OK {
+		return fmt.Errorf("telegram API: %s", result.Description)
+	}
+	return nil
+}
+
+// tgUpdate is the subset of a Telegram Update object we care about.
+type tgUpdate struct {
+	UpdateID int `json:"update_id"`
+	Message  *struct {
+		MessageID int `json:"message_id"`
+		From      struct {
+			ID       int64  `json:"id"`
+			Username string `json:"username"`
+		} `json:"from"`
+		Chat struct {
+			ID int64 `json:"id"`
+		} `json:"chat"`
+		Text string `json:"text"`
+	} `json:"message"`
+}
+
+// POST /telegram/webhook — called by Telegram for every incoming update.
+// Handles /start TOKEN commands to complete Telegram verification.
+func telegramWebhookHandler(w http.ResponseWriter, r *http.Request) {
+	var update tgUpdate
+	if err := json.NewDecoder(r.Body).Decode(&update); err != nil {
+		w.WriteHeader(http.StatusOK) // always return 200 to Telegram
+		return
+	}
+	if update.Message == nil {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
+	text := strings.TrimSpace(update.Message.Text)
+	chatID := update.Message.Chat.ID
+	chatIDStr := fmt.Sprintf("%d", chatID)
+
+	// Only handle /start commands.
+	if !strings.HasPrefix(text, "/start") {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
+	parts := strings.Fields(text)
+	if len(parts) < 2 {
+		// /start without a token — generic greeting
+		_ = sendTelegramMessage(chatIDStr, "Hi! Send me a /start link from the dansal website to verify your account.")
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+	token := parts[1]
+
+	// Look up the verification token.
+	var tokenID, userID int
+	var channel, expiresAt string
+	err := db.QueryRow(
+		"SELECT id, user_id, channel, expires_at FROM verification_tokens WHERE token=? AND channel='telegram'",
+		token,
+	).Scan(&tokenID, &userID, &channel, &expiresAt)
+	if err == sql.ErrNoRows {
+		_ = sendTelegramMessage(chatIDStr, "This verification link is invalid or has already been used.")
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+	if err != nil {
+		log.Printf("telegram webhook: db error: %v", err)
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
+	// Check expiry.
+	exp, err := parseTokenExpiration(expiresAt)
+	if err != nil || time.Now().After(exp) {
+		db.Exec("DELETE FROM verification_tokens WHERE id=?", tokenID)
+		_ = sendTelegramMessage(chatIDStr, "This verification link has expired. Please request a new one.")
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
+	// Mark verified and store chat_id.
+	db.Exec("UPDATE users SET telegram_verified=1, telegram_chat_id=? WHERE id=?", chatIDStr, userID)
+	db.Exec("DELETE FROM verification_tokens WHERE id=?", tokenID)
+	log.Printf("telegram webhook: verified user %d, chat_id=%s", userID, chatIDStr)
+
+	_ = sendTelegramMessage(chatIDStr, "✓ Your Telegram account has been verified!")
+	w.WriteHeader(http.StatusOK)
+}
+
+// POST /api/v1/users/{id}/telegram/message — admin sends a message to a verified user.
+func sendTelegramMessageToUser(w http.ResponseWriter, r *http.Request) {
+	if r.Header.Get("X-User-Role") != RoleAdmin {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
+	id, err := strconv.Atoi(mux.Vars(r)["id"])
+	if err != nil {
+		http.Error(w, "invalid user ID", http.StatusBadRequest)
+		return
+	}
+
+	var req struct {
+		Text string `json:"text"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || strings.TrimSpace(req.Text) == "" {
+		http.Error(w, "text is required", http.StatusBadRequest)
+		return
+	}
+
+	var chatID string
+	err = db.QueryRow("SELECT COALESCE(telegram_chat_id,'') FROM users WHERE id=?", id).Scan(&chatID)
+	if err == sql.ErrNoRows {
+		http.Error(w, "user not found", http.StatusNotFound)
+		return
+	}
+	if chatID == "" {
+		http.Error(w, "user has no verified Telegram account", http.StatusBadRequest)
+		return
+	}
+
+	if err := sendTelegramMessage(chatID, req.Text); err != nil {
+		log.Printf("telegram send to user %d: %v", id, err)
+		http.Error(w, "failed to send message: "+err.Error(), http.StatusBadGateway)
+		return
+	}
+	log.Printf("telegram: admin sent message to user %d (chat_id=%s)", id, chatID)
+	w.WriteHeader(http.StatusNoContent)
+}

@@ -133,17 +133,19 @@ type LoginResponse struct {
 }
 
 type UserInfo struct {
-	ID            int    `json:"id"`
-	Username      string `json:"username"`
-	Email         string `json:"email"`
-	Role          string `json:"role"`
-	Description   string `json:"description"`
-	Telegram      string `json:"telegram"`
-	Matrix        string `json:"matrix"`
-	Mastodon      string `json:"mastodon"`
-	Website       string `json:"website"`
-	EmailVerified bool   `json:"email_verified"`
-	CreatedAt     string `json:"created_at"`
+	ID               int    `json:"id"`
+	Username         string `json:"username"`
+	Email            string `json:"email"`
+	Role             string `json:"role"`
+	Description      string `json:"description"`
+	Telegram         string `json:"telegram"`
+	TelegramChatID   string `json:"telegram_chat_id,omitempty"`
+	Matrix           string `json:"matrix"`
+	Mastodon         string `json:"mastodon"`
+	Website          string `json:"website"`
+	EmailVerified    bool   `json:"email_verified"`
+	TelegramVerified bool   `json:"telegram_verified"`
+	CreatedAt        string `json:"created_at"`
 }
 
 func (c *DansalClient) get(ctx context.Context, path string, out interface{}) error {
@@ -632,6 +634,25 @@ func (c *DansalClient) SendEmailVerification(ctx context.Context, id int, baseUR
 		return fmt.Errorf("dansal API: %s", resp.Status)
 	}
 	return nil
+}
+
+func (c *DansalClient) GetTelegramVerifyLink(ctx context.Context, id int, baseURL, token string) (string, error) {
+	body, _ := json.Marshal(map[string]string{"channel": "telegram", "base_url": baseURL})
+	resp, err := c.authed(ctx, http.MethodPost, fmt.Sprintf("/api/v1/users/%d/verify", id), token, body)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("dansal API: %s", resp.Status)
+	}
+	var result struct {
+		DeepLink string `json:"deep_link"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return "", err
+	}
+	return result.DeepLink, nil
 }
 
 func (c *DansalClient) RequestMagicLogin(ctx context.Context, identifier string) error {
