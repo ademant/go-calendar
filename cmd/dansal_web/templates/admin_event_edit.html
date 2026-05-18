@@ -167,6 +167,10 @@
       <input id="new_loc_address" type="text" name="new_loc_address">
       <div class="field-row">
         <div>
+          <label for="new_loc_zip">{{$.Strings.T "loc_zipcode"}}</label>
+          <input id="new_loc_zip" type="text" name="new_loc_zip" style="width:8rem">
+        </div>
+        <div>
           <label for="new_loc_town">{{$.Strings.T "loc_town"}}</label>
           <input id="new_loc_town" type="text" name="new_loc_town">
         </div>
@@ -349,13 +353,21 @@ function geocodeLocation(){
   var status=document.getElementById('geo-status');
   btn.disabled=true;
   status.textContent='Searching…';
-  fetch('https://nominatim.openstreetmap.org/search?format=json&limit=1&q='+encodeURIComponent(q),{headers:{'Accept':'application/json'}})
+  fetch('https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&limit=1&q='+encodeURIComponent(q),{headers:{'Accept':'application/json'}})
     .then(function(r){return r.json();})
     .then(function(data){
       if(data&&data.length>0){
-        document.getElementById('new_loc_lat').value=parseFloat(data[0].lat).toFixed(6);
-        document.getElementById('new_loc_lng').value=parseFloat(data[0].lon).toFixed(6);
-        status.textContent='✓ '+data[0].display_name;
+        var r=data[0];
+        var a=r.address||{};
+        document.getElementById('new_loc_lat').value=parseFloat(r.lat).toFixed(6);
+        document.getElementById('new_loc_lng').value=parseFloat(r.lon).toFixed(6);
+        var road=[a.house_number,a.road].filter(Boolean).join(' ');
+        if(road) document.getElementById('new_loc_address').value=road;
+        if(a.postcode) document.getElementById('new_loc_zip').value=a.postcode;
+        var city=a.city||a.town||a.village||a.hamlet||a.municipality||'';
+        if(city) document.getElementById('new_loc_town').value=city;
+        if(a.country) document.getElementById('new_loc_country').value=a.country;
+        status.textContent='✓ '+r.display_name;
       } else {
         status.textContent='Not found';
       }

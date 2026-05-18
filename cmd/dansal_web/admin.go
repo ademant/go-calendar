@@ -986,6 +986,7 @@ func adminEventCreateHandler(cfg *Config, tmpls *Templates, client *DansalClient
 			locReq = EventLocReq{
 				Location:  strings.TrimSpace(r.FormValue("new_loc_name")),
 				Address:   strings.TrimSpace(r.FormValue("new_loc_address")),
+				Zipcode:   strings.TrimSpace(r.FormValue("new_loc_zip")),
 				Town:      strings.TrimSpace(r.FormValue("new_loc_town")),
 				Country:   strings.TrimSpace(r.FormValue("new_loc_country")),
 				Latitude:  strings.TrimSpace(r.FormValue("new_loc_lat")),
@@ -1234,6 +1235,7 @@ func adminEventSaveHandler(cfg *Config, tmpls *Templates, client *DansalClient, 
 			locReq = EventLocReq{
 				Location:  strings.TrimSpace(r.FormValue("new_loc_name")),
 				Address:   strings.TrimSpace(r.FormValue("new_loc_address")),
+				Zipcode:   strings.TrimSpace(r.FormValue("new_loc_zip")),
 				Town:      strings.TrimSpace(r.FormValue("new_loc_town")),
 				Country:   strings.TrimSpace(r.FormValue("new_loc_country")),
 				Latitude:  strings.TrimSpace(r.FormValue("new_loc_lat")),
