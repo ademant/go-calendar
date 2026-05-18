@@ -16,7 +16,11 @@
   <div class="evt-header-meta">
     {{if .StartTime}}<span class="evt-time">{{formatTime $.LangCode .StartTime}}{{if .EndTime}} – {{formatTime $.LangCode .EndTime}}{{end}}</span>{{end}}
     {{if .Location}}<span class="evt-sep">·</span><span>{{.Location}}</span>{{end}}
-    {{if .LocationTown}}<span class="evt-sep">·</span><span>{{.LocationTown}}{{if .LocationCountry}}, {{.LocationCountry}}{{end}}</span>{{end}}
+    {{if or .LocationAddress .LocationZipcode}}
+      <span class="evt-sep">·</span><span>{{if .LocationAddress}}{{.LocationAddress}}, {{end}}{{.LocationZipcode}} {{.LocationTown}}{{if .LocationCountry}}, {{.LocationCountry}}{{end}}</span>
+    {{else if .LocationTown}}
+      <span class="evt-sep">·</span><span>{{.LocationTown}}{{if .LocationCountry}}, {{.LocationCountry}}{{end}}</span>
+    {{end}}
   </div>
 </div>
 

@@ -35,6 +35,8 @@ type Event struct {
 	ImageURL        string     `json:"image_url,omitempty"`
 	OrganizationID  *int       `json:"organization_id,omitempty"`
 	Location        string     `json:"location,omitempty"`
+	LocationAddress string     `json:"location_address,omitempty"`
+	LocationZipcode string     `json:"location_zipcode,omitempty"`
 	LocationTown    string     `json:"location_town,omitempty"`
 	LocationCountry string     `json:"location_country,omitempty"`
 	LocationLat     string     `json:"location_lat,omitempty"`

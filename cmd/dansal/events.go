@@ -51,6 +51,8 @@ type Event struct {
 	Musicians       []Musician       `json:"musicians,omitempty"`
 	LocationID      *int             `json:"location_id,omitempty"`
 	Location        string           `json:"location,omitempty"`
+	LocationAddress string           `json:"location_address,omitempty"`
+	LocationZipcode string           `json:"location_zipcode,omitempty"`
 	LocationTown    string           `json:"location_town,omitempty"`
 	LocationCountry string           `json:"location_country,omitempty"`
 	LocationLat     string           `json:"location_lat,omitempty"`
@@ -157,7 +159,7 @@ var timeFormats = []string{
 }
 
 // SELECT used by all event list / single-event queries
-const eventListSelect = `SELECT e.id, e.uid, e.title, e.description, e.start_time, e.end_time, e.has_ball, e.has_workshop, e.has_festival, e.is_cancelled, e.tags, e.is_published, e.short_code, COALESCE(e.url,''), COALESCE(e.source,''), e.created_at, COALESCE(l.location,''), e.organization_id, COALESCE(e.pricing,''), e.location_id, COALESCE(l.town,''), COALESCE(l.country,''), COALESCE(l.latitude,''), COALESCE(l.longitude,''), COALESCE(e.workshop_difficulty,'') FROM events e LEFT JOIN locations l ON e.location_id = l.id`
+const eventListSelect = `SELECT e.id, e.uid, e.title, e.description, e.start_time, e.end_time, e.has_ball, e.has_workshop, e.has_festival, e.is_cancelled, e.tags, e.is_published, e.short_code, COALESCE(e.url,''), COALESCE(e.source,''), e.created_at, COALESCE(l.location,''), COALESCE(l.address,''), COALESCE(l.zipcode,''), e.organization_id, COALESCE(e.pricing,''), e.location_id, COALESCE(l.town,''), COALESCE(l.country,''), COALESCE(l.latitude,''), COALESCE(l.longitude,''), COALESCE(e.workshop_difficulty,'') FROM events e LEFT JOIN locations l ON e.location_id = l.id`
 
 // ── low-level helpers ──────────────────────────────────────────────────────
 
@@ -212,7 +214,8 @@ func scanEventRow(s scanner) (Event, error) {
 	var uid sql.NullString
 	if err := s.Scan(&event.ID, &uid, &event.Title, &event.Description, &startEpoch, &endEpoch,
 		&hasBallInt, &hasWorkshopInt, &hasFestivalInt, &isCancelledInt, &event.TagsJSON, &isPublishedInt,
-		&event.ShortCode, &event.URL, &event.Source, &event.CreatedAt, &event.Location, &orgID,
+		&event.ShortCode, &event.URL, &event.Source, &event.CreatedAt, &event.Location,
+		&event.LocationAddress, &event.LocationZipcode, &orgID,
 		&event.PricingJSON, &locID, &event.LocationTown, &event.LocationCountry,
 		&event.LocationLat, &event.LocationLng, &event.WorkshopDifficulty); err != nil {
 		return Event{}, err
@@ -259,12 +262,14 @@ func fetchEventByID(q querier, id int) (Event, error) {
 		`SELECT e.id, e.uid, e.title, e.description, e.start_time, e.end_time, e.has_ball, e.has_workshop,
 		 e.has_festival, e.is_cancelled, e.tags, e.is_published, e.short_code, COALESCE(e.url,''), COALESCE(e.source,''),
 		 e.created_at, e.organization_id, COALESCE(e.pricing,''), e.location_id,
-		 COALESCE(l.location,''), COALESCE(l.town,''), COALESCE(l.country,''), COALESCE(e.workshop_difficulty,'')
+		 COALESCE(l.location,''), COALESCE(l.address,''), COALESCE(l.zipcode,''),
+		 COALESCE(l.town,''), COALESCE(l.country,''), COALESCE(e.workshop_difficulty,'')
 		 FROM events e LEFT JOIN locations l ON e.location_id = l.id WHERE e.id = ?`, id,
 	).Scan(&event.ID, &uid, &event.Title, &event.Description, &startEpoch, &endEpoch,
 		&hasBallInt, &hasWorkshopInt, &hasFestivalInt, &isCancelledInt, &event.TagsJSON, &isPublishedInt,
 		&event.ShortCode, &event.URL, &event.Source, &event.CreatedAt, &orgID, &event.PricingJSON,
-		&locID, &event.Location, &event.LocationTown, &event.LocationCountry, &event.WorkshopDifficulty)
+		&locID, &event.Location, &event.LocationAddress, &event.LocationZipcode,
+		&event.LocationTown, &event.LocationCountry, &event.WorkshopDifficulty)
 	if uid.Valid {
 		event.UID = uid.String
 	}
