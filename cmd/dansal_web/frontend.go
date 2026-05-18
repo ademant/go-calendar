@@ -369,8 +369,21 @@ func orgFrontendHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *Dansa
 
 		actor, err := getActorBySlug(db, slug)
 		if err == sql.ErrNoRows {
-			http.NotFound(w, r)
-			return
+			orgs, oErr := client.GetOrganizations(r.Context())
+			if oErr != nil {
+				http.Error(w, "upstream error", http.StatusBadGateway)
+				return
+			}
+			for _, o := range orgs {
+				if orgSlug(o.Name) == slug {
+					actor, err = ensureActor(db, o.ID, slug)
+					break
+				}
+			}
+			if actor == nil {
+				http.NotFound(w, r)
+				return
+			}
 		} else if err != nil {
 			http.Error(w, "database error", http.StatusInternalServerError)
 			return

@@ -85,15 +85,20 @@
     function searchMusicians(q){
       var list=document.getElementById('ac-list');
       q=q.trim();
-      if(q.length<2){list.hidden=true;return;}
+      if(!q){list.hidden=true;return;}
       var sel=selectedIDs();
       var results=allMusicians.filter(function(m){
         return m.name.toLowerCase().indexOf(q.toLowerCase())>=0 && sel.indexOf(m.id)<0;
       }).slice(0,8);
       if(results.length===0){list.hidden=true;return;}
       list.innerHTML=results.map(function(m){
-        return '<div class="ac-item" onclick="addMusician('+m.id+','+JSON.stringify(m.name)+')" tabindex="0">'+m.name+'</div>';
+        var esc=m.name.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+        return '<div class="ac-item" data-id="'+m.id+'" data-name="'+esc+'" tabindex="0">'+m.name+'</div>';
       }).join('');
+      list.querySelectorAll('.ac-item').forEach(function(item){
+        item.addEventListener('click',function(){addMusician(parseInt(this.dataset.id,10),this.dataset.name);});
+        item.addEventListener('keydown',function(e){if(e.key==='Enter')addMusician(parseInt(this.dataset.id,10),this.dataset.name);});
+      });
       list.hidden=false;
     }
     function addMusician(id,name){

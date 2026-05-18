@@ -2,7 +2,6 @@ package main
 
 import (
 	"encoding/json"
-	"fmt"
 	"io"
 	"log"
 	"net/http"
@@ -1303,6 +1302,6 @@ func adminEventSaveHandler(cfg *Config, tmpls *Templates, client *DansalClient, 
 			log.Printf("replace timetable error: %v", err)
 		}
 
-		http.Redirect(w, r, fmt.Sprintf("/events/%d", id), http.StatusSeeOther)
+		http.Redirect(w, r, "/admin/events", http.StatusSeeOther)
 	}
 }
