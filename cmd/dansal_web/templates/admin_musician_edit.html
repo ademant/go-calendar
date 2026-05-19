@@ -19,6 +19,12 @@
     <a href="https://musicbrainz.org/artist/{{.Musician.MBID}}" target="_blank" rel="noopener"><code>{{.Musician.MBID}}</code></a>
   </p>
   {{end}}
+  {{if .Musician.DiscogsID}}
+  <p class="mb-current">
+    {{$.Strings.T "musician_discogs_linked"}}:
+    <a href="https://www.discogs.com/artist/{{.Musician.DiscogsID}}" target="_blank" rel="noopener"><code>{{.Musician.DiscogsID}}</code></a>
+  </p>
+  {{end}}
   <div class="mb-tabs">
     <button type="button" class="mb-tab active" data-svc="mb">MusicBrainz</button>
     <button type="button" class="mb-tab" data-svc="discogs">Discogs</button>
@@ -69,6 +75,14 @@
 
   <label for="wikidata_id">{{$.Strings.T "musician_wikidata"}}</label>
   <input id="wikidata_id" type="text" name="wikidata_id" value="{{.Musician.WikidataID}}" placeholder="Q12345">
+
+  <label for="discogs_id">Discogs ID</label>
+  <div class="mbid-row">
+    <input id="discogs_id" type="text" name="discogs_id" value="{{.Musician.DiscogsID}}" placeholder="12345">
+    {{if .Musician.DiscogsID}}
+    <a href="https://www.discogs.com/artist/{{.Musician.DiscogsID}}" target="_blank" rel="noopener" class="btn-sm mb-open">↗ Discogs</a>
+    {{end}}
+  </div>
 
   <fieldset class="social-fieldset">
     <legend>{{$.Strings.T "musician_social"}}</legend>
@@ -185,6 +199,7 @@ function removeImage(url){var f=document.createElement('form');f.method='post';f
   var bcRes       = document.getElementById('bandcamp-results');
   var matchHint   = document.getElementById('match-hint');
   var mbidInp     = document.getElementById('mbid');
+  var discogsIdInp= document.getElementById('discogs_id');
   var nameInp     = document.getElementById('bandname');
   var countryInp  = document.getElementById('country');
   var yearInp     = document.getElementById('begin_year');
@@ -269,9 +284,9 @@ function removeImage(url){var f=document.createElement('form');f.method='post';f
       meta.textContent = parts.join(' · ');
       var btn = makePickBtn(function(){
         mbidInp.value = a.id;
-        if (!nameInp.value.trim()) nameInp.value = a.name;
-        if (!countryInp.value.trim() && a.country) countryInp.value = a.country;
-        if (!yearInp.value.trim() && a['life-span'] && a['life-span'].begin) yearInp.value = a['life-span'].begin.slice(0,4);
+        if (a.name) nameInp.value = a.name;
+        if (a.country) countryInp.value = a.country;
+        if (a['life-span'] && a['life-span'].begin) yearInp.value = a['life-span'].begin.slice(0,4);
         mbResults.innerHTML = '';
         mbidInp.focus();
       });
@@ -296,10 +311,12 @@ function removeImage(url){var f=document.createElement('form');f.method='post';f
       if (r.country) parts.push(r.country);
       meta.textContent = parts.join(' · ');
       var btn = makePickBtn(function(){
-        if (!nameInp.value.trim()) nameInp.value = r.title;
-        if (!countryInp.value.trim() && r.country) countryInp.value = r.country;
-        if (!yearInp.value.trim() && r.year) yearInp.value = r.year;
+        discogsIdInp.value = String(r.id);
+        if (r.title) nameInp.value = r.title;
+        if (r.country) countryInp.value = r.country;
+        if (r.year) yearInp.value = r.year;
         discogsRes.innerHTML = '';
+        discogsIdInp.focus();
       });
       li.appendChild(info); li.appendChild(meta); li.appendChild(btn);
       discogsRes.appendChild(li);
@@ -319,8 +336,8 @@ function removeImage(url){var f=document.createElement('form');f.method='post';f
       meta.className = 'mb-meta';
       if (r.url) meta.textContent = r.url.replace(/^https?:\/\//, '');
       var btn = makePickBtn(function(){
-        if (!nameInp.value.trim()) nameInp.value = r.name;
-        if (!siteInp.value.trim() && r.url) siteInp.value = r.url;
+        if (r.name) nameInp.value = r.name;
+        if (r.url) siteInp.value = r.url;
         bcRes.innerHTML = '';
       });
       li.appendChild(info); li.appendChild(meta); li.appendChild(btn);

@@ -494,6 +494,7 @@ func migrateDB() {
 	db.Exec("ALTER TABLE musicians ADD COLUMN biography TEXT")
 	db.Exec("ALTER TABLE musicians ADD COLUMN members_json TEXT")
 	db.Exec("ALTER TABLE musicians ADD COLUMN albums_json TEXT")
+	db.Exec("ALTER TABLE musicians ADD COLUMN discogs_id TEXT")
 }
 
 func createTables() error {

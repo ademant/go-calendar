@@ -109,6 +109,7 @@ type Musician struct {
 	Description  string `json:"description,omitempty"`
 	MBID         string `json:"mbid,omitempty"`
 	WikidataID   string `json:"wikidata_id,omitempty"`
+	DiscogsID    string `json:"discogs_id,omitempty"`
 	Country      string `json:"country,omitempty"`
 	BeginYear    int    `json:"begin_year,omitempty"`
 	Biography    string `json:"biography,omitempty"`

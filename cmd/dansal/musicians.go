@@ -18,6 +18,7 @@ type Musician struct {
 	Description  string `json:"description,omitempty"`
 	MBID         string `json:"mbid,omitempty"`
 	WikidataID   string `json:"wikidata_id,omitempty"`
+	DiscogsID    string `json:"discogs_id,omitempty"`
 	Country      string `json:"country,omitempty"`
 	BeginYear    int    `json:"begin_year,omitempty"`
 	Biography    string `json:"biography,omitempty"`
@@ -38,6 +39,7 @@ type MusicianCreateRequest struct {
 	Description  string `json:"description"`
 	MBID         string `json:"mbid"`
 	WikidataID   string `json:"wikidata_id"`
+	DiscogsID    string `json:"discogs_id"`
 	Country      string `json:"country"`
 	BeginYear    int    `json:"begin_year"`
 	Biography    string `json:"biography"`
@@ -56,6 +58,7 @@ type MusicianUpdateRequest struct {
 	Description  string `json:"description"`
 	MBID         string `json:"mbid"`
 	WikidataID   string `json:"wikidata_id"`
+	DiscogsID    string `json:"discogs_id"`
 	Country      string `json:"country"`
 	BeginYear    int    `json:"begin_year"`
 	Biography    string `json:"biography"`
@@ -69,7 +72,7 @@ type MusicianUpdateRequest struct {
 
 const musicianCols = `id, bandname,
 	COALESCE(short_name,''), COALESCE(internetsite,''), COALESCE(description,''),
-	COALESCE(mbid,''), COALESCE(wikidata_id,''), COALESCE(country,''), COALESCE(begin_year,0),
+	COALESCE(mbid,''), COALESCE(wikidata_id,''), COALESCE(discogs_id,''), COALESCE(country,''), COALESCE(begin_year,0),
 	COALESCE(biography,''), COALESCE(members_json,''), COALESCE(albums_json,''),
 	COALESCE(mastodon,''), COALESCE(instagram,''),
 	COALESCE(facebook,''), COALESCE(soundcloud,''), created_at`
@@ -77,7 +80,7 @@ const musicianCols = `id, bandname,
 func scanMusician(row interface{ Scan(...any) error }) (Musician, error) {
 	var m Musician
 	err := row.Scan(&m.ID, &m.Bandname, &m.ShortName, &m.Internetsite, &m.Description,
-		&m.MBID, &m.WikidataID, &m.Country, &m.BeginYear, &m.Biography, &m.MembersJSON, &m.AlbumsJSON,
+		&m.MBID, &m.WikidataID, &m.DiscogsID, &m.Country, &m.BeginYear, &m.Biography, &m.MembersJSON, &m.AlbumsJSON,
 		&m.Mastodon, &m.Instagram, &m.Facebook, &m.Soundcloud, &m.CreatedAt)
 	if err == nil {
 		m.ImageURL = musicianImageURL(m.ID)
@@ -171,10 +174,10 @@ func createMusician(w http.ResponseWriter, r *http.Request) {
 	musicians := make([]Musician, 0, len(reqs))
 	for _, req := range reqs {
 		m, err := scanMusician(db.QueryRow(
-			`INSERT INTO musicians (bandname, short_name, internetsite, description, mbid, wikidata_id, country, begin_year, biography, members_json, albums_json, mastodon, instagram, facebook, soundcloud)
-			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING `+musicianCols,
+			`INSERT INTO musicians (bandname, short_name, internetsite, description, mbid, wikidata_id, discogs_id, country, begin_year, biography, members_json, albums_json, mastodon, instagram, facebook, soundcloud)
+			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING `+musicianCols,
 			req.Bandname, req.ShortName, req.Internetsite, req.Description, req.MBID,
-			req.WikidataID, req.Country, req.BeginYear, req.Biography, req.MembersJSON, req.AlbumsJSON,
+			req.WikidataID, req.DiscogsID, req.Country, req.BeginYear, req.Biography, req.MembersJSON, req.AlbumsJSON,
 			req.Mastodon, req.Instagram, req.Facebook, req.Soundcloud,
 		))
 		if err != nil {
@@ -208,10 +211,10 @@ func updateMusician(w http.ResponseWriter, r *http.Request) {
 
 	result, err := db.Exec(
 		`UPDATE musicians SET bandname=?, short_name=?, internetsite=?, description=?, mbid=?,
-		 wikidata_id=?, country=?, begin_year=?, biography=?, members_json=?, albums_json=?,
+		 wikidata_id=?, discogs_id=?, country=?, begin_year=?, biography=?, members_json=?, albums_json=?,
 		 mastodon=?, instagram=?, facebook=?, soundcloud=? WHERE id=?`,
 		req.Bandname, req.ShortName, req.Internetsite, req.Description, req.MBID,
-		req.WikidataID, req.Country, req.BeginYear, req.Biography, req.MembersJSON, req.AlbumsJSON,
+		req.WikidataID, req.DiscogsID, req.Country, req.BeginYear, req.Biography, req.MembersJSON, req.AlbumsJSON,
 		req.Mastodon, req.Instagram, req.Facebook, req.Soundcloud, id,
 	)
 	if err != nil {

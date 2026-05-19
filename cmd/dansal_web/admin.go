@@ -303,6 +303,7 @@ func musicianFromForm(r *http.Request) Musician {
 		Description:  strings.TrimSpace(r.FormValue("description")),
 		MBID:         strings.TrimSpace(r.FormValue("mbid")),
 		WikidataID:   strings.TrimSpace(r.FormValue("wikidata_id")),
+		DiscogsID:    strings.TrimSpace(r.FormValue("discogs_id")),
 		Country:      strings.TrimSpace(r.FormValue("country")),
 		BeginYear:    beginYear,
 		Biography:    strings.TrimSpace(r.FormValue("biography")),
