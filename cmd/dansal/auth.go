@@ -259,7 +259,7 @@ func login(w http.ResponseWriter, r *http.Request) {
 
 	if !loginRateLimiter.Allow(clientIP) {
 		log.Printf("auth failed from %s: login rate limit exceeded", clientIP)
-		http.Error(w, "Too many login attempts", http.StatusTooManyRequests)
+		writeError(w, "Too many login attempts", http.StatusTooManyRequests)
 		return
 	}
 

@@ -150,6 +150,6 @@ func metricsIPGuard(next http.Handler) http.Handler {
 				return
 			}
 		}
-		http.Error(w, "Forbidden", http.StatusForbidden)
+		writeError(w, "Forbidden", http.StatusForbidden)
 	})
 }

@@ -103,7 +103,7 @@ func getMusicians(w http.ResponseWriter, r *http.Request) {
 		rows, err = db.Query("SELECT " + musicianCols + " FROM musicians ORDER BY bandname")
 	}
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	defer rows.Close()
@@ -112,7 +112,7 @@ func getMusicians(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		m, err := scanMusician(rows)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			writeError(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 		musicians = append(musicians, m)
@@ -128,10 +128,10 @@ func getMusician(w http.ResponseWriter, r *http.Request) {
 	id := mux.Vars(r)["id"]
 	musician, err := scanMusician(db.QueryRow("SELECT "+musicianCols+" FROM musicians WHERE id = ?", id))
 	if err == sql.ErrNoRows {
-		http.Error(w, "Musician not found", http.StatusNotFound)
+		writeError(w, "Musician not found", http.StatusNotFound)
 		return
 	} else if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
@@ -144,7 +144,7 @@ func createMusician(w http.ResponseWriter, r *http.Request) {
 
 	requesterRole := r.Header.Get("X-User-Role")
 	if requesterRole != RoleAdmin && requesterRole != RoleUser {
-		http.Error(w, "Forbidden", http.StatusForbidden)
+		writeError(w, "Forbidden", http.StatusForbidden)
 		return
 	}
 
@@ -154,7 +154,7 @@ func createMusician(w http.ResponseWriter, r *http.Request) {
 		if errors.As(err, new(*http.MaxBytesError)) {
 			status = http.StatusRequestEntityTooLarge
 		}
-		http.Error(w, err.Error(), status)
+		writeError(w, err.Error(), status)
 		return
 	}
 
@@ -162,7 +162,7 @@ func createMusician(w http.ResponseWriter, r *http.Request) {
 	if json.Unmarshal(body, &reqs) != nil || len(reqs) == 0 || reqs[0].Bandname == "" {
 		var single MusicianCreateRequest
 		if err := json.Unmarshal(body, &single); err != nil {
-			http.Error(w, "Invalid request body", http.StatusBadRequest)
+			writeError(w, "Invalid request body", http.StatusBadRequest)
 			return
 		}
 		reqs = []MusicianCreateRequest{single}
@@ -178,7 +178,7 @@ func createMusician(w http.ResponseWriter, r *http.Request) {
 			req.Mastodon, req.Instagram, req.Facebook, req.Soundcloud,
 		))
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			writeError(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 		musicians = append(musicians, m)
@@ -194,7 +194,7 @@ func updateMusician(w http.ResponseWriter, r *http.Request) {
 
 	requesterRole := r.Header.Get("X-User-Role")
 	if requesterRole != RoleAdmin && requesterRole != RoleUser {
-		http.Error(w, "Forbidden", http.StatusForbidden)
+		writeError(w, "Forbidden", http.StatusForbidden)
 		return
 	}
 
@@ -202,7 +202,7 @@ func updateMusician(w http.ResponseWriter, r *http.Request) {
 
 	var req MusicianUpdateRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeError(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
@@ -215,19 +215,19 @@ func updateMusician(w http.ResponseWriter, r *http.Request) {
 		req.Mastodon, req.Instagram, req.Facebook, req.Soundcloud, id,
 	)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
 	rowsAffected, _ := result.RowsAffected()
 	if rowsAffected == 0 {
-		http.Error(w, "Musician not found", http.StatusNotFound)
+		writeError(w, "Musician not found", http.StatusNotFound)
 		return
 	}
 
 	musician, err := scanMusician(db.QueryRow("SELECT "+musicianCols+" FROM musicians WHERE id = ?", id))
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
@@ -238,7 +238,7 @@ func updateMusician(w http.ResponseWriter, r *http.Request) {
 func deleteMusician(w http.ResponseWriter, r *http.Request) {
 	requesterRole := r.Header.Get("X-User-Role")
 	if requesterRole != RoleAdmin && requesterRole != RoleUser {
-		http.Error(w, "Forbidden", http.StatusForbidden)
+		writeError(w, "Forbidden", http.StatusForbidden)
 		return
 	}
 
@@ -246,13 +246,13 @@ func deleteMusician(w http.ResponseWriter, r *http.Request) {
 
 	result, err := db.Exec("DELETE FROM musicians WHERE id = ?", id)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
 	rowsAffected, _ := result.RowsAffected()
 	if rowsAffected == 0 {
-		http.Error(w, "Musician not found", http.StatusNotFound)
+		writeError(w, "Musician not found", http.StatusNotFound)
 		return
 	}
 

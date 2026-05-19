@@ -126,7 +126,7 @@ func getUsers(w http.ResponseWriter, r *http.Request) {
 
 	rows, err := db.Query("SELECT id, username, email, role, COALESCE(description,''), COALESCE(telegram,''), COALESCE(telegram_chat_id,''), COALESCE(matrix,''), COALESCE(mastodon,''), COALESCE(website,''), COALESCE(email_verified,0), COALESCE(telegram_verified,0), COALESCE(matrix_verified,0), COALESCE(disabled,0), created_at FROM users")
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	defer rows.Close()
@@ -136,7 +136,7 @@ func getUsers(w http.ResponseWriter, r *http.Request) {
 		var user User
 		var emailVer, telegramVer, matrixVer, disabled int
 		if err := rows.Scan(&user.ID, &user.Username, &user.Email, &user.Role, &user.Description, &user.Telegram, &user.TelegramChatID, &user.Matrix, &user.Mastodon, &user.Website, &emailVer, &telegramVer, &matrixVer, &disabled, &user.CreatedAt); err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			writeError(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 		user.EmailVerified = emailVer == 1
@@ -154,7 +154,7 @@ func createUser(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
 	if r.Header.Get("X-User-Role") != RoleAdmin {
-		http.Error(w, "Forbidden: only admins may create users directly; use invite links instead", http.StatusForbidden)
+		writeError(w, "Forbidden: only admins may create users directly; use invite links instead", http.StatusForbidden)
 		return
 	}
 
@@ -165,7 +165,7 @@ func createUser(w http.ResponseWriter, r *http.Request) {
 	if contentType == "application/x-www-form-urlencoded" {
 		// Parse form data
 		if err := r.ParseForm(); err != nil {
-			http.Error(w, "Invalid form data", http.StatusBadRequest)
+			writeError(w, "Invalid form data", http.StatusBadRequest)
 			return
 		}
 		req.Username = r.FormValue("username")
@@ -177,19 +177,19 @@ func createUser(w http.ResponseWriter, r *http.Request) {
 	} else {
 		// Default to JSON parsing
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			http.Error(w, "Invalid request body", http.StatusBadRequest)
+			writeError(w, "Invalid request body", http.StatusBadRequest)
 			return
 		}
 	}
 
 	// Validate input
 	if req.Username == "" || req.Email == "" || req.Password == "" {
-		http.Error(w, "Username, email, and password are required", http.StatusBadRequest)
+		writeError(w, "Username, email, and password are required", http.StatusBadRequest)
 		return
 	}
 
 	if isReservedUsername(req.Username) {
-		http.Error(w, "Username is reserved", http.StatusBadRequest)
+		writeError(w, "Username is reserved", http.StatusBadRequest)
 		return
 	}
 
@@ -199,7 +199,7 @@ func createUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if !validateRole(req.Role) {
-		http.Error(w, "Invalid role. Allowed values: admin, user, publisher, viewer", http.StatusBadRequest)
+		writeError(w, "Invalid role. Allowed values: admin, user, publisher, viewer", http.StatusBadRequest)
 		return
 	}
 
@@ -212,7 +212,7 @@ func createUser(w http.ResponseWriter, r *http.Request) {
 		req.Username, req.Email, passwordHash, req.Role, req.Telegram, req.Matrix,
 	)
 	if err != nil {
-		http.Error(w, "Username or email already exists", http.StatusConflict)
+		writeError(w, "Username or email already exists", http.StatusConflict)
 		return
 	}
 
@@ -249,11 +249,11 @@ func getUser(w http.ResponseWriter, r *http.Request) {
 	user.Disabled = disabled == 1
 
 	if err == sql.ErrNoRows {
-		http.Error(w, "User not found", http.StatusNotFound)
+		writeError(w, "User not found", http.StatusNotFound)
 		return
 	}
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
@@ -268,7 +268,7 @@ func updateUser(w http.ResponseWriter, r *http.Request) {
 	id := vars["id"]
 	targetID, err := strconv.Atoi(id)
 	if err != nil {
-		http.Error(w, "Invalid user ID", http.StatusBadRequest)
+		writeError(w, "Invalid user ID", http.StatusBadRequest)
 		return
 	}
 
@@ -276,31 +276,31 @@ func updateUser(w http.ResponseWriter, r *http.Request) {
 	requesterRole := r.Header.Get("X-User-Role")
 	requesterID, err := strconv.Atoi(requesterIDStr)
 	if err != nil {
-		http.Error(w, "Invalid requester information", http.StatusUnauthorized)
+		writeError(w, "Invalid requester information", http.StatusUnauthorized)
 		return
 	}
 
 	var req UserUpdateRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		writeError(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
 
 	// Validate role if provided
 	if req.Role != "" && !validateRole(req.Role) {
-		http.Error(w, "Invalid role. Allowed values: admin, user, publisher, viewer", http.StatusBadRequest)
+		writeError(w, "Invalid role. Allowed values: admin, user, publisher, viewer", http.StatusBadRequest)
 		return
 	}
 
 	// Only admin or the user themself can update user details
 	if requesterRole != RoleAdmin && requesterID != targetID {
-		http.Error(w, "Forbidden: only the user or an admin may update this account", http.StatusForbidden)
+		writeError(w, "Forbidden: only the user or an admin may update this account", http.StatusForbidden)
 		return
 	}
 
 	// Regular users may not change their own role
 	if req.Role != "" && requesterRole != RoleAdmin {
-		http.Error(w, "Forbidden: only admin may change role", http.StatusForbidden)
+		writeError(w, "Forbidden: only admin may change role", http.StatusForbidden)
 		return
 	}
 
@@ -310,11 +310,11 @@ func updateUser(w http.ResponseWriter, r *http.Request) {
 	err = db.QueryRow("SELECT id, username, email, role, COALESCE(description,''), COALESCE(telegram,''), COALESCE(telegram_chat_id,''), COALESCE(matrix,''), COALESCE(mastodon,''), COALESCE(website,''), COALESCE(email_verified,0), COALESCE(telegram_verified,0), COALESCE(matrix_verified,0), COALESCE(disabled,0), created_at FROM users WHERE id = ?", id).
 		Scan(&user.ID, &user.Username, &user.Email, &user.Role, &user.Description, &user.Telegram, &user.TelegramChatID, &user.Matrix, &user.Mastodon, &user.Website, &emailVer, &telegramVer, &matrixVer, &disabledInt, &user.CreatedAt)
 	if err == sql.ErrNoRows {
-		http.Error(w, "User not found", http.StatusNotFound)
+		writeError(w, "User not found", http.StatusNotFound)
 		return
 	}
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	user.EmailVerified = emailVer == 1
@@ -349,28 +349,28 @@ func updateUser(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.EmailVerified != nil {
 		if requesterRole != RoleAdmin {
-			http.Error(w, "Forbidden: only admin may change verification flags", http.StatusForbidden)
+			writeError(w, "Forbidden: only admin may change verification flags", http.StatusForbidden)
 			return
 		}
 		user.EmailVerified = *req.EmailVerified
 	}
 	if req.TelegramVerified != nil {
 		if requesterRole != RoleAdmin {
-			http.Error(w, "Forbidden: only admin may change verification flags", http.StatusForbidden)
+			writeError(w, "Forbidden: only admin may change verification flags", http.StatusForbidden)
 			return
 		}
 		user.TelegramVerified = *req.TelegramVerified
 	}
 	if req.MatrixVerified != nil {
 		if requesterRole != RoleAdmin {
-			http.Error(w, "Forbidden: only admin may change verification flags", http.StatusForbidden)
+			writeError(w, "Forbidden: only admin may change verification flags", http.StatusForbidden)
 			return
 		}
 		user.MatrixVerified = *req.MatrixVerified
 	}
 	if req.Disabled != nil {
 		if requesterRole != RoleAdmin {
-			http.Error(w, "Forbidden: only admin may change disabled flag", http.StatusForbidden)
+			writeError(w, "Forbidden: only admin may change disabled flag", http.StatusForbidden)
 			return
 		}
 		user.Disabled = *req.Disabled
@@ -381,7 +381,7 @@ func updateUser(w http.ResponseWriter, r *http.Request) {
 		user.Email, user.Role, user.Description, user.Telegram, user.TelegramChatID, user.Matrix, user.Mastodon, user.Website, user.EmailVerified, user.TelegramVerified, user.MatrixVerified, user.Disabled, id,
 	)
 	if err != nil {
-		http.Error(w, "Failed to update user", http.StatusInternalServerError)
+		writeError(w, "Failed to update user", http.StatusInternalServerError)
 		return
 	}
 
@@ -394,7 +394,7 @@ func deleteUser(w http.ResponseWriter, r *http.Request) {
 
 	requesterRole := r.Header.Get("X-User-Role")
 	if requesterRole != RoleAdmin {
-		http.Error(w, "Forbidden: only admins may delete users", http.StatusForbidden)
+		writeError(w, "Forbidden: only admins may delete users", http.StatusForbidden)
 		return
 	}
 
@@ -406,29 +406,29 @@ func deleteUser(w http.ResponseWriter, r *http.Request) {
 	var userRole string
 	err := db.QueryRow("SELECT id, role FROM users WHERE id = ?", id).Scan(&userID, &userRole)
 	if err == sql.ErrNoRows {
-		http.Error(w, "User not found", http.StatusNotFound)
+		writeError(w, "User not found", http.StatusNotFound)
 		return
 	}
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
 	if userRole == RoleAdmin {
-		http.Error(w, "Forbidden: admin users may not be deleted", http.StatusForbidden)
+		writeError(w, "Forbidden: admin users may not be deleted", http.StatusForbidden)
 		return
 	}
 
 	// Delete user
 	result, err := db.Exec("DELETE FROM users WHERE id = ?", id)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
 	rowsAffected, _ := result.RowsAffected()
 	if rowsAffected == 0 {
-		http.Error(w, "User not found", http.StatusNotFound)
+		writeError(w, "User not found", http.StatusNotFound)
 		return
 	}
 

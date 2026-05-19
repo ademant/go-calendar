@@ -74,13 +74,13 @@ func getMusicianImage(w http.ResponseWriter, r *http.Request) {
 	idStr := mux.Vars(r)["id"]
 	for _, c := range idStr {
 		if c < '0' || c > '9' {
-			http.Error(w, "Invalid musician ID", http.StatusBadRequest)
+			writeError(w, "Invalid musician ID", http.StatusBadRequest)
 			return
 		}
 	}
 	imgPath := filepath.Join(musicianImagesDir, idStr+".avif")
 	if _, err := os.Stat(imgPath); os.IsNotExist(err) {
-		http.Error(w, "Image not found", http.StatusNotFound)
+		writeError(w, "Image not found", http.StatusNotFound)
 		return
 	}
 	w.Header().Set("Content-Type", "image/avif")
@@ -91,35 +91,35 @@ func getMusicianImage(w http.ResponseWriter, r *http.Request) {
 func uploadMusicianImage(w http.ResponseWriter, r *http.Request) {
 	userRole := r.Header.Get("X-User-Role")
 	if userRole != RoleAdmin && userRole != RoleUser {
-		http.Error(w, "Forbidden", http.StatusForbidden)
+		writeError(w, "Forbidden", http.StatusForbidden)
 		return
 	}
 	idStr := mux.Vars(r)["id"]
 	id, err := strconv.Atoi(idStr)
 	if err != nil {
-		http.Error(w, "Invalid musician ID", http.StatusBadRequest)
+		writeError(w, "Invalid musician ID", http.StatusBadRequest)
 		return
 	}
 	var exists int
 	if err := db.QueryRow("SELECT id FROM musicians WHERE id=?", id).Scan(&exists); err != nil {
-		http.Error(w, "Musician not found", http.StatusNotFound)
+		writeError(w, "Musician not found", http.StatusNotFound)
 		return
 	}
 	if err := r.ParseMultipartForm(config.Server.MaxBodyBytes); err != nil {
-		http.Error(w, "Failed to parse form", http.StatusBadRequest)
+		writeError(w, "Failed to parse form", http.StatusBadRequest)
 		return
 	}
 	file, _, err := r.FormFile("image")
 	if err != nil {
-		http.Error(w, "Missing image field", http.StatusBadRequest)
+		writeError(w, "Missing image field", http.StatusBadRequest)
 		return
 	}
 	defer file.Close()
 	if err := saveImageToDir(id, musicianImagesDir, file); err != nil {
 		if errors.Is(err, errNotImage) {
-			http.Error(w, "File is not an image", http.StatusUnsupportedMediaType)
+			writeError(w, "File is not an image", http.StatusUnsupportedMediaType)
 		} else {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			writeError(w, err.Error(), http.StatusInternalServerError)
 		}
 		return
 	}
@@ -131,13 +131,13 @@ func uploadMusicianImage(w http.ResponseWriter, r *http.Request) {
 func deleteMusicianImage(w http.ResponseWriter, r *http.Request) {
 	userRole := r.Header.Get("X-User-Role")
 	if userRole != RoleAdmin && userRole != RoleUser {
-		http.Error(w, "Forbidden", http.StatusForbidden)
+		writeError(w, "Forbidden", http.StatusForbidden)
 		return
 	}
 	idStr := mux.Vars(r)["id"]
 	for _, c := range idStr {
 		if c < '0' || c > '9' {
-			http.Error(w, "Invalid musician ID", http.StatusBadRequest)
+			writeError(w, "Invalid musician ID", http.StatusBadRequest)
 			return
 		}
 	}
@@ -145,10 +145,10 @@ func deleteMusicianImage(w http.ResponseWriter, r *http.Request) {
 	imgPath := filepath.Join(musicianImagesDir, idStr+".avif")
 	if err := os.Remove(imgPath); err != nil {
 		if os.IsNotExist(err) {
-			http.Error(w, "Image not found", http.StatusNotFound)
+			writeError(w, "Image not found", http.StatusNotFound)
 			return
 		}
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	musicianImgCache.remove(id)

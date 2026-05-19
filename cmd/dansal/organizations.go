@@ -124,7 +124,7 @@ func getOrganizations(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	rows, err := db.Query("SELECT " + orgSelectCols + " FROM organizations ORDER BY id")
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	defer rows.Close()
@@ -132,7 +132,7 @@ func getOrganizations(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		o, err := scanOrg(rows)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			writeError(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 		orgs = append(orgs, o)
@@ -144,16 +144,16 @@ func getOrganizations(w http.ResponseWriter, r *http.Request) {
 func createOrganization(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	if r.Header.Get("X-User-Role") != RoleAdmin {
-		http.Error(w, "Forbidden: only admins may create organizations", http.StatusForbidden)
+		writeError(w, "Forbidden: only admins may create organizations", http.StatusForbidden)
 		return
 	}
 	var req CreateOrganizationRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		writeError(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
 	if req.Name == "" {
-		http.Error(w, "name is required", http.StatusBadRequest)
+		writeError(w, "name is required", http.StatusBadRequest)
 		return
 	}
 	o, err := scanOrg(db.QueryRow(
@@ -161,7 +161,7 @@ func createOrganization(w http.ResponseWriter, r *http.Request) {
 		req.Name, req.Description, req.ActorName, req.Website, req.Instagram, req.Mastodon, req.Facebook, req.ContactEmail,
 	))
 	if err != nil {
-		http.Error(w, "Failed to create organization", http.StatusInternalServerError)
+		writeError(w, "Failed to create organization", http.StatusInternalServerError)
 		return
 	}
 	w.WriteHeader(http.StatusCreated)
@@ -174,11 +174,11 @@ func getOrganization(w http.ResponseWriter, r *http.Request) {
 	id := mux.Vars(r)["id"]
 	o, err := scanOrg(db.QueryRow("SELECT "+orgSelectCols+" FROM organizations WHERE id = ?", id))
 	if err == sql.ErrNoRows {
-		http.Error(w, "Organization not found", http.StatusNotFound)
+		writeError(w, "Organization not found", http.StatusNotFound)
 		return
 	}
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	json.NewEncoder(w).Encode(o)
@@ -188,22 +188,22 @@ func getOrganization(w http.ResponseWriter, r *http.Request) {
 func updateOrganization(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	if r.Header.Get("X-User-Role") != RoleAdmin {
-		http.Error(w, "Forbidden: only admins may update organizations", http.StatusForbidden)
+		writeError(w, "Forbidden: only admins may update organizations", http.StatusForbidden)
 		return
 	}
 	id := mux.Vars(r)["id"]
 	o, err := scanOrg(db.QueryRow("SELECT "+orgSelectCols+" FROM organizations WHERE id = ?", id))
 	if err == sql.ErrNoRows {
-		http.Error(w, "Organization not found", http.StatusNotFound)
+		writeError(w, "Organization not found", http.StatusNotFound)
 		return
 	}
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	var req CreateOrganizationRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		writeError(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
 	if req.Name != "" {
@@ -220,7 +220,7 @@ func updateOrganization(w http.ResponseWriter, r *http.Request) {
 		"UPDATE organizations SET name=?, description=?, actor_name=?, website=?, instagram=?, mastodon=?, facebook=?, contact_email=? WHERE id=?",
 		o.Name, o.Description, o.ActorName, o.Website, o.Instagram, o.Mastodon, o.Facebook, o.ContactEmail, id,
 	); err != nil {
-		http.Error(w, "Failed to update organization", http.StatusInternalServerError)
+		writeError(w, "Failed to update organization", http.StatusInternalServerError)
 		return
 	}
 	json.NewEncoder(w).Encode(o)
@@ -229,17 +229,17 @@ func updateOrganization(w http.ResponseWriter, r *http.Request) {
 // DELETE /api/v1/organizations/{id}
 func deleteOrganization(w http.ResponseWriter, r *http.Request) {
 	if r.Header.Get("X-User-Role") != RoleAdmin {
-		http.Error(w, "Forbidden: only admins may delete organizations", http.StatusForbidden)
+		writeError(w, "Forbidden: only admins may delete organizations", http.StatusForbidden)
 		return
 	}
 	id := mux.Vars(r)["id"]
 	result, err := db.Exec("DELETE FROM organizations WHERE id = ?", id)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	if n, _ := result.RowsAffected(); n == 0 {
-		http.Error(w, "Organization not found", http.StatusNotFound)
+		writeError(w, "Organization not found", http.StatusNotFound)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -256,7 +256,7 @@ func getOrganizationMembers(w http.ResponseWriter, r *http.Request) {
 		WHERE om.organization_id = ?
 		ORDER BY om.created_at`, id)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	defer rows.Close()
@@ -264,7 +264,7 @@ func getOrganizationMembers(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		var m OrganizationMember
 		if err := rows.Scan(&m.OrganizationID, &m.UserID, &m.Username, &m.CreatedAt); err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			writeError(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 		members = append(members, m)
@@ -276,29 +276,29 @@ func getOrganizationMembers(w http.ResponseWriter, r *http.Request) {
 func addOrganizationMember(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	if r.Header.Get("X-User-Role") != RoleAdmin {
-		http.Error(w, "Forbidden: only admins may manage organization members", http.StatusForbidden)
+		writeError(w, "Forbidden: only admins may manage organization members", http.StatusForbidden)
 		return
 	}
 	orgID, err := strconv.Atoi(mux.Vars(r)["id"])
 	if err != nil {
-		http.Error(w, "Invalid organization ID", http.StatusBadRequest)
+		writeError(w, "Invalid organization ID", http.StatusBadRequest)
 		return
 	}
 	var req AddMemberRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.UserID == 0 {
-		http.Error(w, "user_id is required", http.StatusBadRequest)
+		writeError(w, "user_id is required", http.StatusBadRequest)
 		return
 	}
 
 	var n int
 	db.QueryRow("SELECT COUNT(*) FROM organizations WHERE id = ?", orgID).Scan(&n)
 	if n == 0 {
-		http.Error(w, "Organization not found", http.StatusNotFound)
+		writeError(w, "Organization not found", http.StatusNotFound)
 		return
 	}
 	db.QueryRow("SELECT COUNT(*) FROM users WHERE id = ?", req.UserID).Scan(&n)
 	if n == 0 {
-		http.Error(w, "User not found", http.StatusNotFound)
+		writeError(w, "User not found", http.StatusNotFound)
 		return
 	}
 
@@ -306,7 +306,7 @@ func addOrganizationMember(w http.ResponseWriter, r *http.Request) {
 		"INSERT OR IGNORE INTO organization_members (organization_id, user_id) VALUES (?, ?)",
 		orgID, req.UserID,
 	); err != nil {
-		http.Error(w, "Failed to add member", http.StatusInternalServerError)
+		writeError(w, "Failed to add member", http.StatusInternalServerError)
 		return
 	}
 
@@ -323,7 +323,7 @@ func addOrganizationMember(w http.ResponseWriter, r *http.Request) {
 // DELETE /api/v1/organizations/{id}/members/{user_id}
 func removeOrganizationMember(w http.ResponseWriter, r *http.Request) {
 	if r.Header.Get("X-User-Role") != RoleAdmin {
-		http.Error(w, "Forbidden: only admins may manage organization members", http.StatusForbidden)
+		writeError(w, "Forbidden: only admins may manage organization members", http.StatusForbidden)
 		return
 	}
 	vars := mux.Vars(r)
@@ -332,11 +332,11 @@ func removeOrganizationMember(w http.ResponseWriter, r *http.Request) {
 		vars["id"], vars["user_id"],
 	)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	if n, _ := result.RowsAffected(); n == 0 {
-		http.Error(w, "Member not found", http.StatusNotFound)
+		writeError(w, "Member not found", http.StatusNotFound)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)

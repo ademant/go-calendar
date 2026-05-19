@@ -7,6 +7,7 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"log/syslog"
 	"net"
 	"net/http"
 	"os"
@@ -79,7 +80,7 @@ func ConnLimitMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ip := getIP(r)
 		if !connLimiter.acquire(ip) {
-			http.Error(w, "Too many concurrent connections", http.StatusTooManyRequests)
+			writeError(w, "Too many concurrent connections", http.StatusTooManyRequests)
 			return
 		}
 		defer connLimiter.release(ip)
@@ -185,7 +186,7 @@ func RateLimitMiddleware(next http.Handler) http.Handler {
 		ip := getIP(r)
 		if !rateLimiter.Allow(ip) {
 			rateLimitRejectionsTotal.Inc()
-			http.Error(w, "Rate limit exceeded", http.StatusTooManyRequests)
+			writeError(w, "Rate limit exceeded", http.StatusTooManyRequests)
 			return
 		}
 		next.ServeHTTP(w, r)
@@ -732,6 +733,11 @@ func reloadConfig(path string) {
 func main() {
 	configPath := flag.String("config", "/etc/dansal/config.yaml", "path to config.yaml")
 	flag.Parse()
+
+	if w, err := syslog.New(syslog.LOG_INFO|syslog.LOG_DAEMON, "dansal"); err == nil {
+		log.SetOutput(w)
+		log.SetFlags(0)
+	}
 
 	var err error
 

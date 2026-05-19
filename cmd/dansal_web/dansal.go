@@ -17,6 +17,20 @@ type DansalClient struct {
 	HTTP    *http.Client
 }
 
+func apiErr(resp *http.Response) error {
+	b, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+	var body struct {
+		Error string `json:"error"`
+	}
+	if json.Unmarshal(b, &body) == nil && body.Error != "" {
+		return fmt.Errorf("dansal API %d: %s", resp.StatusCode, body.Error)
+	}
+	if msg := strings.TrimSpace(string(b)); msg != "" {
+		return fmt.Errorf("dansal API %d: %s", resp.StatusCode, msg)
+	}
+	return fmt.Errorf("dansal API: %s", resp.Status)
+}
+
 type Event struct {
 	ID              int        `json:"id"`
 	Title           string     `json:"title"`
@@ -173,7 +187,7 @@ func (c *DansalClient) get(ctx context.Context, path string, out interface{}) er
 		return fmt.Errorf("not found")
 	}
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("dansal API: %s", resp.Status)
+		return apiErr(resp)
 	}
 	return json.NewDecoder(resp.Body).Decode(out)
 }
@@ -195,7 +209,7 @@ func (c *DansalClient) Login(ctx context.Context, username, password string) (*L
 		return nil, fmt.Errorf("invalid credentials")
 	}
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("dansal API: %s", resp.Status)
+		return nil, apiErr(resp)
 	}
 	var lr LoginResponse
 	if err := json.NewDecoder(resp.Body).Decode(&lr); err != nil {
@@ -288,7 +302,7 @@ func (c *DansalClient) CreateMusician(ctx context.Context, m Musician, token str
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusCreated {
-		return Musician{}, fmt.Errorf("dansal API: %s", resp.Status)
+		return Musician{}, apiErr(resp)
 	}
 	var out []Musician
 	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil || len(out) == 0 {
@@ -305,7 +319,7 @@ func (c *DansalClient) UpdateMusician(ctx context.Context, id int, m Musician, t
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("dansal API: %s", resp.Status)
+		return apiErr(resp)
 	}
 	return nil
 }
@@ -317,7 +331,7 @@ func (c *DansalClient) DeleteMusician(ctx context.Context, id int, token string)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusNoContent {
-		return fmt.Errorf("dansal API: %s", resp.Status)
+		return apiErr(resp)
 	}
 	return nil
 }
@@ -329,7 +343,7 @@ func (c *DansalClient) DeleteLocation(ctx context.Context, id int, token string)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusNoContent {
-		return fmt.Errorf("dansal API: %s", resp.Status)
+		return apiErr(resp)
 	}
 	return nil
 }
@@ -421,7 +435,7 @@ func (c *DansalClient) CreateOrganization(ctx context.Context, org Organization,
 		return Organization{}, fmt.Errorf("forbidden")
 	}
 	if resp.StatusCode != http.StatusCreated {
-		return Organization{}, fmt.Errorf("dansal API: %s", resp.Status)
+		return Organization{}, apiErr(resp)
 	}
 	var out Organization
 	return out, json.NewDecoder(resp.Body).Decode(&out)
@@ -438,7 +452,7 @@ func (c *DansalClient) UpdateOrganization(ctx context.Context, id int, org Organ
 		return fmt.Errorf("forbidden")
 	}
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("dansal API: %s", resp.Status)
+		return apiErr(resp)
 	}
 	return nil
 }
@@ -453,7 +467,7 @@ func (c *DansalClient) DeleteOrganization(ctx context.Context, id int, token str
 		return fmt.Errorf("forbidden")
 	}
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent {
-		return fmt.Errorf("dansal API: %s", resp.Status)
+		return apiErr(resp)
 	}
 	return nil
 }
@@ -477,7 +491,7 @@ func (c *DansalClient) CreateFetchSource(ctx context.Context, rawURL, typ string
 		return 0, fmt.Errorf("forbidden")
 	}
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
-		return 0, fmt.Errorf("dansal API: %s", resp.Status)
+		return 0, apiErr(resp)
 	}
 	var events []interface{}
 	json.NewDecoder(resp.Body).Decode(&events)
@@ -491,7 +505,7 @@ func (c *DansalClient) GetFetchSources(ctx context.Context, token string) ([]Fet
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("dansal API: %s", resp.Status)
+		return nil, apiErr(resp)
 	}
 	var sources []FetchSource
 	return sources, json.NewDecoder(resp.Body).Decode(&sources)
@@ -507,7 +521,7 @@ func (c *DansalClient) GetFetchSource(ctx context.Context, id int, token string)
 		return FetchSource{}, fmt.Errorf("not found")
 	}
 	if resp.StatusCode != http.StatusOK {
-		return FetchSource{}, fmt.Errorf("dansal API: %s", resp.Status)
+		return FetchSource{}, apiErr(resp)
 	}
 	var src FetchSource
 	return src, json.NewDecoder(resp.Body).Decode(&src)
@@ -526,7 +540,7 @@ func (c *DansalClient) UpdateFetchSource(ctx context.Context, id int, typ string
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("dansal API: %s", resp.Status)
+		return apiErr(resp)
 	}
 	return nil
 }
@@ -558,7 +572,7 @@ func (c *DansalClient) CreateLocation(ctx context.Context, loc Location, token s
 		return Location{}, fmt.Errorf("forbidden")
 	}
 	if resp.StatusCode != http.StatusCreated {
-		return Location{}, fmt.Errorf("dansal API: %s", resp.Status)
+		return Location{}, apiErr(resp)
 	}
 	var created Location
 	return created, json.NewDecoder(resp.Body).Decode(&created)
@@ -575,7 +589,7 @@ func (c *DansalClient) UpdateLocation(ctx context.Context, id int, loc Location,
 		return fmt.Errorf("forbidden")
 	}
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("dansal API: %s", resp.Status)
+		return apiErr(resp)
 	}
 	return nil
 }
@@ -590,7 +604,7 @@ func (c *DansalClient) DeleteFetchSource(ctx context.Context, id int, token stri
 		return fmt.Errorf("not found")
 	}
 	if resp.StatusCode != http.StatusNoContent {
-		return fmt.Errorf("dansal API: %s", resp.Status)
+		return apiErr(resp)
 	}
 	return nil
 }
@@ -602,7 +616,7 @@ func (c *DansalClient) RunFetchSource(ctx context.Context, id int, token string)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
-		return 0, fmt.Errorf("dansal API: %s", resp.Status)
+		return 0, apiErr(resp)
 	}
 	var events []json.RawMessage
 	if err := json.NewDecoder(resp.Body).Decode(&events); err != nil {
@@ -619,7 +633,7 @@ func (c *DansalClient) BulkDeleteFetchSources(ctx context.Context, ids []int, to
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusNoContent {
-		return fmt.Errorf("dansal API: %s", resp.Status)
+		return apiErr(resp)
 	}
 	return nil
 }
@@ -632,7 +646,7 @@ func (c *DansalClient) BulkRunFetchSources(ctx context.Context, ids []int, token
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("dansal API: %s", resp.Status)
+		return apiErr(resp)
 	}
 	return nil
 }
@@ -645,7 +659,7 @@ func (c *DansalClient) BulkAssignFetchSourceOrg(ctx context.Context, ids []int, 
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusNoContent {
-		return fmt.Errorf("dansal API: %s", resp.Status)
+		return apiErr(resp)
 	}
 	return nil
 }
@@ -659,7 +673,7 @@ func (c *DansalClient) BulkAssignLocationOrg(ctx context.Context, ids []int, org
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusNoContent {
-		return fmt.Errorf("dansal API: %s", resp.Status)
+		return apiErr(resp)
 	}
 	return nil
 }
@@ -704,7 +718,7 @@ func (c *DansalClient) GetUser(ctx context.Context, id int, token string) (UserI
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return UserInfo{}, fmt.Errorf("dansal API: %s", resp.Status)
+		return UserInfo{}, apiErr(resp)
 	}
 	var u UserInfo
 	return u, json.NewDecoder(resp.Body).Decode(&u)
@@ -718,7 +732,7 @@ func (c *DansalClient) UpdateUser(ctx context.Context, id int, fields map[string
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("dansal API: %s", resp.Status)
+		return apiErr(resp)
 	}
 	return nil
 }
@@ -731,7 +745,7 @@ func (c *DansalClient) SendEmailVerification(ctx context.Context, id int, baseUR
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusNoContent {
-		return fmt.Errorf("dansal API: %s", resp.Status)
+		return apiErr(resp)
 	}
 	return nil
 }
@@ -744,7 +758,7 @@ func (c *DansalClient) GetTelegramVerifyLink(ctx context.Context, id int, baseUR
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("dansal API: %s", resp.Status)
+		return "", apiErr(resp)
 	}
 	var result struct {
 		DeepLink string `json:"deep_link"`
@@ -792,7 +806,7 @@ func (c *DansalClient) UseMagicLogin(ctx context.Context, token string) (*LoginR
 		return nil, fmt.Errorf("invalid_or_expired")
 	}
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("dansal API: %s", resp.Status)
+		return nil, apiErr(resp)
 	}
 	var lr LoginResponse
 	return &lr, json.NewDecoder(resp.Body).Decode(&lr)
@@ -900,7 +914,7 @@ func (c *DansalClient) DeleteEvent(ctx context.Context, id int, token string) er
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusNoContent {
-		return fmt.Errorf("dansal API: %s", resp.Status)
+		return apiErr(resp)
 	}
 	return nil
 }
@@ -912,7 +926,7 @@ func (c *DansalClient) DeleteEventImage(ctx context.Context, eventID int, token 
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusNoContent {
-		return fmt.Errorf("dansal API: %s", resp.Status)
+		return apiErr(resp)
 	}
 	return nil
 }
@@ -924,7 +938,7 @@ func (c *DansalClient) DeleteMusicianImage(ctx context.Context, id int, token st
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusNoContent {
-		return fmt.Errorf("dansal API: %s", resp.Status)
+		return apiErr(resp)
 	}
 	return nil
 }
@@ -936,7 +950,7 @@ func (c *DansalClient) DeleteOrgImage(ctx context.Context, id int, token string)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusNoContent {
-		return fmt.Errorf("dansal API: %s", resp.Status)
+		return apiErr(resp)
 	}
 	return nil
 }
@@ -1024,7 +1038,7 @@ func (c *DansalClient) ConsumeVerification(ctx context.Context, token string) er
 	if err != nil {
 		return err
 	}
-	resp.Body.Close()
+	defer resp.Body.Close()
 	if resp.StatusCode == http.StatusNotFound {
 		return fmt.Errorf("invalid")
 	}
@@ -1032,7 +1046,7 @@ func (c *DansalClient) ConsumeVerification(ctx context.Context, token string) er
 		return fmt.Errorf("expired")
 	}
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("dansal API: %s", resp.Status)
+		return apiErr(resp)
 	}
 	return nil
 }
@@ -1050,7 +1064,7 @@ func (c *DansalClient) GetOrganizationMembers(ctx context.Context, orgID int, to
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("dansal API: %s", resp.Status)
+		return nil, apiErr(resp)
 	}
 	var members []OrgMember
 	return members, json.NewDecoder(resp.Body).Decode(&members)
@@ -1087,9 +1101,9 @@ func (c *DansalClient) CreateContactPost(ctx context.Context, eventID int, post 
 	if err != nil {
 		return err
 	}
-	resp.Body.Close()
+	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusCreated {
-		return fmt.Errorf("dansal API: %s", resp.Status)
+		return apiErr(resp)
 	}
 	return nil
 }
@@ -1099,12 +1113,12 @@ func (c *DansalClient) DeleteContactPost(ctx context.Context, id int, token stri
 	if err != nil {
 		return err
 	}
-	resp.Body.Close()
+	defer resp.Body.Close()
 	if resp.StatusCode == http.StatusForbidden {
 		return fmt.Errorf("forbidden")
 	}
 	if resp.StatusCode != http.StatusNoContent {
-		return fmt.Errorf("dansal API: %s", resp.Status)
+		return apiErr(resp)
 	}
 	return nil
 }
@@ -1133,7 +1147,7 @@ func (c *DansalClient) GetBookings(ctx context.Context, eventID int, token strin
 		return nil, fmt.Errorf("forbidden")
 	}
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("dansal API: %s", resp.Status)
+		return nil, apiErr(resp)
 	}
 	var out []Booking
 	return out, json.NewDecoder(resp.Body).Decode(&out)
@@ -1145,12 +1159,12 @@ func (c *DansalClient) UpdateBookingStatus(ctx context.Context, bookingID int, s
 	if err != nil {
 		return err
 	}
-	resp.Body.Close()
+	defer resp.Body.Close()
 	if resp.StatusCode == http.StatusForbidden {
 		return fmt.Errorf("forbidden")
 	}
 	if resp.StatusCode != http.StatusNoContent {
-		return fmt.Errorf("dansal API: %s", resp.Status)
+		return apiErr(resp)
 	}
 	return nil
 }
@@ -1160,12 +1174,12 @@ func (c *DansalClient) DeleteBooking(ctx context.Context, bookingID int, token s
 	if err != nil {
 		return err
 	}
-	resp.Body.Close()
+	defer resp.Body.Close()
 	if resp.StatusCode == http.StatusForbidden {
 		return fmt.Errorf("forbidden")
 	}
 	if resp.StatusCode != http.StatusNoContent {
-		return fmt.Errorf("dansal API: %s", resp.Status)
+		return apiErr(resp)
 	}
 	return nil
 }
@@ -1183,7 +1197,7 @@ func (c *DansalClient) CheckinBooking(ctx context.Context, qrToken, authToken st
 		return Booking{}, fmt.Errorf("not found")
 	}
 	if resp.StatusCode != http.StatusOK {
-		return Booking{}, fmt.Errorf("dansal API: %s", resp.Status)
+		return Booking{}, apiErr(resp)
 	}
 	var b Booking
 	return b, json.NewDecoder(resp.Body).Decode(&b)
@@ -1202,12 +1216,12 @@ func (c *DansalClient) CreateBooking(ctx context.Context, eventID int, fields ma
 	if err != nil {
 		return err
 	}
-	resp.Body.Close()
+	defer resp.Body.Close()
 	if resp.StatusCode == http.StatusForbidden {
 		return fmt.Errorf("booking_disabled")
 	}
 	if resp.StatusCode != http.StatusCreated {
-		return fmt.Errorf("dansal API: %s", resp.Status)
+		return apiErr(resp)
 	}
 	return nil
 }
@@ -1235,7 +1249,7 @@ func (c *DansalClient) VerifyBooking(ctx context.Context, token string) (Booking
 		return BookingVerifyResult{}, fmt.Errorf("expired")
 	}
 	if resp.StatusCode != http.StatusOK {
-		return BookingVerifyResult{}, fmt.Errorf("dansal API: %s", resp.Status)
+		return BookingVerifyResult{}, apiErr(resp)
 	}
 	var result BookingVerifyResult
 	return result, json.NewDecoder(resp.Body).Decode(&result)
@@ -1254,9 +1268,9 @@ func (c *DansalClient) ContactPoster(ctx context.Context, id int, email, message
 	if err != nil {
 		return err
 	}
-	resp.Body.Close()
+	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusNoContent {
-		return fmt.Errorf("dansal API: %s", resp.Status)
+		return apiErr(resp)
 	}
 	return nil
 }
@@ -1280,7 +1294,7 @@ func (c *DansalClient) GetAllUsers(ctx context.Context, token string) ([]UserInf
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("dansal API: %s", resp.Status)
+		return nil, apiErr(resp)
 	}
 	var users []UserInfo
 	return users, json.NewDecoder(resp.Body).Decode(&users)
@@ -1293,7 +1307,7 @@ func (c *DansalClient) DeleteUser(ctx context.Context, id int, token string) err
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusNoContent {
-		return fmt.Errorf("dansal API: %s", resp.Status)
+		return apiErr(resp)
 	}
 	return nil
 }
@@ -1306,7 +1320,7 @@ func (c *DansalClient) AddOrgMember(ctx context.Context, orgID, userID int, toke
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusCreated {
-		return fmt.Errorf("dansal API: %s", resp.Status)
+		return apiErr(resp)
 	}
 	return nil
 }
@@ -1318,7 +1332,7 @@ func (c *DansalClient) RemoveOrgMember(ctx context.Context, orgID, userID int, t
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusNoContent {
-		return fmt.Errorf("dansal API: %s", resp.Status)
+		return apiErr(resp)
 	}
 	return nil
 }
@@ -1330,7 +1344,7 @@ func (c *DansalClient) ListInvites(ctx context.Context, token string) ([]InviteL
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("dansal API: %s", resp.Status)
+		return nil, apiErr(resp)
 	}
 	var links []InviteLink
 	return links, json.NewDecoder(resp.Body).Decode(&links)
@@ -1348,7 +1362,7 @@ func (c *DansalClient) CreateInvite(ctx context.Context, role string, orgID *int
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusCreated {
-		return InviteLink{}, fmt.Errorf("dansal API: %s", resp.Status)
+		return InviteLink{}, apiErr(resp)
 	}
 	var link InviteLink
 	return link, json.NewDecoder(resp.Body).Decode(&link)
@@ -1361,7 +1375,7 @@ func (c *DansalClient) RevokeInvite(ctx context.Context, inviteToken, authToken 
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusNoContent {
-		return fmt.Errorf("dansal API: %s", resp.Status)
+		return apiErr(resp)
 	}
 	return nil
 }
@@ -1377,7 +1391,7 @@ func (c *DansalClient) VerifyContactPost(ctx context.Context, token string) erro
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("dansal API: %s", resp.Status)
+		return apiErr(resp)
 	}
 	return nil
 }

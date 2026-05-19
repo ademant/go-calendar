@@ -188,14 +188,14 @@ func getEventImage(w http.ResponseWriter, r *http.Request) {
 	// Validate event_id is a plain integer to prevent path traversal
 	for _, c := range eventID {
 		if c < '0' || c > '9' {
-			http.Error(w, "Invalid event ID", http.StatusBadRequest)
+			writeError(w, "Invalid event ID", http.StatusBadRequest)
 			return
 		}
 	}
 
 	imgPath := filepath.Join(config.Server.ImagesDir, eventID+".avif")
 	if _, err := os.Stat(imgPath); os.IsNotExist(err) {
-		http.Error(w, "Image not found", http.StatusNotFound)
+		writeError(w, "Image not found", http.StatusNotFound)
 		return
 	}
 
@@ -229,14 +229,14 @@ func fitImage(img image.Image, maxW, maxH int) image.Image {
 func deleteEventImage(w http.ResponseWriter, r *http.Request) {
 	userRole := r.Header.Get("X-User-Role")
 	if userRole != RoleAdmin && userRole != RoleUser {
-		http.Error(w, "Forbidden", http.StatusForbidden)
+		writeError(w, "Forbidden", http.StatusForbidden)
 		return
 	}
 
 	eventID := mux.Vars(r)["event_id"]
 	for _, c := range eventID {
 		if c < '0' || c > '9' {
-			http.Error(w, "Invalid event ID", http.StatusBadRequest)
+			writeError(w, "Invalid event ID", http.StatusBadRequest)
 			return
 		}
 	}
@@ -245,14 +245,14 @@ func deleteEventImage(w http.ResponseWriter, r *http.Request) {
 		callerID, _ := strconv.Atoi(r.Header.Get("X-User-ID"))
 		var orgID sql.NullInt64
 		if err := db.QueryRow("SELECT organization_id FROM events WHERE id = ?", eventID).Scan(&orgID); err == sql.ErrNoRows {
-			http.Error(w, "Event not found", http.StatusNotFound)
+			writeError(w, "Event not found", http.StatusNotFound)
 			return
 		} else if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			writeError(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 		if !orgID.Valid || !isOrgMember(callerID, int(orgID.Int64)) {
-			http.Error(w, "Forbidden: not a member of the event's organization", http.StatusForbidden)
+			writeError(w, "Forbidden: not a member of the event's organization", http.StatusForbidden)
 			return
 		}
 	}
@@ -260,10 +260,10 @@ func deleteEventImage(w http.ResponseWriter, r *http.Request) {
 	imgPath := filepath.Join(config.Server.ImagesDir, eventID+".avif")
 	if err := os.Remove(imgPath); err != nil {
 		if os.IsNotExist(err) {
-			http.Error(w, "Image not found", http.StatusNotFound)
+			writeError(w, "Image not found", http.StatusNotFound)
 			return
 		}
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	id, _ := strconv.Atoi(eventID)
@@ -275,7 +275,7 @@ func deleteEventImage(w http.ResponseWriter, r *http.Request) {
 func uploadEventImage(w http.ResponseWriter, r *http.Request) {
 	userRole := r.Header.Get("X-User-Role")
 	if userRole != RoleAdmin && userRole != RoleUser && userRole != RolePublisher {
-		http.Error(w, "Forbidden", http.StatusForbidden)
+		writeError(w, "Forbidden", http.StatusForbidden)
 		return
 	}
 
@@ -285,38 +285,38 @@ func uploadEventImage(w http.ResponseWriter, r *http.Request) {
 	var orgID sql.NullInt64
 	err := db.QueryRow("SELECT id, organization_id FROM events WHERE id = ?", eventID).Scan(&id, &orgID)
 	if err == sql.ErrNoRows {
-		http.Error(w, "Event not found", http.StatusNotFound)
+		writeError(w, "Event not found", http.StatusNotFound)
 		return
 	} else if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
 	if userRole != RoleAdmin {
 		callerID, _ := strconv.Atoi(r.Header.Get("X-User-ID"))
 		if !orgID.Valid || !isOrgMember(callerID, int(orgID.Int64)) {
-			http.Error(w, "Forbidden: not a member of the event's organization", http.StatusForbidden)
+			writeError(w, "Forbidden: not a member of the event's organization", http.StatusForbidden)
 			return
 		}
 	}
 
 	if err := r.ParseMultipartForm(config.Server.MaxBodyBytes); err != nil {
-		http.Error(w, "Failed to parse multipart form", http.StatusBadRequest)
+		writeError(w, "Failed to parse multipart form", http.StatusBadRequest)
 		return
 	}
 
 	file, _, err := r.FormFile("image")
 	if err != nil {
-		http.Error(w, "Missing or unreadable 'image' field", http.StatusBadRequest)
+		writeError(w, "Missing or unreadable 'image' field", http.StatusBadRequest)
 		return
 	}
 	defer file.Close()
 
 	if err := saveImageFromReader(id, file); err != nil {
 		if errors.Is(err, errNotImage) {
-			http.Error(w, "File is not an image", http.StatusUnsupportedMediaType)
+			writeError(w, "File is not an image", http.StatusUnsupportedMediaType)
 		} else {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			writeError(w, err.Error(), http.StatusInternalServerError)
 		}
 		return
 	}

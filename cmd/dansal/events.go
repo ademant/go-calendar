@@ -736,10 +736,10 @@ func getEvents(w http.ResponseWriter, r *http.Request) {
 				eventListSelect+" WHERE e.short_code = ? AND e.is_published = 1", shortCode,
 			))
 			if err == sql.ErrNoRows {
-				http.Error(w, "Event not found", http.StatusNotFound)
+				writeError(w, "Event not found", http.StatusNotFound)
 				return
 			} else if err != nil {
-				http.Error(w, err.Error(), http.StatusInternalServerError)
+				writeError(w, err.Error(), http.StatusInternalServerError)
 				return
 			}
 			json.NewEncoder(w).Encode(event)
@@ -787,7 +787,7 @@ func getEvents(w http.ResponseWriter, r *http.Request) {
 
 	rows, err := db.Query(query, args...)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	defer rows.Close()
@@ -796,7 +796,7 @@ func getEvents(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		event, err := scanEventRow(rows)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			writeError(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 		events = append(events, event)
@@ -837,7 +837,7 @@ func createEvent(w http.ResponseWriter, r *http.Request) {
 			if errors.As(err, new(*http.MaxBytesError)) {
 				status = http.StatusRequestEntityTooLarge
 			}
-			http.Error(w, err.Error(), status)
+			writeError(w, err.Error(), status)
 			return
 		}
 		var arrayReqs []EventCreateRequest
@@ -846,7 +846,7 @@ func createEvent(w http.ResponseWriter, r *http.Request) {
 		} else {
 			var singleReq EventCreateRequest
 			if err := json.Unmarshal(body, &singleReq); err != nil {
-				http.Error(w, "Invalid JSON: must be a single event object or array of events", http.StatusBadRequest)
+				writeError(w, "Invalid JSON: must be a single event object or array of events", http.StatusBadRequest)
 				return
 			}
 			requests = []EventCreateRequest{singleReq}
@@ -858,12 +858,12 @@ func createEvent(w http.ResponseWriter, r *http.Request) {
 			if errors.As(err, new(*http.MaxBytesError)) {
 				status = http.StatusRequestEntityTooLarge
 			}
-			http.Error(w, err.Error(), status)
+			writeError(w, err.Error(), status)
 			return
 		}
 		cal, err := ics.ParseCalendar(strings.NewReader(string(body)))
 		if err != nil {
-			http.Error(w, "Invalid iCal format", http.StatusBadRequest)
+			writeError(w, "Invalid iCal format", http.StatusBadRequest)
 			return
 		}
 		var icalOrgID *int
@@ -938,11 +938,11 @@ func createEvent(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		if len(requests) == 0 {
-			http.Error(w, "No events found in iCal file", http.StatusBadRequest)
+			writeError(w, "No events found in iCal file", http.StatusBadRequest)
 			return
 		}
 	} else {
-		http.Error(w, "Content-Type must be application/json or text/calendar", http.StatusUnsupportedMediaType)
+		writeError(w, "Content-Type must be application/json or text/calendar", http.StatusUnsupportedMediaType)
 		return
 	}
 
@@ -950,7 +950,7 @@ func createEvent(w http.ResponseWriter, r *http.Request) {
 		checked := make(map[int]bool)
 		for _, req := range requests {
 			if req.OrganizationID == nil {
-				http.Error(w, "organization_id is required", http.StatusBadRequest)
+				writeError(w, "organization_id is required", http.StatusBadRequest)
 				return
 			}
 			orgID := *req.OrganizationID
@@ -960,7 +960,7 @@ func createEvent(w http.ResponseWriter, r *http.Request) {
 				checked[orgID] = member
 			}
 			if !member {
-				http.Error(w, "Forbidden: not a member of the specified organization", http.StatusForbidden)
+				writeError(w, "Forbidden: not a member of the specified organization", http.StatusForbidden)
 				return
 			}
 		}
@@ -968,7 +968,7 @@ func createEvent(w http.ResponseWriter, r *http.Request) {
 
 	tx, err := db.Begin()
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	defer tx.Rollback()
@@ -978,13 +978,13 @@ func createEvent(w http.ResponseWriter, r *http.Request) {
 	for i, req := range requests {
 		locationID, err := ensureLocation(tx, req.Location)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			writeError(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 
 		createdEvents, created, err := createEventFromRequest(tx, req, locationID, isPublished)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			writeError(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 		if !created {
@@ -999,7 +999,7 @@ func createEvent(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := tx.Commit(); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
@@ -1020,16 +1020,16 @@ func getEvent(w http.ResponseWriter, r *http.Request) {
 
 	event, err := scanEventRow(db.QueryRow(eventListSelect+" WHERE e.id = ?", id))
 	if err == sql.ErrNoRows {
-		http.Error(w, "Event not found", http.StatusNotFound)
+		writeError(w, "Event not found", http.StatusNotFound)
 		return
 	} else if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
 	// Unauthenticated callers may only view published events.
 	if userRole == "" && !event.IsPublished {
-		http.Error(w, "Event not found", http.StatusNotFound)
+		writeError(w, "Event not found", http.StatusNotFound)
 		return
 	}
 
@@ -1062,44 +1062,44 @@ func getEvent(w http.ResponseWriter, r *http.Request) {
 func updateEvent(w http.ResponseWriter, r *http.Request) {
 	userRole := r.Header.Get("X-User-Role")
 	if userRole != RoleAdmin && userRole != RoleUser {
-		http.Error(w, "Forbidden", http.StatusForbidden)
+		writeError(w, "Forbidden", http.StatusForbidden)
 		return
 	}
 	callerID, _ := strconv.Atoi(r.Header.Get("X-User-ID"))
 	id, err := strconv.Atoi(mux.Vars(r)["id"])
 	if err != nil {
-		http.Error(w, "invalid id", http.StatusBadRequest)
+		writeError(w, "invalid id", http.StatusBadRequest)
 		return
 	}
 
 	var req EventUpdateRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "invalid request body", http.StatusBadRequest)
+		writeError(w, "invalid request body", http.StatusBadRequest)
 		return
 	}
 	if req.Title == "" {
-		http.Error(w, "title is required", http.StatusBadRequest)
+		writeError(w, "title is required", http.StatusBadRequest)
 		return
 	}
 
 	var existingOrgID sql.NullInt64
 	if err := db.QueryRow("SELECT organization_id FROM events WHERE id = ?", id).Scan(&existingOrgID); err == sql.ErrNoRows {
-		http.Error(w, "Event not found", http.StatusNotFound)
+		writeError(w, "Event not found", http.StatusNotFound)
 		return
 	} else if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	if userRole != RoleAdmin {
 		if !existingOrgID.Valid || !isOrgMember(callerID, int(existingOrgID.Int64)) {
-			http.Error(w, "Forbidden", http.StatusForbidden)
+			writeError(w, "Forbidden", http.StatusForbidden)
 			return
 		}
 	}
 
 	startTime, err := parseTimeToUnix(req.StartTime)
 	if err != nil {
-		http.Error(w, "invalid start_time: "+err.Error(), http.StatusBadRequest)
+		writeError(w, "invalid start_time: "+err.Error(), http.StatusBadRequest)
 		return
 	}
 	endTime, err := parseTimeToUnix(req.EndTime)
@@ -1109,14 +1109,14 @@ func updateEvent(w http.ResponseWriter, r *http.Request) {
 
 	tx, err := db.Begin()
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	defer tx.Rollback()
 
 	locationID, err := ensureLocation(tx, req.Location)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
@@ -1142,7 +1142,7 @@ func updateEvent(w http.ResponseWriter, r *http.Request) {
 		req.WorkshopDifficulty, string(tagsJSON), urlVal(req.URL), urlVal(req.BookingURL), orgIDArg, pricingArg,
 		req.Availability, req.TicketsTotal, req.BookingEnabled, id,
 	); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
@@ -1152,13 +1152,13 @@ func updateEvent(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := tx.Commit(); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
 	event, err := fetchEventByID(db, id)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	if musicians, err := fetchEventMusicians(id); err == nil {
@@ -1176,7 +1176,7 @@ func updateEvent(w http.ResponseWriter, r *http.Request) {
 func deleteEvent(w http.ResponseWriter, r *http.Request) {
 	userRole := r.Header.Get("X-User-Role")
 	if userRole != RoleAdmin && userRole != RoleUser {
-		http.Error(w, "Forbidden", http.StatusForbidden)
+		writeError(w, "Forbidden", http.StatusForbidden)
 		return
 	}
 
@@ -1187,19 +1187,19 @@ func deleteEvent(w http.ResponseWriter, r *http.Request) {
 		var orgID sql.NullInt64
 		db.QueryRow("SELECT organization_id FROM events WHERE id = ?", id).Scan(&orgID)
 		if !orgID.Valid || !isOrgMember(callerID, int(orgID.Int64)) {
-			http.Error(w, "Forbidden: not a member of the event's organization", http.StatusForbidden)
+			writeError(w, "Forbidden: not a member of the event's organization", http.StatusForbidden)
 			return
 		}
 	}
 
 	result, err := db.Exec("DELETE FROM events WHERE id = ?", id)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	rowsAffected, _ := result.RowsAffected()
 	if rowsAffected == 0 {
-		http.Error(w, "Event not found", http.StatusNotFound)
+		writeError(w, "Event not found", http.StatusNotFound)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -1241,7 +1241,7 @@ func getEventsICS(w http.ResponseWriter, r *http.Request) {
 
 	rows, err := db.Query(query, args...)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	defer rows.Close()
@@ -1251,7 +1251,7 @@ func getEventsICS(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		event, err := scanEventRow(rows)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			writeError(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 		addEventToCalendar(cal, event)
@@ -1294,7 +1294,7 @@ func getEventsByTagICS(w http.ResponseWriter, r *http.Request) {
 	query := eventListSelect + " WHERE e.is_published = 1 AND e.start_time >= ? AND EXISTS (SELECT 1 FROM json_each(e.tags) WHERE value = ?) ORDER BY e.start_time ASC"
 	rows, err := db.Query(query, now, tag)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	defer rows.Close()
@@ -1304,7 +1304,7 @@ func getEventsByTagICS(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		event, err := scanEventRow(rows)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			writeError(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 		addEventToCalendar(cal, event)
@@ -1327,7 +1327,7 @@ func getEventsByTownICS(w http.ResponseWriter, r *http.Request) {
 	query := eventListSelect + " WHERE e.is_published = 1 AND e.start_time >= ? AND l.town LIKE ? ORDER BY e.start_time ASC"
 	rows, err := db.Query(query, now, "%"+town+"%")
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	defer rows.Close()
@@ -1337,7 +1337,7 @@ func getEventsByTownICS(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		event, err := scanEventRow(rows)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			writeError(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 		addEventToCalendar(cal, event)
@@ -1399,7 +1399,7 @@ func getTags(w http.ResponseWriter, r *http.Request) {
 
 	rows, err := db.Query(query, args...)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	defer rows.Close()
@@ -1408,7 +1408,7 @@ func getTags(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		var tag string
 		if err := rows.Scan(&tag); err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			writeError(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 		tags = append(tags, tag)

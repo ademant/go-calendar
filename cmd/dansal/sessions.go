@@ -27,7 +27,7 @@ func getSessions(w http.ResponseWriter, r *http.Request) {
 
 	userID, err := strconv.Atoi(r.Header.Get("X-User-ID"))
 	if err != nil {
-		http.Error(w, "Invalid user ID", http.StatusUnauthorized)
+		writeError(w, "Invalid user ID", http.StatusUnauthorized)
 		return
 	}
 	currentSessionID, _ := strconv.Atoi(r.Header.Get("X-Session-ID"))
@@ -44,7 +44,7 @@ func getSessions(w http.ResponseWriter, r *http.Request) {
 		WHERE user_id = ? AND expires_at > datetime('now')
 		ORDER BY COALESCE(last_seen_at, created_at) DESC`, userID)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	defer rows.Close()
@@ -54,7 +54,7 @@ func getSessions(w http.ResponseWriter, r *http.Request) {
 		var s Session
 		var hasFP int
 		if err := rows.Scan(&s.ID, &s.UserAgent, &s.IP, &hasFP, &s.CreatedAt, &s.LastSeenAt, &s.ExpiresAt); err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			writeError(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 		s.Fingerprint = hasFP == 1
@@ -69,14 +69,14 @@ func getSessions(w http.ResponseWriter, r *http.Request) {
 func deleteSession(w http.ResponseWriter, r *http.Request) {
 	callerID, err := strconv.Atoi(r.Header.Get("X-User-ID"))
 	if err != nil {
-		http.Error(w, "Invalid user ID", http.StatusUnauthorized)
+		writeError(w, "Invalid user ID", http.StatusUnauthorized)
 		return
 	}
 	callerRole := r.Header.Get("X-User-Role")
 
 	sessionID, err := strconv.Atoi(mux.Vars(r)["id"])
 	if err != nil {
-		http.Error(w, "Invalid session ID", http.StatusBadRequest)
+		writeError(w, "Invalid session ID", http.StatusBadRequest)
 		return
 	}
 
@@ -84,16 +84,16 @@ func deleteSession(w http.ResponseWriter, r *http.Request) {
 	var token string
 	err = db.QueryRow("SELECT user_id, token FROM tokens WHERE id=?", sessionID).Scan(&ownerID, &token)
 	if err == sql.ErrNoRows {
-		http.Error(w, "Session not found", http.StatusNotFound)
+		writeError(w, "Session not found", http.StatusNotFound)
 		return
 	}
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
 	if ownerID != callerID && callerRole != RoleAdmin {
-		http.Error(w, fmt.Sprintf("Forbidden: session belongs to user %d", ownerID), http.StatusForbidden)
+		writeError(w, fmt.Sprintf("Forbidden: session belongs to user %d", ownerID), http.StatusForbidden)
 		return
 	}
 

@@ -20,15 +20,15 @@ func getInfo(w http.ResponseWriter, r *http.Request) {
 	var total, published, upcoming int
 
 	if err := db.QueryRow(`SELECT COUNT(*) FROM events`).Scan(&total); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	if err := db.QueryRow(`SELECT COUNT(*) FROM events WHERE is_published = 1`).Scan(&published); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	if err := db.QueryRow(`SELECT COUNT(*) FROM events WHERE is_published = 1 AND start_time > ?`, now()).Scan(&upcoming); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 

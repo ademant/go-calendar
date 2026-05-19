@@ -69,24 +69,24 @@ func createInvite(w http.ResponseWriter, r *http.Request) {
 	callerID, _ := strconv.Atoi(callerIDStr)
 
 	if callerRole != RoleAdmin && callerRole != RoleUser {
-		http.Error(w, "Forbidden: only admin and user roles may create invite links", http.StatusForbidden)
+		writeError(w, "Forbidden: only admin and user roles may create invite links", http.StatusForbidden)
 		return
 	}
 
 	var req CreateInviteRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		writeError(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
 	if req.Role == "" {
 		req.Role = RoleUser
 	}
 	if !validateRole(req.Role) {
-		http.Error(w, "Invalid role", http.StatusBadRequest)
+		writeError(w, "Invalid role", http.StatusBadRequest)
 		return
 	}
 	if roleRank(req.Role) > roleRank(callerRole) {
-		http.Error(w, "Forbidden: cannot invite a user with higher role than your own", http.StatusForbidden)
+		writeError(w, "Forbidden: cannot invite a user with higher role than your own", http.StatusForbidden)
 		return
 	}
 
@@ -102,14 +102,14 @@ func createInvite(w http.ResponseWriter, r *http.Request) {
 	if orgID != nil {
 		var exists int
 		if err := db.QueryRow("SELECT COUNT(*) FROM organizations WHERE id=?", *orgID).Scan(&exists); err != nil || exists == 0 {
-			http.Error(w, "Organization not found", http.StatusBadRequest)
+			writeError(w, "Organization not found", http.StatusBadRequest)
 			return
 		}
 	}
 
 	token, err := generateInviteToken()
 	if err != nil {
-		http.Error(w, "Failed to generate token", http.StatusInternalServerError)
+		writeError(w, "Failed to generate token", http.StatusInternalServerError)
 		return
 	}
 
@@ -125,7 +125,7 @@ func createInvite(w http.ResponseWriter, r *http.Request) {
 		token, callerID, req.Role, orgVal, expiresAt.Format(time.RFC3339),
 	)
 	if err != nil {
-		http.Error(w, "Failed to create invite link", http.StatusInternalServerError)
+		writeError(w, "Failed to create invite link", http.StatusInternalServerError)
 		return
 	}
 
@@ -160,7 +160,7 @@ func listInvites(w http.ResponseWriter, r *http.Request) {
 		)
 	}
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	defer rows.Close()
@@ -170,7 +170,7 @@ func listInvites(w http.ResponseWriter, r *http.Request) {
 		var l InviteLink
 		var orgID sql.NullInt64
 		if err := rows.Scan(&l.ID, &l.Token, &l.Role, &orgID, &l.ExpiresAt, &l.UsedAt, &l.CreatedAt); err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			writeError(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 		if orgID.Valid {
@@ -195,19 +195,19 @@ func revokeInvite(w http.ResponseWriter, r *http.Request) {
 	var usedAt string
 	err := db.QueryRow("SELECT created_by, COALESCE(used_at,'') FROM invite_links WHERE token=?", token).Scan(&ownerID, &usedAt)
 	if err == sql.ErrNoRows {
-		http.Error(w, "Invite link not found", http.StatusNotFound)
+		writeError(w, "Invite link not found", http.StatusNotFound)
 		return
 	}
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	if usedAt != "" {
-		http.Error(w, "Invite link has already been used", http.StatusConflict)
+		writeError(w, "Invite link has already been used", http.StatusConflict)
 		return
 	}
 	if ownerID != callerID && callerRole != RoleAdmin {
-		http.Error(w, "Forbidden", http.StatusForbidden)
+		writeError(w, "Forbidden", http.StatusForbidden)
 		return
 	}
 
@@ -233,40 +233,40 @@ func useInvite(w http.ResponseWriter, r *http.Request) {
 		token,
 	).Scan(&invite.ID, &invite.Role, &invite.OrgID, &invite.ExpiresAt, &invite.UsedAt)
 	if err == sql.ErrNoRows {
-		http.Error(w, "Invalid or expired invite link", http.StatusNotFound)
+		writeError(w, "Invalid or expired invite link", http.StatusNotFound)
 		return
 	}
 	if err != nil {
-		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		writeError(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
 	if invite.UsedAt != "" {
-		http.Error(w, "Invite link has already been used", http.StatusGone)
+		writeError(w, "Invite link has already been used", http.StatusGone)
 		return
 	}
 	exp, err := parseTokenExpiration(invite.ExpiresAt)
 	if err != nil || time.Now().After(exp) {
-		http.Error(w, "Invite link has expired", http.StatusGone)
+		writeError(w, "Invite link has expired", http.StatusGone)
 		return
 	}
 
 	var req UseInviteRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		writeError(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
 	if req.Username == "" || req.Email == "" || req.Password == "" {
-		http.Error(w, "username, email and password are required", http.StatusBadRequest)
+		writeError(w, "username, email and password are required", http.StatusBadRequest)
 		return
 	}
 	if isReservedUsername(req.Username) {
-		http.Error(w, "Username is reserved", http.StatusBadRequest)
+		writeError(w, "Username is reserved", http.StatusBadRequest)
 		return
 	}
 
 	tx, err := db.Begin()
 	if err != nil {
-		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		writeError(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
 	defer tx.Rollback()
@@ -276,7 +276,7 @@ func useInvite(w http.ResponseWriter, r *http.Request) {
 		req.Username, req.Email, hashPassword(req.Password), invite.Role, req.Telegram, req.Matrix,
 	)
 	if err != nil {
-		http.Error(w, "Username or email already exists", http.StatusConflict)
+		writeError(w, "Username or email already exists", http.StatusConflict)
 		return
 	}
 	userID, _ := result.LastInsertId()
@@ -291,7 +291,7 @@ func useInvite(w http.ResponseWriter, r *http.Request) {
 	tx.Exec("UPDATE invite_links SET used_at=? WHERE id=?", time.Now().UTC().Format(time.RFC3339), invite.ID)
 
 	if err := tx.Commit(); err != nil {
-		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		writeError(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
 

@@ -130,12 +130,12 @@ func telegramWebhookHandler(w http.ResponseWriter, r *http.Request) {
 // POST /api/v1/users/{id}/telegram/message — admin sends a message to a verified user.
 func sendTelegramMessageToUser(w http.ResponseWriter, r *http.Request) {
 	if r.Header.Get("X-User-Role") != RoleAdmin {
-		http.Error(w, "Forbidden", http.StatusForbidden)
+		writeError(w, "Forbidden", http.StatusForbidden)
 		return
 	}
 	id, err := strconv.Atoi(mux.Vars(r)["id"])
 	if err != nil {
-		http.Error(w, "invalid user ID", http.StatusBadRequest)
+		writeError(w, "invalid user ID", http.StatusBadRequest)
 		return
 	}
 
@@ -143,24 +143,24 @@ func sendTelegramMessageToUser(w http.ResponseWriter, r *http.Request) {
 		Text string `json:"text"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || strings.TrimSpace(req.Text) == "" {
-		http.Error(w, "text is required", http.StatusBadRequest)
+		writeError(w, "text is required", http.StatusBadRequest)
 		return
 	}
 
 	var chatID string
 	err = db.QueryRow("SELECT COALESCE(telegram_chat_id,'') FROM users WHERE id=?", id).Scan(&chatID)
 	if err == sql.ErrNoRows {
-		http.Error(w, "user not found", http.StatusNotFound)
+		writeError(w, "user not found", http.StatusNotFound)
 		return
 	}
 	if chatID == "" {
-		http.Error(w, "user has no verified Telegram account", http.StatusBadRequest)
+		writeError(w, "user has no verified Telegram account", http.StatusBadRequest)
 		return
 	}
 
 	if err := sendTelegramMessage(chatID, req.Text); err != nil {
 		log.Printf("telegram send to user %d: %v", id, err)
-		http.Error(w, "failed to send message: "+err.Error(), http.StatusBadGateway)
+		writeError(w, "failed to send message: "+err.Error(), http.StatusBadGateway)
 		return
 	}
 	log.Printf("telegram: admin sent message to user %d (chat_id=%s)", id, chatID)

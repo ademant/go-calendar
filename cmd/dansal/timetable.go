@@ -102,15 +102,15 @@ func timetableAuthCheck(w http.ResponseWriter, userRole string, callerID, eventI
 	var orgID sql.NullInt64
 	err := db.QueryRow("SELECT organization_id FROM events WHERE id = ?", eventID).Scan(&orgID)
 	if err == sql.ErrNoRows {
-		http.Error(w, "Event not found", http.StatusNotFound)
+		writeError(w, "Event not found", http.StatusNotFound)
 		return false
 	}
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeError(w, err.Error(), http.StatusInternalServerError)
 		return false
 	}
 	if userRole != RoleAdmin && (!orgID.Valid || !isOrgMember(callerID, int(orgID.Int64))) {
-		http.Error(w, "Forbidden: not authorized to edit this event", http.StatusForbidden)
+		writeError(w, "Forbidden: not authorized to edit this event", http.StatusForbidden)
 		return false
 	}
 	return true
@@ -149,13 +149,13 @@ func addTimetableEntries(w http.ResponseWriter, r *http.Request) {
 
 	userRole := r.Header.Get("X-User-Role")
 	if userRole != RoleAdmin && userRole != RoleUser {
-		http.Error(w, "Forbidden", http.StatusForbidden)
+		writeError(w, "Forbidden", http.StatusForbidden)
 		return
 	}
 	callerID, _ := strconv.Atoi(r.Header.Get("X-User-ID"))
 	eventID, err := strconv.Atoi(mux.Vars(r)["id"])
 	if err != nil {
-		http.Error(w, "Invalid event ID", http.StatusBadRequest)
+		writeError(w, "Invalid event ID", http.StatusBadRequest)
 		return
 	}
 	if !timetableAuthCheck(w, userRole, callerID, eventID) {
@@ -168,11 +168,11 @@ func addTimetableEntries(w http.ResponseWriter, r *http.Request) {
 		if errors.As(err, new(*http.MaxBytesError)) {
 			status = http.StatusRequestEntityTooLarge
 		}
-		http.Error(w, err.Error(), status)
+		writeError(w, err.Error(), status)
 		return
 	}
 	if err := validateTimetableRequests(reqs); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeError(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
@@ -180,7 +180,7 @@ func addTimetableEntries(w http.ResponseWriter, r *http.Request) {
 	for _, req := range reqs {
 		e, err := insertEntry(db, eventID, req)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			writeError(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 		entries = append(entries, e)
@@ -196,13 +196,13 @@ func replaceTimetable(w http.ResponseWriter, r *http.Request) {
 
 	userRole := r.Header.Get("X-User-Role")
 	if userRole != RoleAdmin && userRole != RoleUser {
-		http.Error(w, "Forbidden", http.StatusForbidden)
+		writeError(w, "Forbidden", http.StatusForbidden)
 		return
 	}
 	callerID, _ := strconv.Atoi(r.Header.Get("X-User-ID"))
 	eventID, err := strconv.Atoi(mux.Vars(r)["id"])
 	if err != nil {
-		http.Error(w, "Invalid event ID", http.StatusBadRequest)
+		writeError(w, "Invalid event ID", http.StatusBadRequest)
 		return
 	}
 	if !timetableAuthCheck(w, userRole, callerID, eventID) {
@@ -215,29 +215,29 @@ func replaceTimetable(w http.ResponseWriter, r *http.Request) {
 		if errors.As(err, new(*http.MaxBytesError)) {
 			status = http.StatusRequestEntityTooLarge
 		}
-		http.Error(w, err.Error(), status)
+		writeError(w, err.Error(), status)
 		return
 	}
 	// PUT always expects an array; send [] to clear the timetable.
 	var reqs []TimetableEntryRequest
 	if err := json.Unmarshal(body, &reqs); err != nil {
-		http.Error(w, "Invalid request body: expected JSON array", http.StatusBadRequest)
+		writeError(w, "Invalid request body: expected JSON array", http.StatusBadRequest)
 		return
 	}
 	if err := validateTimetableRequests(reqs); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeError(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
 	tx, err := db.Begin()
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	defer tx.Rollback()
 
 	if _, err := tx.Exec("DELETE FROM timetable_entries WHERE event_id = ?", eventID); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
@@ -245,14 +245,14 @@ func replaceTimetable(w http.ResponseWriter, r *http.Request) {
 	for _, req := range reqs {
 		e, err := insertEntry(tx, eventID, req)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			writeError(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 		entries = append(entries, e)
 	}
 
 	if err := tx.Commit(); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 

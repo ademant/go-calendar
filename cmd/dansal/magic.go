@@ -22,11 +22,11 @@ func requestMagicLogin(w http.ResponseWriter, r *http.Request) {
 		Email    string `json:"email"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		writeError(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
 	if req.Username == "" && req.Email == "" {
-		http.Error(w, "username or email is required", http.StatusBadRequest)
+		writeError(w, "username or email is required", http.StatusBadRequest)
 		return
 	}
 
@@ -53,7 +53,7 @@ func requestMagicLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		writeError(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
 
@@ -64,7 +64,7 @@ func requestMagicLogin(w http.ResponseWriter, r *http.Request) {
 			retryAfter := int(time.Until(last.Add(time.Duration(rateSecs) * time.Second)).Seconds())
 			if retryAfter > 0 {
 				w.Header().Set("Retry-After", strconv.Itoa(retryAfter))
-				http.Error(w, "Too many magic link requests", http.StatusTooManyRequests)
+				writeError(w, "Too many magic link requests", http.StatusTooManyRequests)
 				return
 			}
 		}
@@ -72,7 +72,7 @@ func requestMagicLogin(w http.ResponseWriter, r *http.Request) {
 
 	token, err := generateVerificationToken()
 	if err != nil {
-		http.Error(w, "Failed to generate token", http.StatusInternalServerError)
+		writeError(w, "Failed to generate token", http.StatusInternalServerError)
 		return
 	}
 
@@ -87,7 +87,7 @@ func requestMagicLogin(w http.ResponseWriter, r *http.Request) {
 		token, user.ID, expiresAt.Format(time.RFC3339),
 	)
 	if err != nil {
-		http.Error(w, "Failed to create magic token", http.StatusInternalServerError)
+		writeError(w, "Failed to create magic token", http.StatusInternalServerError)
 		return
 	}
 
@@ -102,7 +102,7 @@ func requestMagicLogin(w http.ResponseWriter, r *http.Request) {
 	if err := SendEmail(user.Email, "Your login link", body); err != nil {
 		db.Exec("DELETE FROM magic_login_tokens WHERE token=?", token)
 		log.Printf("magic: send failed for user %d (%s): %v", user.ID, user.Username, err)
-		http.Error(w, "Failed to send login link: "+err.Error(), http.StatusBadGateway)
+		writeError(w, "Failed to send login link: "+err.Error(), http.StatusBadGateway)
 		return
 	}
 
@@ -134,18 +134,18 @@ func useMagicLogin(w http.ResponseWriter, r *http.Request) {
 		"SELECT id, user_id, expires_at FROM magic_login_tokens WHERE token=?", token,
 	).Scan(&id, &userID, &expiresAt)
 	if err == sql.ErrNoRows {
-		http.Error(w, "Invalid or expired login link", http.StatusNotFound)
+		writeError(w, "Invalid or expired login link", http.StatusNotFound)
 		return
 	}
 	if err != nil {
-		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		writeError(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
 
 	exp, err := parseTokenExpiration(expiresAt)
 	if err != nil || time.Now().After(exp) {
 		db.Exec("DELETE FROM magic_login_tokens WHERE id=?", id)
-		http.Error(w, "Login link has expired", http.StatusGone)
+		writeError(w, "Login link has expired", http.StatusGone)
 		return
 	}
 
@@ -161,7 +161,7 @@ func useMagicLogin(w http.ResponseWriter, r *http.Request) {
 		"SELECT id, username, email, role, created_at FROM users WHERE id=?", userID,
 	).Scan(&user.ID, &user.Username, &user.Email, &user.Role, &user.CreatedAt)
 	if err != nil {
-		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		writeError(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
 
@@ -169,7 +169,7 @@ func useMagicLogin(w http.ResponseWriter, r *http.Request) {
 	sessionToken, sessionExpiry, err := createTokenInDB(user.ID, r.UserAgent(), clientIP, "")
 	if err != nil {
 		log.Printf("magic: failed to create session for user %d: %v", user.ID, err)
-		http.Error(w, "Failed to create session", http.StatusInternalServerError)
+		writeError(w, "Failed to create session", http.StatusInternalServerError)
 		return
 	}
 

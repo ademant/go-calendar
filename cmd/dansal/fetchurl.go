@@ -212,7 +212,7 @@ func upsertFetchSource(rawURL, typ string, tags []string, orgID *int) (int64, er
 func getFetchSources(w http.ResponseWriter, r *http.Request) {
 	rows, err := db.Query("SELECT id, url, type, tags, organization_id, last_fetched_at, created_at FROM fetch_sources ORDER BY id ASC")
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	defer rows.Close()
@@ -221,7 +221,7 @@ func getFetchSources(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		src, err := scanFetchSource(rows)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			writeError(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 		sources = append(sources, src)
@@ -238,10 +238,10 @@ func getFetchSource(w http.ResponseWriter, r *http.Request) {
 		"SELECT id, url, type, tags, organization_id, last_fetched_at, created_at FROM fetch_sources WHERE id = ?", id,
 	))
 	if err == sql.ErrNoRows {
-		http.Error(w, "Fetch source not found", http.StatusNotFound)
+		writeError(w, "Fetch source not found", http.StatusNotFound)
 		return
 	} else if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
@@ -256,10 +256,10 @@ func patchFetchSource(w http.ResponseWriter, r *http.Request) {
 		"SELECT id, url, type, tags, organization_id, last_fetched_at, created_at FROM fetch_sources WHERE id = ?", id,
 	))
 	if err == sql.ErrNoRows {
-		http.Error(w, "not found", http.StatusNotFound)
+		writeError(w, "not found", http.StatusNotFound)
 		return
 	} else if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
@@ -269,7 +269,7 @@ func patchFetchSource(w http.ResponseWriter, r *http.Request) {
 		OrganizationID *int     `json:"organization_id"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "invalid body", http.StatusBadRequest)
+		writeError(w, "invalid body", http.StatusBadRequest)
 		return
 	}
 
@@ -290,7 +290,7 @@ func patchFetchSource(w http.ResponseWriter, r *http.Request) {
 		"UPDATE fetch_sources SET type = ?, tags = ?, organization_id = ? WHERE id = ?",
 		src.Type, string(tagsJSON), orgVal, src.ID,
 	); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
@@ -451,13 +451,13 @@ func importFromICalSource(src FetchSource) ([]Event, bool, error) {
 func fetchURL(w http.ResponseWriter, r *http.Request) {
 	userRole := r.Header.Get("X-User-Role")
 	if userRole != RoleAdmin && userRole != RoleUser && userRole != RolePublisher {
-		http.Error(w, "Forbidden", http.StatusForbidden)
+		writeError(w, "Forbidden", http.StatusForbidden)
 		return
 	}
 
 	var req FetchURLRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		writeError(w, "Invalid JSON", http.StatusBadRequest)
 		return
 	}
 
@@ -466,7 +466,7 @@ func fetchURL(w http.ResponseWriter, r *http.Request) {
 	}
 	parsed, err := url.Parse(req.URL)
 	if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") {
-		http.Error(w, "URL must use http or https scheme", http.StatusBadRequest)
+		writeError(w, "URL must use http or https scheme", http.StatusBadRequest)
 		return
 	}
 
@@ -474,7 +474,7 @@ func fetchURL(w http.ResponseWriter, r *http.Request) {
 		req.Type = detectFetchType(req.URL)
 	}
 	if !validFetchType(req.Type) {
-		http.Error(w, "Unsupported type; use 'ical', 'rss', or 'folkdance-json'", http.StatusBadRequest)
+		writeError(w, "Unsupported type; use 'ical', 'rss', or 'folkdance-json'", http.StatusBadRequest)
 		return
 	}
 
@@ -484,14 +484,14 @@ func fetchURL(w http.ResponseWriter, r *http.Request) {
 
 	sourceID, err := upsertFetchSource(req.URL, req.Type, req.Tags, req.OrganizationID)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
 	src := FetchSource{ID: int(sourceID), URL: req.URL, Type: req.Type, Tags: req.Tags, OrganizationID: req.OrganizationID}
 	allEvents, allCreated, err := importFromSource(src)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadGateway)
+		writeError(w, err.Error(), http.StatusBadGateway)
 		return
 	}
 
@@ -514,17 +514,17 @@ type BulkSourceResult struct {
 func deleteFetchSource(w http.ResponseWriter, r *http.Request) {
 	userRole := r.Header.Get("X-User-Role")
 	if userRole != RoleAdmin {
-		http.Error(w, "Forbidden", http.StatusForbidden)
+		writeError(w, "Forbidden", http.StatusForbidden)
 		return
 	}
 	id := mux.Vars(r)["id"]
 	result, err := db.Exec("DELETE FROM fetch_sources WHERE id = ?", id)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	if n, _ := result.RowsAffected(); n == 0 {
-		http.Error(w, "Fetch source not found", http.StatusNotFound)
+		writeError(w, "Fetch source not found", http.StatusNotFound)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -534,14 +534,14 @@ func deleteFetchSource(w http.ResponseWriter, r *http.Request) {
 func bulkDeleteFetchSources(w http.ResponseWriter, r *http.Request) {
 	userRole := r.Header.Get("X-User-Role")
 	if userRole != RoleAdmin {
-		http.Error(w, "Forbidden", http.StatusForbidden)
+		writeError(w, "Forbidden", http.StatusForbidden)
 		return
 	}
 	var req struct {
 		IDs []int `json:"ids"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || len(req.IDs) == 0 {
-		http.Error(w, "ids required", http.StatusBadRequest)
+		writeError(w, "ids required", http.StatusBadRequest)
 		return
 	}
 	for _, id := range req.IDs {
@@ -554,14 +554,14 @@ func bulkDeleteFetchSources(w http.ResponseWriter, r *http.Request) {
 func bulkFetchURLsByIDs(w http.ResponseWriter, r *http.Request) {
 	userRole := r.Header.Get("X-User-Role")
 	if userRole != RoleAdmin && userRole != RoleUser && userRole != RolePublisher {
-		http.Error(w, "Forbidden", http.StatusForbidden)
+		writeError(w, "Forbidden", http.StatusForbidden)
 		return
 	}
 	var req struct {
 		IDs []int `json:"ids"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || len(req.IDs) == 0 {
-		http.Error(w, "ids required", http.StatusBadRequest)
+		writeError(w, "ids required", http.StatusBadRequest)
 		return
 	}
 
@@ -574,7 +574,7 @@ func bulkFetchURLsByIDs(w http.ResponseWriter, r *http.Request) {
 	query := "SELECT id, url, type, tags, organization_id, last_fetched_at, created_at FROM fetch_sources WHERE id IN (" + strings.Join(placeholders, ",") + ")"
 	rows, err := db.Query(query, args...)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	defer rows.Close()
@@ -611,7 +611,7 @@ func bulkFetchURLsByIDs(w http.ResponseWriter, r *http.Request) {
 func bulkAssignFetchSourceOrg(w http.ResponseWriter, r *http.Request) {
 	userRole := r.Header.Get("X-User-Role")
 	if userRole != RoleAdmin {
-		http.Error(w, "Forbidden", http.StatusForbidden)
+		writeError(w, "Forbidden", http.StatusForbidden)
 		return
 	}
 	var req struct {
@@ -619,7 +619,7 @@ func bulkAssignFetchSourceOrg(w http.ResponseWriter, r *http.Request) {
 		OrganizationID *int  `json:"organization_id"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || len(req.IDs) == 0 {
-		http.Error(w, "ids required", http.StatusBadRequest)
+		writeError(w, "ids required", http.StatusBadRequest)
 		return
 	}
 	for _, id := range req.IDs {
@@ -632,7 +632,7 @@ func bulkAssignFetchSourceOrg(w http.ResponseWriter, r *http.Request) {
 func fetchURLByID(w http.ResponseWriter, r *http.Request) {
 	userRole := r.Header.Get("X-User-Role")
 	if userRole != RoleAdmin && userRole != RoleUser && userRole != RolePublisher {
-		http.Error(w, "Forbidden", http.StatusForbidden)
+		writeError(w, "Forbidden", http.StatusForbidden)
 		return
 	}
 
@@ -641,21 +641,21 @@ func fetchURLByID(w http.ResponseWriter, r *http.Request) {
 		"SELECT id, url, type, tags, organization_id, last_fetched_at, created_at FROM fetch_sources WHERE id = ?", id,
 	))
 	if err == sql.ErrNoRows {
-		http.Error(w, "Fetch source not found", http.StatusNotFound)
+		writeError(w, "Fetch source not found", http.StatusNotFound)
 		return
 	} else if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
 	if !validFetchType(src.Type) {
-		http.Error(w, "Unsupported type; use 'ical', 'rss', or 'folkdance-json'", http.StatusBadRequest)
+		writeError(w, "Unsupported type; use 'ical', 'rss', or 'folkdance-json'", http.StatusBadRequest)
 		return
 	}
 
 	allEvents, allCreated, err := importFromSource(src)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadGateway)
+		writeError(w, err.Error(), http.StatusBadGateway)
 		return
 	}
 

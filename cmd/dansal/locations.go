@@ -144,7 +144,7 @@ func getLocations(w http.ResponseWriter, r *http.Request) {
 
 	rows, err := db.Query("SELECT id, location, COALESCE(short_name,''), address, COALESCE(zipcode,''), town, COALESCE(country,''), COALESCE(latitude,''), COALESCE(longitude,''), COALESCE(internetsite,''), created_at, organization_id FROM locations")
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	defer rows.Close()
@@ -154,7 +154,7 @@ func getLocations(w http.ResponseWriter, r *http.Request) {
 		var location Location
 		var orgID sql.NullInt64
 		if err := rows.Scan(&location.ID, &location.Location, &location.ShortName, &location.Address, &location.Zipcode, &location.Town, &location.Country, &location.Latitude, &location.Longitude, &location.Internetsite, &location.CreatedAt, &orgID); err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			writeError(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 		if orgID.Valid {
@@ -180,7 +180,7 @@ func createLocation(w http.ResponseWriter, r *http.Request) {
 		if errors.As(err, new(*http.MaxBytesError)) {
 			status = http.StatusRequestEntityTooLarge
 		}
-		http.Error(w, err.Error(), status)
+		writeError(w, err.Error(), status)
 		return
 	}
 
@@ -188,7 +188,7 @@ func createLocation(w http.ResponseWriter, r *http.Request) {
 	if json.Unmarshal(body, &reqs) != nil || len(reqs) == 0 || reqs[0].Location == "" {
 		var single LocationCreateRequest
 		if err := json.Unmarshal(body, &single); err != nil {
-			http.Error(w, "Invalid request body", http.StatusBadRequest)
+			writeError(w, "Invalid request body", http.StatusBadRequest)
 			return
 		}
 		reqs = []LocationCreateRequest{single}
@@ -197,19 +197,19 @@ func createLocation(w http.ResponseWriter, r *http.Request) {
 	// Validate all items before inserting any.
 	for _, req := range reqs {
 		if req.Location == "" {
-			http.Error(w, "location is required", http.StatusBadRequest)
+			writeError(w, "location is required", http.StatusBadRequest)
 			return
 		}
 	}
 	if requesterRole != RoleAdmin {
 		if requesterRole != RoleUser && requesterRole != RolePublisher {
-			http.Error(w, "Forbidden", http.StatusForbidden)
+			writeError(w, "Forbidden", http.StatusForbidden)
 			return
 		}
 		checked := make(map[int]bool)
 		for _, req := range reqs {
 			if req.OrganizationID == nil {
-				http.Error(w, "organization_id is required", http.StatusBadRequest)
+				writeError(w, "organization_id is required", http.StatusBadRequest)
 				return
 			}
 			orgID := *req.OrganizationID
@@ -219,7 +219,7 @@ func createLocation(w http.ResponseWriter, r *http.Request) {
 				checked[orgID] = member
 			}
 			if !member {
-				http.Error(w, "Forbidden: not a member of the specified organization", http.StatusForbidden)
+				writeError(w, "Forbidden: not a member of the specified organization", http.StatusForbidden)
 				return
 			}
 		}
@@ -251,7 +251,7 @@ func createLocation(w http.ResponseWriter, r *http.Request) {
 			req.Location, req.ShortName, req.Address, req.Zipcode, req.Town, req.Country, req.Latitude, req.Longitude, req.Internetsite, orgIDArg,
 		)
 		if err != nil {
-			http.Error(w, "Failed to create location", http.StatusInternalServerError)
+			writeError(w, "Failed to create location", http.StatusInternalServerError)
 			return
 		}
 		id, _ := result.LastInsertId()
@@ -294,11 +294,11 @@ func getLocation(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err == sql.ErrNoRows {
-		http.Error(w, "Location not found", http.StatusNotFound)
+		writeError(w, "Location not found", http.StatusNotFound)
 		return
 	}
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
@@ -314,22 +314,22 @@ func patchLocation(w http.ResponseWriter, r *http.Request) {
 
 	if requesterRole != RoleAdmin {
 		if requesterRole != RoleUser && requesterRole != RolePublisher {
-			http.Error(w, "Forbidden", http.StatusForbidden)
+			writeError(w, "Forbidden", http.StatusForbidden)
 			return
 		}
 		callerID, _ := strconv.Atoi(r.Header.Get("X-User-ID"))
 		var orgID sql.NullInt64
 		err := db.QueryRow("SELECT organization_id FROM locations WHERE id = ?", id).Scan(&orgID)
 		if err == sql.ErrNoRows {
-			http.Error(w, "Location not found", http.StatusNotFound)
+			writeError(w, "Location not found", http.StatusNotFound)
 			return
 		}
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			writeError(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 		if !orgID.Valid || !isOrgMember(callerID, int(orgID.Int64)) {
-			http.Error(w, "Forbidden", http.StatusForbidden)
+			writeError(w, "Forbidden", http.StatusForbidden)
 			return
 		}
 	}
@@ -347,7 +347,7 @@ func patchLocation(w http.ResponseWriter, r *http.Request) {
 		OrganizationID *int   `json:"organization_id"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		writeError(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
 
@@ -357,11 +357,11 @@ func patchLocation(w http.ResponseWriter, r *http.Request) {
 		"SELECT id, location, COALESCE(short_name,''), address, COALESCE(zipcode,''), town, COALESCE(country,''), COALESCE(latitude,''), COALESCE(longitude,''), COALESCE(internetsite,''), created_at, organization_id FROM locations WHERE id = ?", id,
 	).Scan(&loc.ID, &loc.Location, &loc.ShortName, &loc.Address, &loc.Zipcode, &loc.Town, &loc.Country, &loc.Latitude, &loc.Longitude, &loc.Internetsite, &loc.CreatedAt, &orgID)
 	if err == sql.ErrNoRows {
-		http.Error(w, "Location not found", http.StatusNotFound)
+		writeError(w, "Location not found", http.StatusNotFound)
 		return
 	}
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
@@ -388,7 +388,7 @@ func patchLocation(w http.ResponseWriter, r *http.Request) {
 		"UPDATE locations SET location=?, short_name=?, address=?, zipcode=?, town=?, country=?, latitude=?, longitude=?, internetsite=?, organization_id=? WHERE id=?",
 		loc.Location, loc.ShortName, loc.Address, loc.Zipcode, loc.Town, loc.Country, loc.Latitude, loc.Longitude, loc.Internetsite, orgVal, loc.ID,
 	); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
@@ -398,7 +398,7 @@ func patchLocation(w http.ResponseWriter, r *http.Request) {
 // POST /api/v1/locations/bulk-assign-org - Admin bulk-assign organization to locations
 func bulkAssignLocationOrg(w http.ResponseWriter, r *http.Request) {
 	if r.Header.Get("X-User-Role") != RoleAdmin {
-		http.Error(w, "Forbidden: admin only", http.StatusForbidden)
+		writeError(w, "Forbidden: admin only", http.StatusForbidden)
 		return
 	}
 	var req struct {
@@ -406,7 +406,7 @@ func bulkAssignLocationOrg(w http.ResponseWriter, r *http.Request) {
 		OrganizationID *int  `json:"organization_id"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || len(req.IDs) == 0 {
-		http.Error(w, "invalid body", http.StatusBadRequest)
+		writeError(w, "invalid body", http.StatusBadRequest)
 		return
 	}
 	var orgVal interface{}
@@ -429,22 +429,22 @@ func deleteLocation(w http.ResponseWriter, r *http.Request) {
 
 	if requesterRole != RoleAdmin {
 		if requesterRole != RoleUser {
-			http.Error(w, "Forbidden", http.StatusForbidden)
+			writeError(w, "Forbidden", http.StatusForbidden)
 			return
 		}
 		callerID, _ := strconv.Atoi(r.Header.Get("X-User-ID"))
 		var orgID sql.NullInt64
 		err := db.QueryRow("SELECT organization_id FROM locations WHERE id = ?", id).Scan(&orgID)
 		if err == sql.ErrNoRows {
-			http.Error(w, "Location not found", http.StatusNotFound)
+			writeError(w, "Location not found", http.StatusNotFound)
 			return
 		}
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			writeError(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 		if !orgID.Valid || !isOrgMember(callerID, int(orgID.Int64)) {
-			http.Error(w, "Forbidden: not a member of the location's organization", http.StatusForbidden)
+			writeError(w, "Forbidden: not a member of the location's organization", http.StatusForbidden)
 			return
 		}
 	}
@@ -453,24 +453,24 @@ func deleteLocation(w http.ResponseWriter, r *http.Request) {
 	var locationID int
 	err := db.QueryRow("SELECT id FROM locations WHERE id = ?", id).Scan(&locationID)
 	if err == sql.ErrNoRows {
-		http.Error(w, "Location not found", http.StatusNotFound)
+		writeError(w, "Location not found", http.StatusNotFound)
 		return
 	}
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
 	// Delete location
 	result, err := db.Exec("DELETE FROM locations WHERE id = ?", id)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
 	rowsAffected, _ := result.RowsAffected()
 	if rowsAffected == 0 {
-		http.Error(w, "Location not found", http.StatusNotFound)
+		writeError(w, "Location not found", http.StatusNotFound)
 		return
 	}
 

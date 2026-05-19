@@ -47,11 +47,11 @@ func sendVerification(w http.ResponseWriter, r *http.Request) {
 
 	targetID, err := strconv.Atoi(mux.Vars(r)["id"])
 	if err != nil {
-		http.Error(w, "Invalid user ID", http.StatusBadRequest)
+		writeError(w, "Invalid user ID", http.StatusBadRequest)
 		return
 	}
 	if callerID != targetID && callerRole != RoleAdmin {
-		http.Error(w, "Forbidden", http.StatusForbidden)
+		writeError(w, "Forbidden", http.StatusForbidden)
 		return
 	}
 
@@ -60,11 +60,11 @@ func sendVerification(w http.ResponseWriter, r *http.Request) {
 		BaseURL string `json:"base_url"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Channel == "" {
-		http.Error(w, "channel is required (email, telegram, matrix)", http.StatusBadRequest)
+		writeError(w, "channel is required (email, telegram, matrix)", http.StatusBadRequest)
 		return
 	}
 	if req.Channel != "email" && req.Channel != "telegram" && req.Channel != "matrix" {
-		http.Error(w, "channel must be one of: email, telegram, matrix", http.StatusBadRequest)
+		writeError(w, "channel must be one of: email, telegram, matrix", http.StatusBadRequest)
 		return
 	}
 
@@ -76,28 +76,28 @@ func sendVerification(w http.ResponseWriter, r *http.Request) {
 	).Scan(&user.ID, &user.Username, &user.Email, &user.Role, &user.Telegram, &user.Matrix,
 		&emailVer, &telegramVer, &matrixVer, &disabled, &user.CreatedAt)
 	if err == sql.ErrNoRows {
-		http.Error(w, "User not found", http.StatusNotFound)
+		writeError(w, "User not found", http.StatusNotFound)
 		return
 	}
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
 	switch req.Channel {
 	case "email":
 		if user.Email == "" {
-			http.Error(w, "User has no email address", http.StatusBadRequest)
+			writeError(w, "User has no email address", http.StatusBadRequest)
 			return
 		}
 	case "telegram":
 		if user.Telegram == "" {
-			http.Error(w, "User has no Telegram handle", http.StatusBadRequest)
+			writeError(w, "User has no Telegram handle", http.StatusBadRequest)
 			return
 		}
 	case "matrix":
 		if user.Matrix == "" {
-			http.Error(w, "User has no Matrix ID", http.StatusBadRequest)
+			writeError(w, "User has no Matrix ID", http.StatusBadRequest)
 			return
 		}
 	}
@@ -107,7 +107,7 @@ func sendVerification(w http.ResponseWriter, r *http.Request) {
 
 	token, err := generateVerificationToken()
 	if err != nil {
-		http.Error(w, "Failed to generate token", http.StatusInternalServerError)
+		writeError(w, "Failed to generate token", http.StatusInternalServerError)
 		return
 	}
 	expiresAt := time.Now().UTC().Add(time.Duration(config.Server.VerificationExpiryHours) * time.Hour)
@@ -116,7 +116,7 @@ func sendVerification(w http.ResponseWriter, r *http.Request) {
 		token, targetID, req.Channel, expiresAt.Format(time.RFC3339),
 	)
 	if err != nil {
-		http.Error(w, "Failed to create verification token", http.StatusInternalServerError)
+		writeError(w, "Failed to create verification token", http.StatusInternalServerError)
 		return
 	}
 
@@ -133,7 +133,7 @@ func sendVerification(w http.ResponseWriter, r *http.Request) {
 		botName := config.Server.TelegramBotName
 		if botName == "" {
 			db.Exec("DELETE FROM verification_tokens WHERE token=?", token)
-			http.Error(w, "telegram_bot_name not configured", http.StatusInternalServerError)
+			writeError(w, "telegram_bot_name not configured", http.StatusInternalServerError)
 			return
 		}
 		deepLink := "https://t.me/" + botName + "?start=" + token
@@ -153,7 +153,7 @@ func sendVerification(w http.ResponseWriter, r *http.Request) {
 	if sendErr != nil {
 		db.Exec("DELETE FROM verification_tokens WHERE token=?", token)
 		log.Printf("verify: send failed for user %d channel %s: %v", targetID, req.Channel, sendErr)
-		http.Error(w, "Failed to send verification: "+sendErr.Error(), http.StatusBadGateway)
+		writeError(w, "Failed to send verification: "+sendErr.Error(), http.StatusBadGateway)
 		return
 	}
 
@@ -172,18 +172,18 @@ func consumeVerification(w http.ResponseWriter, r *http.Request) {
 		"SELECT id, user_id, channel, expires_at FROM verification_tokens WHERE token=?", token,
 	).Scan(&id, &userID, &channel, &expiresAt)
 	if err == sql.ErrNoRows {
-		http.Error(w, "Invalid or expired verification link", http.StatusNotFound)
+		writeError(w, "Invalid or expired verification link", http.StatusNotFound)
 		return
 	}
 	if err != nil {
-		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		writeError(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
 
 	exp, err := parseTokenExpiration(expiresAt)
 	if err != nil || time.Now().After(exp) {
 		db.Exec("DELETE FROM verification_tokens WHERE id=?", id)
-		http.Error(w, "Verification link has expired", http.StatusGone)
+		writeError(w, "Verification link has expired", http.StatusGone)
 		return
 	}
 
@@ -193,7 +193,7 @@ func consumeVerification(w http.ResponseWriter, r *http.Request) {
 		"matrix":   "matrix_verified",
 	}[channel]
 	if col == "" {
-		http.Error(w, "Unknown channel", http.StatusInternalServerError)
+		writeError(w, "Unknown channel", http.StatusInternalServerError)
 		return
 	}
 

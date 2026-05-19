@@ -75,15 +75,15 @@ func bookingAuthCheck(w http.ResponseWriter, bookingID, callerID int, callerRole
 	var eventID int
 	err := db.QueryRow("SELECT event_id FROM bookings WHERE id=?", bookingID).Scan(&eventID)
 	if err == sql.ErrNoRows {
-		http.Error(w, "booking not found", http.StatusNotFound)
+		writeError(w, "booking not found", http.StatusNotFound)
 		return 0, false
 	}
 	if err != nil {
-		http.Error(w, "internal server error", http.StatusInternalServerError)
+		writeError(w, "internal server error", http.StatusInternalServerError)
 		return 0, false
 	}
 	if callerRole != RoleAdmin && !isOrgMemberOfEvent(callerID, eventID) {
-		http.Error(w, "forbidden", http.StatusForbidden)
+		writeError(w, "forbidden", http.StatusForbidden)
 		return 0, false
 	}
 	return eventID, true
@@ -97,11 +97,11 @@ func listBookings(w http.ResponseWriter, r *http.Request) {
 
 	eventID, err := strconv.Atoi(mux.Vars(r)["id"])
 	if err != nil {
-		http.Error(w, "invalid event id", http.StatusBadRequest)
+		writeError(w, "invalid event id", http.StatusBadRequest)
 		return
 	}
 	if callerRole != RoleAdmin && !isOrgMemberOfEvent(callerID, eventID) {
-		http.Error(w, "forbidden", http.StatusForbidden)
+		writeError(w, "forbidden", http.StatusForbidden)
 		return
 	}
 
@@ -110,7 +110,7 @@ func listBookings(w http.ResponseWriter, r *http.Request) {
 		 FROM bookings WHERE event_id=? ORDER BY created_at ASC`, eventID,
 	)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	defer rows.Close()
@@ -119,7 +119,7 @@ func listBookings(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		var b Booking
 		if err := rows.Scan(&b.ID, &b.EventID, &b.Name, &b.Email, &b.Persons, &b.Message, &b.Status, &b.QRToken, &b.CreatedAt); err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			writeError(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 		out = append(out, b)
@@ -133,7 +133,7 @@ func listBookings(w http.ResponseWriter, r *http.Request) {
 func createBooking(w http.ResponseWriter, r *http.Request) {
 	eventID, err := strconv.Atoi(mux.Vars(r)["id"])
 	if err != nil {
-		http.Error(w, "invalid event id", http.StatusBadRequest)
+		writeError(w, "invalid event id", http.StatusBadRequest)
 		return
 	}
 
@@ -141,15 +141,15 @@ func createBooking(w http.ResponseWriter, r *http.Request) {
 	var bookingEnabled int
 	err = db.QueryRow("SELECT COALESCE(booking_enabled,0) FROM events WHERE id=?", eventID).Scan(&bookingEnabled)
 	if err == sql.ErrNoRows {
-		http.Error(w, "event not found", http.StatusNotFound)
+		writeError(w, "event not found", http.StatusNotFound)
 		return
 	}
 	if err != nil {
-		http.Error(w, "internal server error", http.StatusInternalServerError)
+		writeError(w, "internal server error", http.StatusInternalServerError)
 		return
 	}
 	if bookingEnabled == 0 {
-		http.Error(w, "booking is not enabled for this event", http.StatusForbidden)
+		writeError(w, "booking is not enabled for this event", http.StatusForbidden)
 		return
 	}
 
@@ -160,18 +160,18 @@ func createBooking(w http.ResponseWriter, r *http.Request) {
 		Message string `json:"message"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "invalid request body", http.StatusBadRequest)
+		writeError(w, "invalid request body", http.StatusBadRequest)
 		return
 	}
 	req.Name = strings.TrimSpace(req.Name)
 	req.Email = strings.TrimSpace(req.Email)
 	req.Message = strings.TrimSpace(req.Message)
 	if req.Name == "" || req.Email == "" {
-		http.Error(w, "name and email are required", http.StatusBadRequest)
+		writeError(w, "name and email are required", http.StatusBadRequest)
 		return
 	}
 	if !strings.Contains(req.Email, "@") {
-		http.Error(w, "invalid email address", http.StatusBadRequest)
+		writeError(w, "invalid email address", http.StatusBadRequest)
 		return
 	}
 	if req.Persons < 1 {
@@ -180,7 +180,7 @@ func createBooking(w http.ResponseWriter, r *http.Request) {
 
 	verifyToken, err := generateVerificationToken()
 	if err != nil {
-		http.Error(w, "failed to generate token", http.StatusInternalServerError)
+		writeError(w, "failed to generate token", http.StatusInternalServerError)
 		return
 	}
 
@@ -194,7 +194,7 @@ func createBooking(w http.ResponseWriter, r *http.Request) {
 		eventID, req.Name, req.Email, req.Persons, req.Message, verifyToken, expiresAt.Format(time.RFC3339), lang,
 	)
 	if err != nil {
-		http.Error(w, "failed to create booking", http.StatusInternalServerError)
+		writeError(w, "failed to create booking", http.StatusInternalServerError)
 		return
 	}
 	id, _ := result.LastInsertId()
@@ -226,24 +226,24 @@ func verifyBooking(w http.ResponseWriter, r *http.Request) {
 		"SELECT id, event_id, expires_at, name, email, COALESCE(lang,'') FROM bookings WHERE verify_token=? AND status='pending'", token,
 	).Scan(&id, &eventID, &expiresAt, &name, &email, &lang)
 	if err == sql.ErrNoRows {
-		http.Error(w, "invalid or already used verification link", http.StatusNotFound)
+		writeError(w, "invalid or already used verification link", http.StatusNotFound)
 		return
 	}
 	if err != nil {
-		http.Error(w, "internal server error", http.StatusInternalServerError)
+		writeError(w, "internal server error", http.StatusInternalServerError)
 		return
 	}
 
 	exp, err := parseTokenExpiration(expiresAt)
 	if err != nil || time.Now().After(exp) {
 		db.Exec("DELETE FROM bookings WHERE id=?", id)
-		http.Error(w, "verification link has expired", http.StatusGone)
+		writeError(w, "verification link has expired", http.StatusGone)
 		return
 	}
 
 	qrToken, err := generateVerificationToken()
 	if err != nil {
-		http.Error(w, "failed to generate QR token", http.StatusInternalServerError)
+		writeError(w, "failed to generate QR token", http.StatusInternalServerError)
 		return
 	}
 
@@ -274,7 +274,7 @@ func updateBookingStatus(w http.ResponseWriter, r *http.Request) {
 
 	bookingID, err := strconv.Atoi(mux.Vars(r)["id"])
 	if err != nil {
-		http.Error(w, "invalid booking id", http.StatusBadRequest)
+		writeError(w, "invalid booking id", http.StatusBadRequest)
 		return
 	}
 
@@ -287,21 +287,21 @@ func updateBookingStatus(w http.ResponseWriter, r *http.Request) {
 		Status string `json:"status"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "invalid request body", http.StatusBadRequest)
+		writeError(w, "invalid request body", http.StatusBadRequest)
 		return
 	}
 	if req.Status != "approved" && req.Status != "cancelled" {
-		http.Error(w, "status must be 'approved' or 'cancelled'", http.StatusBadRequest)
+		writeError(w, "status must be 'approved' or 'cancelled'", http.StatusBadRequest)
 		return
 	}
 
 	res, err := db.Exec("UPDATE bookings SET status=? WHERE id=?", req.Status, bookingID)
 	if err != nil {
-		http.Error(w, "failed to update booking", http.StatusInternalServerError)
+		writeError(w, "failed to update booking", http.StatusInternalServerError)
 		return
 	}
 	if n, _ := res.RowsAffected(); n == 0 {
-		http.Error(w, "booking not found", http.StatusNotFound)
+		writeError(w, "booking not found", http.StatusNotFound)
 		return
 	}
 	log.Printf("bookings: booking %d set to %s by user %d", bookingID, req.Status, callerID)
@@ -331,16 +331,16 @@ func checkinBooking(w http.ResponseWriter, r *http.Request) {
 		 FROM bookings WHERE qr_token=?`, qrToken,
 	).Scan(&b.ID, &b.EventID, &b.Name, &b.Persons, &b.Message, &b.Status, &b.CreatedAt)
 	if err == sql.ErrNoRows {
-		http.Error(w, "booking not found", http.StatusNotFound)
+		writeError(w, "booking not found", http.StatusNotFound)
 		return
 	}
 	if err != nil {
-		http.Error(w, "internal server error", http.StatusInternalServerError)
+		writeError(w, "internal server error", http.StatusInternalServerError)
 		return
 	}
 
 	if callerRole != RoleAdmin && !isOrgMemberOfEvent(callerID, b.EventID) {
-		http.Error(w, "forbidden", http.StatusForbidden)
+		writeError(w, "forbidden", http.StatusForbidden)
 		return
 	}
 
@@ -363,7 +363,7 @@ func deleteBooking(w http.ResponseWriter, r *http.Request) {
 
 	bookingID, err := strconv.Atoi(mux.Vars(r)["id"])
 	if err != nil {
-		http.Error(w, "invalid booking id", http.StatusBadRequest)
+		writeError(w, "invalid booking id", http.StatusBadRequest)
 		return
 	}
 

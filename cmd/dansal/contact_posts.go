@@ -60,7 +60,7 @@ func listContactPosts(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	eventID, err := strconv.Atoi(mux.Vars(r)["id"])
 	if err != nil {
-		http.Error(w, "invalid event id", http.StatusBadRequest)
+		writeError(w, "invalid event id", http.StatusBadRequest)
 		return
 	}
 
@@ -72,7 +72,7 @@ func listContactPosts(w http.ResponseWriter, r *http.Request) {
 		eventID, time.Now().UTC().Format(time.RFC3339),
 	)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	defer rows.Close()
@@ -82,7 +82,7 @@ func listContactPosts(w http.ResponseWriter, r *http.Request) {
 		var p ContactPost
 		var ev int
 		if err := rows.Scan(&p.ID, &p.EventID, &p.Type, &p.City, &p.Persons, &p.Message, &p.Nickname, &ev, &p.CreatedAt); err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			writeError(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 		p.EmailVerified = ev == 1
@@ -97,14 +97,14 @@ func createContactPost(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	eventID, err := strconv.Atoi(mux.Vars(r)["id"])
 	if err != nil {
-		http.Error(w, "invalid event id", http.StatusBadRequest)
+		writeError(w, "invalid event id", http.StatusBadRequest)
 		return
 	}
 
 	// Check event exists.
 	var dummy int
 	if err := db.QueryRow("SELECT id FROM events WHERE id=?", eventID).Scan(&dummy); err == sql.ErrNoRows {
-		http.Error(w, "event not found", http.StatusNotFound)
+		writeError(w, "event not found", http.StatusNotFound)
 		return
 	}
 
@@ -117,7 +117,7 @@ func createContactPost(w http.ResponseWriter, r *http.Request) {
 		Email    string `json:"email"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "invalid request body", http.StatusBadRequest)
+		writeError(w, "invalid request body", http.StatusBadRequest)
 		return
 	}
 
@@ -127,16 +127,16 @@ func createContactPost(w http.ResponseWriter, r *http.Request) {
 	req.Nickname = strings.TrimSpace(req.Nickname)
 	req.Email = strings.TrimSpace(req.Email)
 	if req.Type == "" || req.City == "" || req.Nickname == "" || req.Email == "" {
-		http.Error(w, "type, city, nickname and email are required", http.StatusBadRequest)
+		writeError(w, "type, city, nickname and email are required", http.StatusBadRequest)
 		return
 	}
 	validTypes := map[string]bool{"ride_offer": true, "ride_request": true, "sleep_offer": true, "sleep_request": true}
 	if !validTypes[req.Type] {
-		http.Error(w, "type must be one of: ride_offer, ride_request, sleep_offer, sleep_request", http.StatusBadRequest)
+		writeError(w, "type must be one of: ride_offer, ride_request, sleep_offer, sleep_request", http.StatusBadRequest)
 		return
 	}
 	if !strings.Contains(req.Email, "@") {
-		http.Error(w, "invalid email address", http.StatusBadRequest)
+		writeError(w, "invalid email address", http.StatusBadRequest)
 		return
 	}
 	if req.Persons < 1 {
@@ -145,12 +145,12 @@ func createContactPost(w http.ResponseWriter, r *http.Request) {
 
 	verifyToken, err := generateVerificationToken()
 	if err != nil {
-		http.Error(w, "failed to generate token", http.StatusInternalServerError)
+		writeError(w, "failed to generate token", http.StatusInternalServerError)
 		return
 	}
 	deleteToken, err := generateVerificationToken()
 	if err != nil {
-		http.Error(w, "failed to generate token", http.StatusInternalServerError)
+		writeError(w, "failed to generate token", http.StatusInternalServerError)
 		return
 	}
 
@@ -163,7 +163,7 @@ func createContactPost(w http.ResponseWriter, r *http.Request) {
 		verifyToken, deleteToken, expiresAt.Format(time.RFC3339),
 	)
 	if err != nil {
-		http.Error(w, "failed to create post", http.StatusInternalServerError)
+		writeError(w, "failed to create post", http.StatusInternalServerError)
 		return
 	}
 	id, _ := result.LastInsertId()
@@ -199,18 +199,18 @@ func verifyContactPost(w http.ResponseWriter, r *http.Request) {
 		"SELECT id, expires_at FROM contact_posts WHERE verify_token=?", token,
 	).Scan(&id, &expiresAt)
 	if err == sql.ErrNoRows {
-		http.Error(w, "invalid or already used verification link", http.StatusNotFound)
+		writeError(w, "invalid or already used verification link", http.StatusNotFound)
 		return
 	}
 	if err != nil {
-		http.Error(w, "internal server error", http.StatusInternalServerError)
+		writeError(w, "internal server error", http.StatusInternalServerError)
 		return
 	}
 
 	exp, err := parseTokenExpiration(expiresAt)
 	if err != nil || time.Now().After(exp) {
 		db.Exec("DELETE FROM contact_posts WHERE id=?", id)
-		http.Error(w, "verification link has expired", http.StatusGone)
+		writeError(w, "verification link has expired", http.StatusGone)
 		return
 	}
 
@@ -227,11 +227,11 @@ func deleteContactPostByToken(w http.ResponseWriter, r *http.Request) {
 	var id int
 	err := db.QueryRow("SELECT id FROM contact_posts WHERE delete_token=?", token).Scan(&id)
 	if err == sql.ErrNoRows {
-		http.Error(w, "invalid delete link", http.StatusNotFound)
+		writeError(w, "invalid delete link", http.StatusNotFound)
 		return
 	}
 	if err != nil {
-		http.Error(w, "internal server error", http.StatusInternalServerError)
+		writeError(w, "internal server error", http.StatusInternalServerError)
 		return
 	}
 
@@ -248,23 +248,23 @@ func deleteContactPost(w http.ResponseWriter, r *http.Request) {
 
 	postID, err := strconv.Atoi(mux.Vars(r)["id"])
 	if err != nil {
-		http.Error(w, "invalid post id", http.StatusBadRequest)
+		writeError(w, "invalid post id", http.StatusBadRequest)
 		return
 	}
 
 	var eventID int
 	err = db.QueryRow("SELECT event_id FROM contact_posts WHERE id=?", postID).Scan(&eventID)
 	if err == sql.ErrNoRows {
-		http.Error(w, "post not found", http.StatusNotFound)
+		writeError(w, "post not found", http.StatusNotFound)
 		return
 	}
 	if err != nil {
-		http.Error(w, "internal server error", http.StatusInternalServerError)
+		writeError(w, "internal server error", http.StatusInternalServerError)
 		return
 	}
 
 	if callerRole != RoleAdmin && !isOrgMemberOfEvent(callerID, eventID) {
-		http.Error(w, "forbidden", http.StatusForbidden)
+		writeError(w, "forbidden", http.StatusForbidden)
 		return
 	}
 
@@ -278,7 +278,7 @@ func deleteContactPost(w http.ResponseWriter, r *http.Request) {
 func contactPoster(w http.ResponseWriter, r *http.Request) {
 	postID, err := strconv.Atoi(mux.Vars(r)["id"])
 	if err != nil {
-		http.Error(w, "invalid post id", http.StatusBadRequest)
+		writeError(w, "invalid post id", http.StatusBadRequest)
 		return
 	}
 
@@ -287,13 +287,13 @@ func contactPoster(w http.ResponseWriter, r *http.Request) {
 		Message string `json:"message"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "invalid request body", http.StatusBadRequest)
+		writeError(w, "invalid request body", http.StatusBadRequest)
 		return
 	}
 	req.Email = strings.TrimSpace(req.Email)
 	req.Message = strings.TrimSpace(req.Message)
 	if !strings.Contains(req.Email, "@") || req.Message == "" {
-		http.Error(w, "email and message are required", http.StatusBadRequest)
+		writeError(w, "email and message are required", http.StatusBadRequest)
 		return
 	}
 
@@ -304,20 +304,20 @@ func contactPoster(w http.ResponseWriter, r *http.Request) {
 		"SELECT email, nickname, email_verified, expires_at FROM contact_posts WHERE id=?", postID,
 	).Scan(&posterEmail, &nickname, &emailVerified, &expiresAt)
 	if err == sql.ErrNoRows {
-		http.Error(w, "post not found", http.StatusNotFound)
+		writeError(w, "post not found", http.StatusNotFound)
 		return
 	}
 	if err != nil {
-		http.Error(w, "internal server error", http.StatusInternalServerError)
+		writeError(w, "internal server error", http.StatusInternalServerError)
 		return
 	}
 	if emailVerified == 0 {
-		http.Error(w, "post not verified", http.StatusBadRequest)
+		writeError(w, "post not verified", http.StatusBadRequest)
 		return
 	}
 	exp, err := parseTokenExpiration(expiresAt)
 	if err != nil || time.Now().After(exp) {
-		http.Error(w, "post has expired", http.StatusGone)
+		writeError(w, "post has expired", http.StatusGone)
 		return
 	}
 
@@ -327,7 +327,7 @@ func contactPoster(w http.ResponseWriter, r *http.Request) {
 	)
 	if err := SendEmail(posterEmail, "Someone wants to contact you (dansal board)", body); err != nil {
 		log.Printf("contact_posts: forward email failed for post %d: %v", postID, err)
-		http.Error(w, "failed to forward message: "+err.Error(), http.StatusBadGateway)
+		writeError(w, "failed to forward message: "+err.Error(), http.StatusBadGateway)
 		return
 	}
 

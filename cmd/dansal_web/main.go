@@ -2,6 +2,7 @@ package main
 
 import (
 	"log"
+	"log/syslog"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -11,6 +12,11 @@ import (
 )
 
 func main() {
+	if w, err := syslog.New(syslog.LOG_INFO|syslog.LOG_DAEMON, "dansal_web"); err == nil {
+		log.SetOutput(w)
+		log.SetFlags(0)
+	}
+
 	cfg := loadConfig()
 	cfg.pagesContent = loadPagesContent(cfg.PagesFile)
 	db := initDB(cfg.DBPath)
