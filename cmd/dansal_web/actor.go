@@ -9,6 +9,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"net/url"
 	"regexp"
 	"strconv"
 	"strings"
@@ -401,6 +402,22 @@ func inboxHandler(cfg *Config, db *sql.DB, client *DansalClient) http.HandlerFun
 			}
 			w.WriteHeader(http.StatusAccepted)
 
+		case "Accept":
+			// Accept{Follow}: update our outbound follow state to accepted.
+			var followActivityID string
+			switch v := raw["object"].(type) {
+			case string:
+				followActivityID = v
+			case map[string]interface{}:
+				followActivityID, _ = v["id"].(string)
+			}
+			if followActivityID != "" {
+				if err := updateFollowStateByActivityID(db, followActivityID, "accepted"); err != nil {
+					log.Printf("inbox Accept: update follow state for %s: %v", followActivityID, err)
+				}
+			}
+			w.WriteHeader(http.StatusAccepted)
+
 		default:
 			writeJSONError(w, http.StatusBadRequest, "unsupported activity type")
 		}
@@ -502,4 +519,147 @@ func buildCreateActivity(cfg *Config, slug string, e Event) Activity {
 		To:    []string{"https://www.w3.org/ns/activitystreams#Public"},
 		CC:    []string{base + "/followers"},
 	}
+}
+
+// resolveActorFromInput resolves a webfinger address (@user@host) or AP URL to
+// the canonical AP actor URL and its inbox URL.
+func resolveActorFromInput(ctx context.Context, httpClient *http.Client, input string) (apID, inboxURL string, err error) {
+	input = strings.TrimSpace(input)
+	if strings.HasPrefix(input, "@") {
+		parts := strings.SplitN(strings.TrimPrefix(input, "@"), "@", 2)
+		if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
+			return "", "", fmt.Errorf("invalid webfinger address")
+		}
+		resource := "acct:" + parts[0] + "@" + parts[1]
+		wfURL := "https://" + parts[1] + "/.well-known/webfinger?resource=" + url.QueryEscape(resource)
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, wfURL, nil)
+		if err != nil {
+			return "", "", err
+		}
+		req.Header.Set("Accept", "application/json")
+		resp, err := httpClient.Do(req)
+		if err != nil {
+			return "", "", err
+		}
+		defer resp.Body.Close()
+		var wf struct {
+			Links []struct {
+				Rel  string `json:"rel"`
+				Type string `json:"type"`
+				Href string `json:"href"`
+			} `json:"links"`
+		}
+		if err := json.NewDecoder(resp.Body).Decode(&wf); err != nil {
+			return "", "", err
+		}
+		for _, l := range wf.Links {
+			if l.Rel == "self" && l.Href != "" {
+				apID = l.Href
+				break
+			}
+		}
+		if apID == "" {
+			return "", "", fmt.Errorf("no self link in webfinger response")
+		}
+	} else if strings.HasPrefix(input, "https://") {
+		apID = input
+	} else {
+		return "", "", fmt.Errorf("expected @user@host or https:// URL")
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, apID, nil)
+	if err != nil {
+		return "", "", err
+	}
+	req.Header.Set("Accept", "application/activity+json")
+	resp, err := httpClient.Do(req)
+	if err != nil {
+		return "", "", err
+	}
+	defer resp.Body.Close()
+	var actor map[string]interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&actor); err != nil {
+		return "", "", err
+	}
+	inboxURL, _ = actor["inbox"].(string)
+	if inboxURL == "" {
+		return "", "", fmt.Errorf("no inbox in actor response")
+	}
+	return apID, inboxURL, nil
+}
+
+func sendFollowActivity(cfg *Config, actor *ActorRecord, followeeAPID, followeeInbox string) (followActivityID string, err error) {
+	base := actorURL(cfg, actor.OrgSlug)
+	followActivityID = base + "/activities/follow-" + strconv.FormatInt(time.Now().UnixNano(), 36)
+	follow := Activity{
+		Context: APContext,
+		Type:    "Follow",
+		ID:      followActivityID,
+		Actor:   base,
+		Object:  followeeAPID,
+	}
+	body, err := json.Marshal(follow)
+	if err != nil {
+		return "", err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, followeeInbox, bytes.NewReader(body))
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("Content-Type", "application/activity+json")
+	keyID := base + "#main-key"
+	if err := SignRequest(req, keyID, actor.PrivateKeyPEM, body); err != nil {
+		return "", fmt.Errorf("sign: %w", err)
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return "", err
+	}
+	resp.Body.Close()
+	if resp.StatusCode >= 300 {
+		return "", fmt.Errorf("remote returned %d", resp.StatusCode)
+	}
+	return followActivityID, nil
+}
+
+func sendUndoFollow(cfg *Config, actor *ActorRecord, followeeAPID, followeeInbox, followActivityID string) error {
+	base := actorURL(cfg, actor.OrgSlug)
+	undo := Activity{
+		Context: APContext,
+		Type:    "Undo",
+		ID:      base + "/activities/undo-" + strconv.FormatInt(time.Now().UnixNano(), 36),
+		Actor:   base,
+		Object: Activity{
+			Type:  "Follow",
+			ID:    followActivityID,
+			Actor: base,
+			Object: followeeAPID,
+		},
+	}
+	body, err := json.Marshal(undo)
+	if err != nil {
+		return err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, followeeInbox, bytes.NewReader(body))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/activity+json")
+	keyID := base + "#main-key"
+	if err := SignRequest(req, keyID, actor.PrivateKeyPEM, body); err != nil {
+		return fmt.Errorf("sign: %w", err)
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return err
+	}
+	resp.Body.Close()
+	if resp.StatusCode >= 300 {
+		return fmt.Errorf("remote returned %d", resp.StatusCode)
+	}
+	return nil
 }

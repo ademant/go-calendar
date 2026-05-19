@@ -57,6 +57,38 @@
     <a href="/admin/organizations" class="btn-secondary">{{$.Strings.T "admin_cancel"}}</a>
   </div>
 </form>
+
+{{$orgID := .Org.ID}}
+{{if $orgID}}
+<fieldset class="follows-fieldset">
+  <legend>Follow external actors</legend>
+  {{if .FollowErr}}<p class="form-error" role="alert">{{.FollowErr}}</p>{{end}}
+  {{if .Follows}}
+  <table class="follows-table">
+    <tbody>
+    {{range .Follows}}
+    <tr>
+      <td class="followee-url">{{.FolloweeAPID}}</td>
+      <td class="follow-state {{.State}}">{{.State}}</td>
+      <td>
+        <form method="post" action="/admin/organizations/{{$orgID}}/unfollow" style="margin:0">
+          <input type="hidden" name="followee_ap_id" value="{{.FolloweeAPID}}">
+          <button type="submit" class="btn-sm btn-del">Unfollow</button>
+        </form>
+      </td>
+    </tr>
+    {{end}}
+    </tbody>
+  </table>
+  {{else}}
+  <p style="color:#888;font-size:.9rem;margin:.25rem 0">No followed actors yet.</p>
+  {{end}}
+  <form method="post" action="/admin/organizations/{{$orgID}}/follow" style="display:flex;gap:.5rem;margin-top:.75rem;align-items:center">
+    <input type="text" name="followee" placeholder="@relay@other.example or https://..." style="flex:1;padding:.4rem .6rem;border:1px solid #ccc;border-radius:4px;font-size:.95rem">
+    <button type="submit" class="btn-primary" style="white-space:nowrap">Follow</button>
+  </form>
+</fieldset>
+{{end}}
 {{end}}
 </div>
 
@@ -82,6 +114,15 @@
 .btn-secondary:hover{background:#e8e8e8}
 .btn-del{background:#b00020;color:#fff;border:none;cursor:pointer}
 .btn-del:hover{background:#800016}
+.follows-fieldset{border:1px solid #ddd;border-radius:4px;padding:.75rem 1rem;display:flex;flex-direction:column;gap:.5rem;margin-top:1rem}
+.follows-fieldset legend{font-weight:600;font-size:.9rem;color:#444;padding:0 .25rem}
+.follows-table{width:100%;border-collapse:collapse;font-size:.88rem}
+.follows-table td{padding:.3rem .4rem;border-bottom:1px solid #eee;vertical-align:middle}
+.follows-table .followee-url{word-break:break-all;color:#333}
+.follows-table .follow-state{font-size:.8rem;padding:.2rem .5rem;border-radius:3px;white-space:nowrap}
+.follows-table .follow-state.pending{color:#856404;background:#fff3cd}
+.follows-table .follow-state.accepted{color:#155724;background:#d4edda}
+.follows-table .follow-state.rejected{color:#721c24;background:#f8d7da}
 </style>
 <script>
 function removeImage(url){var f=document.createElement('form');f.method='post';f.action=url;document.body.appendChild(f);f.submit();}

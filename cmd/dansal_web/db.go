@@ -36,6 +36,16 @@ CREATE TABLE IF NOT EXISTS delivered (
     delivered_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     UNIQUE(event_id, org_id)
 );
+CREATE TABLE IF NOT EXISTS follows (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    actor_id INTEGER NOT NULL,
+    followee_ap_id TEXT NOT NULL,
+    followee_inbox TEXT NOT NULL,
+    follow_activity_id TEXT NOT NULL,
+    state TEXT NOT NULL DEFAULT 'pending',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(actor_id, followee_ap_id)
+);
 `); err != nil {
 		log.Fatalf("init db schema: %v", err)
 	}
@@ -160,4 +170,70 @@ func isDelivered(db *sql.DB, eventID, orgID int) bool {
 		eventID, orgID,
 	).Scan(&n)
 	return n > 0
+}
+
+type FollowRecord struct {
+	ID               int
+	ActorID          int
+	FolloweeAPID     string
+	FolloweeInbox    string
+	FollowActivityID string
+	State            string
+	CreatedAt        string
+}
+
+func addFollow(db *sql.DB, actorID int, followeeAPID, followeeInbox, followActivityID string) error {
+	_, err := db.Exec(
+		"INSERT OR IGNORE INTO follows (actor_id, followee_ap_id, followee_inbox, follow_activity_id) VALUES (?, ?, ?, ?)",
+		actorID, followeeAPID, followeeInbox, followActivityID,
+	)
+	return err
+}
+
+func getFollow(db *sql.DB, actorID int, followeeAPID string) (*FollowRecord, error) {
+	var f FollowRecord
+	err := db.QueryRow(
+		"SELECT id, actor_id, followee_ap_id, followee_inbox, follow_activity_id, state, created_at FROM follows WHERE actor_id=? AND followee_ap_id=?",
+		actorID, followeeAPID,
+	).Scan(&f.ID, &f.ActorID, &f.FolloweeAPID, &f.FolloweeInbox, &f.FollowActivityID, &f.State, &f.CreatedAt)
+	if err != nil {
+		return nil, err
+	}
+	return &f, nil
+}
+
+func listFollows(db *sql.DB, actorID int) ([]FollowRecord, error) {
+	rows, err := db.Query(
+		"SELECT id, actor_id, followee_ap_id, followee_inbox, follow_activity_id, state, created_at FROM follows WHERE actor_id=? ORDER BY created_at",
+		actorID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var fs []FollowRecord
+	for rows.Next() {
+		var f FollowRecord
+		if err := rows.Scan(&f.ID, &f.ActorID, &f.FolloweeAPID, &f.FolloweeInbox, &f.FollowActivityID, &f.State, &f.CreatedAt); err != nil {
+			return nil, err
+		}
+		fs = append(fs, f)
+	}
+	return fs, nil
+}
+
+func removeFollow(db *sql.DB, actorID int, followeeAPID string) error {
+	_, err := db.Exec(
+		"DELETE FROM follows WHERE actor_id=? AND followee_ap_id=?",
+		actorID, followeeAPID,
+	)
+	return err
+}
+
+func updateFollowStateByActivityID(db *sql.DB, followActivityID, state string) error {
+	_, err := db.Exec(
+		"UPDATE follows SET state=? WHERE follow_activity_id=?",
+		state, followActivityID,
+	)
+	return err
 }

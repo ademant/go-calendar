@@ -1,6 +1,7 @@
 package main
 
 import (
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -55,8 +56,10 @@ type AdminOrgsData struct {
 }
 
 type AdminOrgEditData struct {
-	Org      Organization
-	ErrorKey string
+	Org       Organization
+	ErrorKey  string
+	Follows   []FollowRecord
+	FollowErr string
 }
 
 func adminOrgsHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {
@@ -166,7 +169,7 @@ func adminOrgCreateHandler(cfg *Config, tmpls *Templates, client *DansalClient, 
 	}
 }
 
-func adminOrgEditPageHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {
+func adminOrgEditPageHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n, db *sql.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		user, ok := requireLogin(w, r)
 		if !ok {
@@ -186,8 +189,105 @@ func adminOrgEditPageHandler(cfg *Config, tmpls *Templates, client *DansalClient
 			http.NotFound(w, r)
 			return
 		}
+		var follows []FollowRecord
+		if actor, err := getActorByOrgID(db, id); err == nil {
+			follows, _ = listFollows(db, actor.ID)
+		}
 		title := i18n.T(r, "admin_edit")
-		renderTemplate(w, tmpls.adminOrgEdit, tmplData(r, cfg, i18n, title, AdminOrgEditData{Org: org}))
+		renderTemplate(w, tmpls.adminOrgEdit, tmplData(r, cfg, i18n, title, AdminOrgEditData{
+			Org:       org,
+			Follows:   follows,
+			FollowErr: r.URL.Query().Get("follow_err"),
+		}))
+	}
+}
+
+func adminOrgFollowHandler(cfg *Config, db *sql.DB, client *DansalClient) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		user, ok := requireLogin(w, r)
+		if !ok {
+			return
+		}
+		if user.Role != "admin" {
+			http.Error(w, "Forbidden", http.StatusForbidden)
+			return
+		}
+		id, err := strconv.Atoi(mux.Vars(r)["id"])
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		if err := r.ParseForm(); err != nil {
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+		input := strings.TrimSpace(r.FormValue("followee"))
+		if input == "" {
+			http.Redirect(w, r, fmt.Sprintf("/admin/organizations/%d/edit", id), http.StatusSeeOther)
+			return
+		}
+		actor, err := getActorByOrgID(db, id)
+		if err != nil {
+			http.Redirect(w, r, fmt.Sprintf("/admin/organizations/%d/edit?follow_err=no+actor", id), http.StatusSeeOther)
+			return
+		}
+		apID, inboxURL, err := resolveActorFromInput(r.Context(), client.HTTP, input)
+		if err != nil {
+			log.Printf("follow resolve %q: %v", input, err)
+			http.Redirect(w, r, fmt.Sprintf("/admin/organizations/%d/edit?follow_err=%s", id, url.QueryEscape("could not resolve: "+err.Error())), http.StatusSeeOther)
+			return
+		}
+		followActivityID, err := sendFollowActivity(cfg, actor, apID, inboxURL)
+		if err != nil {
+			log.Printf("sendFollow %s: %v", apID, err)
+			http.Redirect(w, r, fmt.Sprintf("/admin/organizations/%d/edit?follow_err=%s", id, url.QueryEscape("delivery failed: "+err.Error())), http.StatusSeeOther)
+			return
+		}
+		if err := addFollow(db, actor.ID, apID, inboxURL, followActivityID); err != nil {
+			log.Printf("addFollow: %v", err)
+		}
+		http.Redirect(w, r, fmt.Sprintf("/admin/organizations/%d/edit", id), http.StatusSeeOther)
+	}
+}
+
+func adminOrgUnfollowHandler(cfg *Config, db *sql.DB, client *DansalClient) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		user, ok := requireLogin(w, r)
+		if !ok {
+			return
+		}
+		if user.Role != "admin" {
+			http.Error(w, "Forbidden", http.StatusForbidden)
+			return
+		}
+		id, err := strconv.Atoi(mux.Vars(r)["id"])
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		if err := r.ParseForm(); err != nil {
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+		followeeAPID := strings.TrimSpace(r.FormValue("followee_ap_id"))
+		if followeeAPID == "" {
+			http.Redirect(w, r, fmt.Sprintf("/admin/organizations/%d/edit", id), http.StatusSeeOther)
+			return
+		}
+		actor, err := getActorByOrgID(db, id)
+		if err != nil {
+			http.Redirect(w, r, fmt.Sprintf("/admin/organizations/%d/edit", id), http.StatusSeeOther)
+			return
+		}
+		if follow, err := getFollow(db, actor.ID, followeeAPID); err == nil {
+			if err := sendUndoFollow(cfg, actor, followeeAPID, follow.FolloweeInbox, follow.FollowActivityID); err != nil {
+				log.Printf("sendUndoFollow %s: %v", followeeAPID, err)
+			}
+		}
+		if err := removeFollow(db, actor.ID, followeeAPID); err != nil {
+			log.Printf("removeFollow: %v", err)
+		}
+		http.Redirect(w, r, fmt.Sprintf("/admin/organizations/%d/edit", id), http.StatusSeeOther)
 	}
 }
 

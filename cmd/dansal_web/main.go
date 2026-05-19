@@ -118,10 +118,12 @@ func main() {
 	r.HandleFunc("/admin/organizations/check-actor-name", adminOrgCheckActorNameHandler(cfg, client)).Methods("GET")
 	r.HandleFunc("/admin/organizations/new", adminOrgNewPageHandler(cfg, tmpls, i18n)).Methods("GET")
 	r.HandleFunc("/admin/organizations/new", adminOrgCreateHandler(cfg, tmpls, client, i18n)).Methods("POST")
-	r.HandleFunc("/admin/organizations/{id}/edit", adminOrgEditPageHandler(cfg, tmpls, client, i18n)).Methods("GET")
+	r.HandleFunc("/admin/organizations/{id}/edit", adminOrgEditPageHandler(cfg, tmpls, client, i18n, db)).Methods("GET")
 	r.HandleFunc("/admin/organizations/{id}/edit", adminOrgSaveHandler(cfg, tmpls, client, i18n)).Methods("POST")
 	r.HandleFunc("/admin/organizations/{id}/delete", adminOrgDeleteHandler(cfg, client)).Methods("POST")
 	r.HandleFunc("/admin/organizations/{id}/run-feeds", adminOrgRunFeedsHandler(cfg, client)).Methods("POST")
+	r.HandleFunc("/admin/organizations/{id}/follow", adminOrgFollowHandler(cfg, db, client)).Methods("POST")
+	r.HandleFunc("/admin/organizations/{id}/unfollow", adminOrgUnfollowHandler(cfg, db, client)).Methods("POST")
 
 	r.HandleFunc("/admin/fetchurls", adminFetchurlsHandler(cfg, tmpls, client, i18n)).Methods("GET")
 	r.HandleFunc("/admin/fetchurls/new", adminFetchurlNewPageHandler(cfg, tmpls, client, i18n)).Methods("GET")
