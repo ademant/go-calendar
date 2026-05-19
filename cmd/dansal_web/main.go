@@ -128,6 +128,10 @@ func main() {
 	r.HandleFunc("/admin/organizations/{id}/follow", adminOrgFollowHandler(cfg, db, client)).Methods("POST")
 	r.HandleFunc("/admin/organizations/{id}/unfollow", adminOrgUnfollowHandler(cfg, db, client)).Methods("POST")
 
+	r.HandleFunc("/admin/dances", adminDancesHandler(cfg, tmpls, client, i18n)).Methods("GET")
+	r.HandleFunc("/admin/dances", adminDanceCreateHandler(cfg, client)).Methods("POST")
+	r.HandleFunc("/admin/dances/{id}/delete", adminDanceDeleteHandler(cfg, client)).Methods("POST")
+
 	r.HandleFunc("/admin/fetchurls", adminFetchurlsHandler(cfg, tmpls, client, i18n)).Methods("GET")
 	r.HandleFunc("/admin/fetchurls/new", adminFetchurlNewPageHandler(cfg, tmpls, client, i18n)).Methods("GET")
 	r.HandleFunc("/admin/fetchurls/new", adminFetchurlNewPostHandler(cfg, tmpls, client, i18n)).Methods("POST")

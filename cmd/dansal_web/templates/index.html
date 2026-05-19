@@ -38,6 +38,10 @@
       <option value="">{{$.Strings.T "filter_all_countries"}}</option>
       {{range countryList .Events}}<option value="{{.}}">{{.}}</option>{{end}}
     </select>
+    <select id="f-dance" aria-label="All dance styles">
+      <option value="">All dance styles</option>
+      {{range .Dances}}<option value="{{.Name}}">{{.Name}}</option>{{end}}
+    </select>
     <button type="button" id="f-clear">{{$.Strings.T "filter_clear"}}</button>
   </div>
 </div>
@@ -69,6 +73,7 @@
       data-festival="{{if .HasFestival}}1{{else}}0{{end}}"
       data-organizer="{{$org}}"
       data-tags="{{range .Tags}}{{.}} {{end}}"
+      data-dances="{{range .DanceNames}}{{.}} {{end}}"
       data-id="{{.ID}}"
       data-start="{{.StartTime}}"
       data-town="{{.LocationTown}}"
@@ -448,6 +453,7 @@ th.sorted-desc::after{content:" ↓";color:var(--link)}
     document.getElementById('f-from').value    = '';
     document.getElementById('f-to').value      = '';
     document.getElementById('f-country').value = '';
+    document.getElementById('f-dance').value   = '';
     currentType = '';
     document.querySelectorAll('.type-btn').forEach(function(b){ b.classList.remove('type-active'); });
     document.querySelector('.type-btn[data-type=""]').classList.add('type-active');
@@ -460,6 +466,7 @@ th.sorted-desc::after{content:" ↓";color:var(--link)}
     var from    = document.getElementById('f-from').value;
     var to      = document.getElementById('f-to').value;
     var country = document.getElementById('f-country').value.toLowerCase();
+    var dance   = document.getElementById('f-dance').value.toLowerCase();
 
     visible = rows.filter(function(r){
       if(search){
@@ -469,6 +476,10 @@ th.sorted-desc::after{content:" ↓";color:var(--link)}
       if(from && r.dataset.date<from) return false;
       if(to   && r.dataset.date>to)   return false;
       if(country && r.dataset.country.toLowerCase()!==country) return false;
+      if(dance){
+        var dances = (r.dataset.dances||'').toLowerCase();
+        if(dances.indexOf(dance)<0) return false;
+      }
       if(currentType==='ball'     && r.dataset.ball    !=='1') return false;
       if(currentType==='workshop' && r.dataset.workshop!=='1') return false;
       if(currentType==='festival' && r.dataset.festival!=='1') return false;
@@ -530,7 +541,7 @@ th.sorted-desc::after{content:" ↓";color:var(--link)}
     });
   });
 
-  ['f-search','f-from','f-to','f-country'].forEach(function(id){
+  ['f-search','f-from','f-to','f-country','f-dance'].forEach(function(id){
     var el=document.getElementById(id);
     el.addEventListener('input',  applyFilters);
     el.addEventListener('change', applyFilters);

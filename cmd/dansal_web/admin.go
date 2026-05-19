@@ -1170,6 +1170,7 @@ type AdminEventNewData struct {
 	Organizations []Organization
 	Locations     []Location
 	Musicians     []Musician
+	Dances        []Dance
 	ErrorKey      string
 }
 
@@ -1765,11 +1766,21 @@ func adminEventCreateHandler(cfg *Config, tmpls *Templates, client *DansalClient
 }
 
 type AdminEventEditData struct {
-	Event         Event
-	Organizations []Organization
-	Locations     []Location
-	Musicians     []Musician
-	ErrorKey      string
+	Event              Event
+	Organizations      []Organization
+	Locations          []Location
+	Musicians          []Musician
+	Dances             []Dance
+	SelectedDanceNames map[string]bool
+	ErrorKey           string
+}
+
+func buildSelectedDanceNames(event Event) map[string]bool {
+	m := make(map[string]bool, len(event.DanceNames))
+	for _, n := range event.DanceNames {
+		m[n] = true
+	}
+	return m
 }
 
 func adminEventEditPageHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {
@@ -1791,12 +1802,15 @@ func adminEventEditPageHandler(cfg *Config, tmpls *Templates, client *DansalClie
 		orgs, _ := client.GetOrganizations(r.Context())
 		locs, _ := client.GetLocations(r.Context())
 		musicians, _ := client.GetMusicians(r.Context())
+		dances, _ := client.GetDances(r.Context())
 		title := i18n.T(r, "admin_event_edit_title")
 		renderTemplate(w, tmpls.adminEventEdit, tmplData(r, cfg, i18n, title, AdminEventEditData{
-			Event:         event,
-			Organizations: orgs,
-			Locations:     locs,
-			Musicians:     musicians,
+			Event:              event,
+			Organizations:      orgs,
+			Locations:          locs,
+			Musicians:          musicians,
+			Dances:             dances,
+			SelectedDanceNames: buildSelectedDanceNames(event),
 		}))
 	}
 }
@@ -1822,13 +1836,16 @@ func adminEventSaveHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *Da
 			orgs, _ := client.GetOrganizations(r.Context())
 			locs, _ := client.GetLocations(r.Context())
 			musicians, _ := client.GetMusicians(r.Context())
+			dances, _ := client.GetDances(r.Context())
 			title := i18n.T(r, "admin_event_edit_title")
 			renderTemplate(w, tmpls.adminEventEdit, tmplData(r, cfg, i18n, title, AdminEventEditData{
-				Event:         event,
-				Organizations: orgs,
-				Locations:     locs,
-				Musicians:     musicians,
-				ErrorKey:      errKey,
+				Event:              event,
+				Organizations:      orgs,
+				Locations:          locs,
+				Musicians:          musicians,
+				Dances:             dances,
+				SelectedDanceNames: buildSelectedDanceNames(event),
+				ErrorKey:           errKey,
 			}))
 		}
 
@@ -1945,6 +1962,12 @@ func adminEventSaveHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *Da
 				musicianIDs = append(musicianIDs, n)
 			}
 		}
+		var danceIDs []int
+		for _, v := range r.MultipartForm.Value["dance_ids"] {
+			if n, err := strconv.Atoi(strings.TrimSpace(v)); err == nil {
+				danceIDs = append(danceIDs, n)
+			}
+		}
 
 		ticketsTotal, _ := strconv.Atoi(r.FormValue("tickets_total"))
 		req := EventUpdateReq{
@@ -1968,6 +1991,7 @@ func adminEventSaveHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *Da
 			Pricing:            pricing,
 			Location:           locReq,
 			Musicians:          musicianIDs,
+			Dances:             danceIDs,
 		}
 
 		if req.Title == "" {
@@ -2026,5 +2050,70 @@ func adminEventSaveHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *Da
 			go deliverUpdateToFollowers(cfg, db, client, id)
 		}
 		http.Redirect(w, r, "/admin/events", http.StatusSeeOther)
+	}
+}
+
+// ── Admin Dances ──────────────────────────────────────────────────────────────
+
+type AdminDancesData struct {
+	Dances   []Dance
+	ErrorMsg string
+}
+
+func adminDancesHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		user, ok := requireLogin(w, r)
+		if !ok {
+			return
+		}
+		if user.Role != "admin" {
+			http.Error(w, "Forbidden", http.StatusForbidden)
+			return
+		}
+		dances, _ := client.GetDances(r.Context())
+		title := "Dance Styles"
+		renderTemplate(w, tmpls.adminDances, tmplData(r, cfg, i18n, title, AdminDancesData{Dances: dances}))
+	}
+}
+
+func adminDanceCreateHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		user, ok := requireLogin(w, r)
+		if !ok {
+			return
+		}
+		if user.Role != "admin" {
+			http.Error(w, "Forbidden", http.StatusForbidden)
+			return
+		}
+		if err := r.ParseForm(); err != nil {
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+		name := strings.TrimSpace(r.FormValue("name"))
+		if name != "" {
+			_, _ = client.CreateDance(r.Context(), name, getSessionToken(r))
+		}
+		http.Redirect(w, r, "/admin/dances", http.StatusSeeOther)
+	}
+}
+
+func adminDanceDeleteHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		user, ok := requireLogin(w, r)
+		if !ok {
+			return
+		}
+		if user.Role != "admin" {
+			http.Error(w, "Forbidden", http.StatusForbidden)
+			return
+		}
+		id, err := strconv.Atoi(mux.Vars(r)["id"])
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		_ = client.DeleteDance(r.Context(), id, getSessionToken(r))
+		http.Redirect(w, r, "/admin/dances", http.StatusSeeOther)
 	}
 }

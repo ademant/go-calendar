@@ -69,6 +69,7 @@ type IndexData struct {
 	Events          []Event
 	OrgMap          map[int]Organization
 	FederatedEvents []FederatedEvent
+	Dances          []Dance
 }
 
 type EventData struct {
@@ -421,6 +422,7 @@ type Templates struct {
 	adminEvents        *template.Template
 	adminEventNew      *template.Template
 	adminEventEdit     *template.Template
+	adminDances        *template.Template
 	impressum          *template.Template
 	orgs               *template.Template
 }
@@ -459,6 +461,7 @@ func loadTemplates() *Templates {
 		adminEvents:       load("admin_events"),
 		adminEventNew:     load("admin_event_new"),
 		adminEventEdit:    load("admin_event_edit"),
+		adminDances:       load("admin_dances"),
 		impressum:         load("impressum"),
 		orgs:              load("orgs"),
 	}
@@ -517,8 +520,9 @@ func indexHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *DansalClien
 		if cfg.ShowFederatedEvents {
 			fedEvents, _ = listFederatedEvents(db)
 		}
+		dances, _ := client.GetDances(r.Context())
 		title := i18n.T(r, "events_title")
-		renderTemplate(w, tmpls.index, tmplData(r, cfg, i18n, title, IndexData{Events: events, OrgMap: orgMap, FederatedEvents: fedEvents}))
+		renderTemplate(w, tmpls.index, tmplData(r, cfg, i18n, title, IndexData{Events: events, OrgMap: orgMap, FederatedEvents: fedEvents, Dances: dances}))
 	}
 }
 

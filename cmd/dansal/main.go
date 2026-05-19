@@ -495,6 +495,21 @@ func migrateDB() {
 	db.Exec("ALTER TABLE musicians ADD COLUMN members_json TEXT")
 	db.Exec("ALTER TABLE musicians ADD COLUMN albums_json TEXT")
 	db.Exec("ALTER TABLE musicians ADD COLUMN discogs_id TEXT")
+	db.Exec(`CREATE TABLE IF NOT EXISTS dances (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		name TEXT UNIQUE NOT NULL
+	)`)
+	db.Exec(`CREATE TABLE IF NOT EXISTS event_dances (
+		event_id INTEGER NOT NULL,
+		dance_id INTEGER NOT NULL,
+		PRIMARY KEY (event_id, dance_id),
+		FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE CASCADE,
+		FOREIGN KEY (dance_id) REFERENCES dances(id) ON DELETE CASCADE
+	)`)
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_event_dances_event_id ON event_dances(event_id)")
+	for _, name := range []string{"balfolk", "bretonic", "swedish", "occitan", "balkan", "israelic", "tango", "forro", "salsa", "social dance"} {
+		db.Exec("INSERT OR IGNORE INTO dances (name) VALUES (?)", name)
+	}
 }
 
 func createTables() error {
@@ -836,6 +851,7 @@ func main() {
 	router.Handle("/api/v1/musicians", optAuth(http.HandlerFunc(getMusicians))).Methods("GET")
 	router.Handle("/api/v1/musicians/{id}", optAuth(http.HandlerFunc(getMusician))).Methods("GET")
 	router.Handle("/api/v1/tags", optAuth(http.HandlerFunc(getTags))).Methods("GET")
+	router.Handle("/api/v1/dances", optAuth(http.HandlerFunc(getDances))).Methods("GET")
 	router.Handle("/api/v1/images/{event_id}", optAuth(http.HandlerFunc(getEventImage))).Methods("GET")
 	router.HandleFunc("/api/v1/musician-images/{id}", getMusicianImage).Methods("GET")
 	router.HandleFunc("/api/v1/org-images/{id}", getOrgImage).Methods("GET")
@@ -856,6 +872,12 @@ func main() {
 	locationRoutes.HandleFunc("/bulk-assign-org", bulkAssignLocationOrg).Methods("POST")
 	locationRoutes.HandleFunc("/{id}", patchLocation).Methods("PATCH")
 	locationRoutes.HandleFunc("/{id}", deleteLocation).Methods("DELETE")
+
+	// Dance endpoints (protected writes)
+	danceRoutes := router.PathPrefix("/api/v1/dances").Subrouter()
+	danceRoutes.Use(TokenMiddleware)
+	danceRoutes.HandleFunc("", createDance).Methods("POST")
+	danceRoutes.HandleFunc("/{id}", deleteDance).Methods("DELETE")
 
 	// Protected musician writes
 	musicianRoutes := router.PathPrefix("/api/v1/musicians").Subrouter()

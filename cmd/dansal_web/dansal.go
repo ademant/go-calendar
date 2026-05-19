@@ -62,9 +62,15 @@ type Event struct {
 	BookingEnabled  bool       `json:"booking_enabled,omitempty"`
 	Pricing         *Pricing         `json:"pricing,omitempty"`
 	Musicians       []Musician       `json:"musicians,omitempty"`
+	DanceNames      []string         `json:"dance_names,omitempty"`
 	Timetable       []TimetableEntry `json:"timetable,omitempty"`
 	CreatedAt       string           `json:"created_at"`
 	SourceURL       string           `json:"source_url,omitempty"`
+}
+
+type Dance struct {
+	ID   int    `json:"id"`
+	Name string `json:"name"`
 }
 
 type TimetableEntry struct {
@@ -855,6 +861,7 @@ type EventUpdateReq struct {
 	Pricing        *Pricing    `json:"pricing,omitempty"`
 	Location       EventLocReq `json:"location"`
 	Musicians      []int       `json:"musicians,omitempty"`
+	Dances         []int       `json:"dances,omitempty"`
 }
 
 type EventLocReq struct {
@@ -1331,6 +1338,37 @@ func (c *DansalClient) AddOrgMember(ctx context.Context, orgID, userID int, toke
 
 func (c *DansalClient) RemoveOrgMember(ctx context.Context, orgID, userID int, token string) error {
 	resp, err := c.authed(ctx, http.MethodDelete, fmt.Sprintf("/api/v1/organizations/%d/members/%d", orgID, userID), token, nil)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusNoContent {
+		return apiErr(resp)
+	}
+	return nil
+}
+
+func (c *DansalClient) GetDances(ctx context.Context) ([]Dance, error) {
+	var dances []Dance
+	return dances, c.get(ctx, "/api/v1/dances", &dances)
+}
+
+func (c *DansalClient) CreateDance(ctx context.Context, name, token string) (Dance, error) {
+	body, _ := json.Marshal(map[string]string{"name": name})
+	resp, err := c.authed(ctx, http.MethodPost, "/api/v1/dances", token, body)
+	if err != nil {
+		return Dance{}, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusCreated {
+		return Dance{}, apiErr(resp)
+	}
+	var d Dance
+	return d, json.NewDecoder(resp.Body).Decode(&d)
+}
+
+func (c *DansalClient) DeleteDance(ctx context.Context, id int, token string) error {
+	resp, err := c.authed(ctx, http.MethodDelete, fmt.Sprintf("/api/v1/dances/%d", id), token, nil)
 	if err != nil {
 		return err
 	}

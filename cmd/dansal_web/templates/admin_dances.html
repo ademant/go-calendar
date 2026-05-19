@@ -1,0 +1,56 @@
+{{template "base" .}}
+{{define "content"}}
+<div class="page-header">
+  <h1>Dance Styles</h1>
+</div>
+
+{{with .Data}}
+<div class="table-wrap">
+<table class="event-table" data-sortable>
+  <thead>
+    <tr>
+      <th data-sort="str">Name</th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+  {{range .Dances}}
+  <tr>
+    <td>{{.Name}}</td>
+    <td class="col-actions">
+      <button type="button" class="btn-sm btn-del"
+              onclick="if(confirm('Delete dance style &quot;{{.Name}}&quot;?'))deleteDance({{.ID}})">Delete</button>
+    </td>
+  </tr>
+  {{end}}
+  </tbody>
+</table>
+</div>
+
+<div class="add-section">
+  <h2>Add Dance Style</h2>
+  <form method="post" action="/admin/dances" class="add-form">
+    <input type="text" name="name" placeholder="Dance style name" required>
+    <button type="submit" class="btn-primary">Add</button>
+  </form>
+</div>
+{{end}}
+
+<style>
+.page-header{display:flex;align-items:center;gap:1rem;margin-bottom:.5rem}
+.page-header h1{margin:0}
+.col-actions{white-space:nowrap}
+.btn-del{background:#b00020;color:#fff;border:none;cursor:pointer}
+.btn-del:hover{background:#800016}
+.add-section{margin-top:2rem}
+.add-section h2{font-size:1.1rem;margin-bottom:.75rem}
+.add-form{display:flex;gap:.5rem;align-items:center}
+.add-form input{padding:.4rem .6rem;border:1px solid #ccc;border-radius:4px;font-size:.95rem;min-width:220px}
+.btn-primary{padding:.4rem 1rem;background:#1a6eb5;color:#fff;border:none;border-radius:4px;font-size:.9rem;cursor:pointer}
+.btn-primary:hover{background:#0d4a80}
+</style>
+<script>
+document.querySelectorAll('table[data-sortable]').forEach(initSortable);
+function deleteDance(id){var f=document.createElement('form');f.method='post';f.action='/admin/dances/'+id+'/delete';document.body.appendChild(f);f.submit();}
+</script>
+{{end}}

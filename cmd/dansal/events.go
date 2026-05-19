@@ -62,6 +62,7 @@ type Event struct {
 	Availability    string           `json:"availability,omitempty"`
 	TicketsTotal    int              `json:"tickets_total,omitempty"`
 	BookingEnabled  bool             `json:"booking_enabled,omitempty"`
+	DanceNames      []string         `json:"dance_names,omitempty"`
 	TagsJSON        string           `json:"-"`
 	PricingJSON     string           `json:"-"`
 }
@@ -93,6 +94,7 @@ type EventUpdateRequest struct {
 	Location       EventLocationRequest `json:"location"`
 	Pricing        *Pricing             `json:"pricing"`
 	Musicians      []int                `json:"musicians"`
+	Dances         []int                `json:"dances,omitempty"`
 }
 
 type EventCreateRequest struct {
@@ -112,6 +114,7 @@ type EventCreateRequest struct {
 	Location           EventLocationRequest `json:"location"`
 	Date               []EventDate          `json:"date"`
 	Musicians          []int                `json:"musicians,omitempty"`
+	Dances             []int                `json:"dances,omitempty"`
 	Source             string               `json:"source,omitempty"`
 	OrganizationID     *int                 `json:"organization_id,omitempty"`
 	SourceLastModified int64                `json:"source_last_modified,omitempty"`
@@ -157,7 +160,7 @@ var timeFormats = []string{
 }
 
 // SELECT used by all event list / single-event queries
-const eventListSelect = `SELECT e.id, e.uid, e.title, e.description, e.start_time, e.end_time, e.has_ball, e.has_workshop, e.has_festival, e.is_cancelled, e.tags, e.is_published, e.short_code, COALESCE(e.url,''), COALESCE(e.source,''), e.created_at, COALESCE(l.location,''), COALESCE(l.short_name,''), COALESCE(l.address,''), COALESCE(l.zipcode,''), e.organization_id, COALESCE(e.pricing,''), e.location_id, COALESCE(l.town,''), COALESCE(l.country,''), COALESCE(l.latitude,''), COALESCE(l.longitude,''), COALESCE(e.workshop_difficulty,''), COALESCE(e.booking_url,''), COALESCE(e.availability,''), COALESCE(e.tickets_total,0), COALESCE(e.booking_enabled,0) FROM events e LEFT JOIN locations l ON e.location_id = l.id`
+const eventListSelect = `SELECT e.id, e.uid, e.title, e.description, e.start_time, e.end_time, e.has_ball, e.has_workshop, e.has_festival, e.is_cancelled, e.tags, e.is_published, e.short_code, COALESCE(e.url,''), COALESCE(e.source,''), e.created_at, COALESCE(l.location,''), COALESCE(l.short_name,''), COALESCE(l.address,''), COALESCE(l.zipcode,''), e.organization_id, COALESCE(e.pricing,''), e.location_id, COALESCE(l.town,''), COALESCE(l.country,''), COALESCE(l.latitude,''), COALESCE(l.longitude,''), COALESCE(e.workshop_difficulty,''), COALESCE(e.booking_url,''), COALESCE(e.availability,''), COALESCE(e.tickets_total,0), COALESCE(e.booking_enabled,0), COALESCE((SELECT GROUP_CONCAT(d.name,',') FROM event_dances ed JOIN dances d ON d.id=ed.dance_id WHERE ed.event_id=e.id),'') FROM events e LEFT JOIN locations l ON e.location_id = l.id`
 
 // ── low-level helpers ──────────────────────────────────────────────────────
 
@@ -210,13 +213,14 @@ func scanEventRow(s scanner) (Event, error) {
 	var startEpoch, endEpoch int64
 	var orgID, locID sql.NullInt64
 	var uid sql.NullString
+	var danceNamesCSV string
 	if err := s.Scan(&event.ID, &uid, &event.Title, &event.Description, &startEpoch, &endEpoch,
 		&hasBallInt, &hasWorkshopInt, &hasFestivalInt, &isCancelledInt, &event.TagsJSON, &isPublishedInt,
 		&event.ShortCode, &event.URL, &event.Source, &event.CreatedAt, &event.Location,
 		&event.LocationShortName, &event.LocationAddress, &event.LocationZipcode, &orgID,
 		&event.PricingJSON, &locID, &event.LocationTown, &event.LocationCountry,
 		&event.LocationLat, &event.LocationLng, &event.WorkshopDifficulty, &event.BookingURL,
-		&event.Availability, &event.TicketsTotal, &bookingEnabledInt); err != nil {
+		&event.Availability, &event.TicketsTotal, &bookingEnabledInt, &danceNamesCSV); err != nil {
 		return Event{}, err
 	}
 	if uid.Valid {
@@ -247,6 +251,9 @@ func scanEventRow(s scanner) (Event, error) {
 			event.Pricing = &p
 		}
 	}
+	if danceNamesCSV != "" {
+		event.DanceNames = strings.Split(danceNamesCSV, ",")
+	}
 	return event, nil
 }
 
@@ -257,20 +264,22 @@ func fetchEventByID(q querier, id int) (Event, error) {
 	var startEpoch, endEpoch int64
 	var orgID, locID sql.NullInt64
 	var uid sql.NullString
+	var danceNamesCSV string
 	err := q.QueryRow(
 		`SELECT e.id, e.uid, e.title, e.description, e.start_time, e.end_time, e.has_ball, e.has_workshop,
 		 e.has_festival, e.is_cancelled, e.tags, e.is_published, e.short_code, COALESCE(e.url,''), COALESCE(e.source,''),
 		 e.created_at, e.organization_id, COALESCE(e.pricing,''), e.location_id,
 		 COALESCE(l.location,''), COALESCE(l.short_name,''), COALESCE(l.address,''), COALESCE(l.zipcode,''),
 		 COALESCE(l.town,''), COALESCE(l.country,''), COALESCE(e.workshop_difficulty,''), COALESCE(e.booking_url,''),
-		 COALESCE(e.availability,''), COALESCE(e.tickets_total,0), COALESCE(e.booking_enabled,0)
+		 COALESCE(e.availability,''), COALESCE(e.tickets_total,0), COALESCE(e.booking_enabled,0),
+		 COALESCE((SELECT GROUP_CONCAT(d.name,',') FROM event_dances ed JOIN dances d ON d.id=ed.dance_id WHERE ed.event_id=e.id),'')
 		 FROM events e LEFT JOIN locations l ON e.location_id = l.id WHERE e.id = ?`, id,
 	).Scan(&event.ID, &uid, &event.Title, &event.Description, &startEpoch, &endEpoch,
 		&hasBallInt, &hasWorkshopInt, &hasFestivalInt, &isCancelledInt, &event.TagsJSON, &isPublishedInt,
 		&event.ShortCode, &event.URL, &event.Source, &event.CreatedAt, &orgID, &event.PricingJSON,
 		&locID, &event.Location, &event.LocationShortName, &event.LocationAddress, &event.LocationZipcode,
 		&event.LocationTown, &event.LocationCountry, &event.WorkshopDifficulty, &event.BookingURL,
-		&event.Availability, &event.TicketsTotal, &bookingEnabledInt)
+		&event.Availability, &event.TicketsTotal, &bookingEnabledInt, &danceNamesCSV)
 	if uid.Valid {
 		event.UID = uid.String
 	}
@@ -302,6 +311,9 @@ func fetchEventByID(q querier, id int) (Event, error) {
 		if json.Unmarshal([]byte(event.PricingJSON), &p) == nil {
 			event.Pricing = &p
 		}
+	}
+	if danceNamesCSV != "" {
+		event.DanceNames = strings.Split(danceNamesCSV, ",")
 	}
 	return event, nil
 }
@@ -396,6 +408,10 @@ func applyEventFilters(r *http.Request, query *string, args *[]interface{}) {
 	if v := q.Get("musician_id"); v != "" {
 		*query += " AND EXISTS (SELECT 1 FROM event_musicians em WHERE em.event_id = e.id AND em.musician_id = ?)"
 		*args = append(*args, v)
+	}
+	if dance := q.Get("dance"); dance != "" {
+		*query += " AND EXISTS (SELECT 1 FROM event_dances ed JOIN dances d ON d.id=ed.dance_id WHERE ed.event_id=e.id AND d.name=?)"
+		*args = append(*args, dance)
 	}
 	if latStr, lonStr, radStr := q.Get("lat"), q.Get("lon"), q.Get("radius_km"); latStr != "" && lonStr != "" && radStr != "" {
 		lat, latErr := strconv.ParseFloat(latStr, 64)
@@ -601,6 +617,12 @@ func createEventFromRequest(q querier, req EventCreateRequest, locationID int64,
 			q.Exec("DELETE FROM event_musicians WHERE event_id = ?", id)
 			for _, musicianID := range req.Musicians {
 				q.Exec("INSERT OR IGNORE INTO event_musicians (event_id, musician_id) VALUES (?, ?)", id, musicianID)
+			}
+		}
+		if len(req.Dances) > 0 {
+			q.Exec("DELETE FROM event_dances WHERE event_id = ?", id)
+			for _, danceID := range req.Dances {
+				q.Exec("INSERT OR IGNORE INTO event_dances (event_id, dance_id) VALUES (?, ?)", id, danceID)
 			}
 		}
 
@@ -1150,6 +1172,10 @@ func updateEvent(w http.ResponseWriter, r *http.Request) {
 	tx.Exec("DELETE FROM event_musicians WHERE event_id = ?", id)
 	for _, musicianID := range req.Musicians {
 		tx.Exec("INSERT OR IGNORE INTO event_musicians (event_id, musician_id) VALUES (?, ?)", id, musicianID)
+	}
+	tx.Exec("DELETE FROM event_dances WHERE event_id = ?", id)
+	for _, danceID := range req.Dances {
+		tx.Exec("INSERT OR IGNORE INTO event_dances (event_id, dance_id) VALUES (?, ?)", id, danceID)
 	}
 
 	if err := tx.Commit(); err != nil {
