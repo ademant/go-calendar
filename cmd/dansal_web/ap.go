@@ -92,8 +92,10 @@ type WebFinger struct {
 }
 
 type NodeInfoSoftware struct {
-	Name    string `json:"name"`
-	Version string `json:"version"`
+	Name       string `json:"name"`
+	Version    string `json:"version"`
+	Repository string `json:"repository,omitempty"`
+	Homepage   string `json:"homepage,omitempty"`
 }
 
 type NodeInfoUsage struct {
@@ -102,10 +104,21 @@ type NodeInfoUsage struct {
 	} `json:"users"`
 }
 
+type NodeInfoMaintainer struct {
+	Name  string `json:"name,omitempty"`
+	Email string `json:"email,omitempty"`
+}
+
+type NodeInfoMetadata struct {
+	NodeDescription string              `json:"nodeDescription,omitempty"`
+	Maintainer      *NodeInfoMaintainer `json:"maintainer,omitempty"`
+}
+
 type NodeInfo struct {
-	Version           string           `json:"version"`
-	Software          NodeInfoSoftware `json:"software"`
-	Protocols         []string         `json:"protocols"`
-	Usage             NodeInfoUsage    `json:"usage"`
-	OpenRegistrations bool             `json:"openRegistrations"`
+	Version           string            `json:"version"`
+	Software          NodeInfoSoftware  `json:"software"`
+	Protocols         []string          `json:"protocols"`
+	Usage             NodeInfoUsage     `json:"usage"`
+	OpenRegistrations bool              `json:"openRegistrations"`
+	Metadata          *NodeInfoMetadata `json:"metadata,omitempty"`
 }

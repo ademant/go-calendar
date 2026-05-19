@@ -33,6 +33,7 @@ func main() {
 	r.HandleFunc("/.well-known/webfinger", webfingerHandler(cfg, db, client)).Methods("GET")
 	r.HandleFunc("/.well-known/nodeinfo", nodeinfoIndexHandler(cfg)).Methods("GET")
 	r.HandleFunc("/nodeinfo/2.0", nodeinfoHandler(cfg)).Methods("GET")
+	r.HandleFunc("/nodeinfo/2.1", nodeinfo21Handler(cfg)).Methods("GET")
 
 	r.HandleFunc("/org/{name}", actorOrFrontendHandler(cfg, tmpls, db, client, i18n)).Methods("GET")
 	r.HandleFunc("/org/{name}/outbox", outboxHandler(cfg, db, client)).Methods("GET")

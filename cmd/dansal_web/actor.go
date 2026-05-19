@@ -174,11 +174,16 @@ func webfingerHandler(cfg *Config, db *sql.DB, client *DansalClient) http.Handle
 
 func nodeinfoIndexHandler(cfg *Config) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		base := "https://" + cfg.Domain
 		resp := map[string]interface{}{
 			"links": []map[string]string{
 				{
 					"rel":  "http://nodeinfo.diaspora.software/ns/schema/2.0",
-					"href": "https://" + cfg.Domain + "/nodeinfo/2.0",
+					"href": base + "/nodeinfo/2.0",
+				},
+				{
+					"rel":  "http://nodeinfo.diaspora.software/ns/schema/2.1",
+					"href": base + "/nodeinfo/2.1",
 				},
 			},
 		}
@@ -187,18 +192,44 @@ func nodeinfoIndexHandler(cfg *Config) http.HandlerFunc {
 	}
 }
 
+func buildNodeInfo(cfg *Config, version string) NodeInfo {
+	ni := NodeInfo{
+		Version: version,
+		Software: NodeInfoSoftware{
+			Name:    "dansal-web",
+			Version: "1.0.0",
+		},
+		Protocols:         []string{"activitypub"},
+		OpenRegistrations: false,
+	}
+	if version == "2.1" {
+		var meta *NodeInfoMetadata
+		if cfg.NodeInfoDescription != "" || cfg.NodeInfoMaintainerName != "" || cfg.NodeInfoMaintainerEmail != "" {
+			meta = &NodeInfoMetadata{NodeDescription: cfg.NodeInfoDescription}
+			if cfg.NodeInfoMaintainerName != "" || cfg.NodeInfoMaintainerEmail != "" {
+				meta.Maintainer = &NodeInfoMaintainer{
+					Name:  cfg.NodeInfoMaintainerName,
+					Email: cfg.NodeInfoMaintainerEmail,
+				}
+			}
+		}
+		ni.Metadata = meta
+	}
+	return ni
+}
+
 func nodeinfoHandler(cfg *Config) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		ni := NodeInfo{
-			Version: "2.0",
-			Software: NodeInfoSoftware{
-				Name:    "dansal-web",
-				Version: "1.0.0",
-			},
-			Protocols:         []string{"activitypub"},
-			OpenRegistrations: false,
-		}
-		w.Header().Set("Content-Type", "application/json")
+		ni := buildNodeInfo(cfg, "2.0")
+		w.Header().Set("Content-Type", `application/json; profile="http://nodeinfo.diaspora.software/ns/schema/2.0#"`)
+		json.NewEncoder(w).Encode(ni)
+	}
+}
+
+func nodeinfo21Handler(cfg *Config) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		ni := buildNodeInfo(cfg, "2.1")
+		w.Header().Set("Content-Type", `application/json; profile="http://nodeinfo.diaspora.software/ns/schema/2.1#"`)
 		json.NewEncoder(w).Encode(ni)
 	}
 }

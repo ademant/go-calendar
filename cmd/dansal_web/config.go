@@ -19,6 +19,11 @@ type Config struct {
 	I18nFile  string `yaml:"i18n_file"`  // optional path to override embedded i18n.yaml
 	PagesFile string `yaml:"pages_file"` // optional path to impressum/contact YAML
 
+	// NodeInfo metadata (served at /nodeinfo/2.1)
+	NodeInfoDescription     string `yaml:"nodeinfo_description"`
+	NodeInfoMaintainerName  string `yaml:"nodeinfo_maintainer_name"`
+	NodeInfoMaintainerEmail string `yaml:"nodeinfo_maintainer_email"`
+
 	// Layout
 	ImagesDir        string `yaml:"images_dir"`         // directory for logo.svg, banner.svg, favicon.svg
 	BannerHeightMain int    `yaml:"banner_height_main"` // px; 0 = hidden
