@@ -259,37 +259,3 @@ func replaceTimetable(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(entries)
 }
 
-// DELETE /api/v1/events/{id}/timetable/{entry_id}
-func deleteTimetableEntry(w http.ResponseWriter, r *http.Request) {
-	userRole := r.Header.Get("X-User-Role")
-	if userRole != RoleAdmin && userRole != RoleUser {
-		http.Error(w, "Forbidden", http.StatusForbidden)
-		return
-	}
-	callerID, _ := strconv.Atoi(r.Header.Get("X-User-ID"))
-	vars := mux.Vars(r)
-	eventID, err := strconv.Atoi(vars["id"])
-	if err != nil {
-		http.Error(w, "Invalid event ID", http.StatusBadRequest)
-		return
-	}
-	entryID, err := strconv.Atoi(vars["entry_id"])
-	if err != nil {
-		http.Error(w, "Invalid entry ID", http.StatusBadRequest)
-		return
-	}
-	if !timetableAuthCheck(w, userRole, callerID, eventID) {
-		return
-	}
-
-	result, err := db.Exec("DELETE FROM timetable_entries WHERE id = ? AND event_id = ?", entryID, eventID)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	if n, _ := result.RowsAffected(); n == 0 {
-		http.Error(w, "Timetable entry not found", http.StatusNotFound)
-		return
-	}
-	w.WriteHeader(http.StatusNoContent)
-}

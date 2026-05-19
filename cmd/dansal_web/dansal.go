@@ -846,19 +846,6 @@ type TimetableEntryReq struct {
 	Room        string `json:"room,omitempty"`
 }
 
-func (c *DansalClient) GetAllEventsAdmin(ctx context.Context, token string) ([]Event, error) {
-	resp, err := c.authed(ctx, http.MethodGet, "/api/v1/events?include_past=true", token, nil)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-	var events []Event
-	if err := json.NewDecoder(resp.Body).Decode(&events); err != nil {
-		return nil, err
-	}
-	return events, nil
-}
-
 func (c *DansalClient) GetAdminEvents(ctx context.Context, token string, params url.Values) ([]Event, error) {
 	path := "/api/v1/events"
 	if len(params) > 0 {
@@ -1209,6 +1196,22 @@ func (c *DansalClient) ContactPoster(ctx context.Context, id int, email, message
 	}
 	resp.Body.Close()
 	if resp.StatusCode != http.StatusNoContent {
+		return fmt.Errorf("dansal API: %s", resp.Status)
+	}
+	return nil
+}
+
+func (c *DansalClient) VerifyContactPost(ctx context.Context, token string) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.BaseURL+"/api/v1/contact-posts/verify/"+token, nil)
+	if err != nil {
+		return err
+	}
+	resp, err := c.HTTP.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("dansal API: %s", resp.Status)
 	}
 	return nil

@@ -104,18 +104,11 @@ func contactBoardContactHandler(cfg *Config, client *DansalClient) http.HandlerF
 func contactBoardVerifyHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		token := mux.Vars(r)["token"]
-		req, _ := http.NewRequestWithContext(r.Context(), http.MethodGet,
-			client.BaseURL+"/api/v1/contact-posts/verify/"+token, nil)
-		resp, err := client.HTTP.Do(req)
-		if err != nil || resp.StatusCode != http.StatusOK {
-			if resp != nil {
-				resp.Body.Close()
-			}
+		if err := client.VerifyContactPost(r.Context(), token); err != nil {
 			title := i18n.T(r, "verify_title")
 			renderTemplate(w, tmpls.verify, tmplData(r, cfg, i18n, title, VerifyData{ErrorKey: "verify_error_invalid"}))
 			return
 		}
-		resp.Body.Close()
 		title := i18n.T(r, "board_verify_title")
 		renderTemplate(w, tmpls.verify, tmplData(r, cfg, i18n, title, VerifyData{Success: true}))
 	}
