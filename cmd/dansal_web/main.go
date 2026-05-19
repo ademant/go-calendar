@@ -39,6 +39,7 @@ func main() {
 	r.HandleFunc("/org/{name}/outbox", outboxHandler(cfg, db, client)).Methods("GET")
 	r.HandleFunc("/org/{name}/followers", followersHandler(cfg, db)).Methods("GET")
 	r.HandleFunc("/org/{name}/inbox", inboxHandler(cfg, db, client)).Methods("POST")
+	r.HandleFunc("/inbox", sharedInboxHandler(cfg, db, client)).Methods("POST")
 
 	faviconData, logoData, bannerData := faviconSVG, logoSVG, bannerSVG
 	if cfg.ImagesDir != "" {

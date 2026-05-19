@@ -70,23 +70,31 @@ func actorURL(cfg *Config, slug string) string {
 
 func actorFromOrg(cfg *Config, org Organization, actor *ActorRecord) Actor {
 	base := actorURL(cfg, actor.OrgSlug)
-	return Actor{
-		Context:           APContext,
-		Type:              "Organization",
-		ID:                base,
-		Name:              org.Name,
-		Summary:           org.Description,
-		URL:               base,
-		PreferredUsername: actor.OrgSlug,
-		Inbox:             base + "/inbox",
-		Outbox:            base + "/outbox",
-		Followers:         base + "/followers",
+	a := Actor{
+		Context:                   APContext,
+		Type:                      "Organization",
+		ID:                        base,
+		Name:                      org.Name,
+		Summary:                   org.Description,
+		URL:                       base,
+		PreferredUsername:         actor.OrgSlug,
+		Inbox:                     base + "/inbox",
+		Outbox:                    base + "/outbox",
+		Followers:                 base + "/followers",
+		ManuallyApprovesFollowers: false,
+		Discoverable:              true,
+		Indexable:                 true,
+		Endpoints:                 &APEndpoints{SharedInbox: "https://" + cfg.Domain + "/inbox"},
 		PublicKey: PublicKey{
 			ID:           base + "#main-key",
 			Owner:        base,
 			PublicKeyPem: actor.PublicKeyPEM,
 		},
 	}
+	if org.ImageURL != "" {
+		a.Icon = &APDocument{Type: "Image", MediaType: "image/jpeg", URL: org.ImageURL}
+	}
+	return a
 }
 
 func isAPRequest(r *http.Request) bool {
@@ -345,82 +353,142 @@ func inboxHandler(cfg *Config, db *sql.DB, client *DansalClient) http.HandlerFun
 			writeJSONError(w, http.StatusBadRequest, "read error")
 			return
 		}
-
 		var raw map[string]interface{}
 		if err := json.Unmarshal(body, &raw); err != nil {
 			writeJSONError(w, http.StatusBadRequest, "invalid JSON")
 			return
 		}
+		processInboxActivity(w, r, cfg, db, client, actor, raw)
+	}
+}
 
-		activityType, _ := raw["type"].(string)
-		actorField, _ := raw["actor"].(string)
-
-		switch activityType {
-		case "Follow":
-			if actorField == "" {
-				writeJSONError(w, http.StatusBadRequest, "missing actor")
-				return
-			}
-			inboxURL, err := resolveInboxURL(r.Context(), client, actorField)
-			if err != nil {
-				log.Printf("inbox: resolve actor %s: %v", actorField, err)
-				inboxURL = ""
-			}
-			if inboxURL == "" {
-				writeJSONError(w, http.StatusBadRequest, "could not resolve actor inbox")
-				return
-			}
-			if err := addFollower(db, actor.OrgID, actorField, inboxURL); err != nil {
-				writeJSONError(w, http.StatusInternalServerError, err.Error())
-				return
-			}
-			go sendAccept(cfg, actor, raw, actorField, inboxURL)
-			w.WriteHeader(http.StatusAccepted)
-
-		case "Undo":
-			obj, _ := raw["object"].(map[string]interface{})
-			if obj == nil {
-				writeJSONError(w, http.StatusBadRequest, "missing object")
-				return
-			}
-			objType, _ := obj["type"].(string)
-			if objType != "Follow" {
-				writeJSONError(w, http.StatusBadRequest, "only Undo{Follow} supported")
-				return
-			}
-			undoActor := actorField
-			if undoActor == "" {
-				undoActor, _ = obj["actor"].(string)
-			}
-			if undoActor == "" {
-				writeJSONError(w, http.StatusBadRequest, "missing actor")
-				return
-			}
-			if err := removeFollower(db, actor.OrgID, undoActor); err != nil {
-				writeJSONError(w, http.StatusInternalServerError, err.Error())
-				return
-			}
-			w.WriteHeader(http.StatusAccepted)
-
-		case "Accept":
-			// Accept{Follow}: update our outbound follow state to accepted.
-			var followActivityID string
-			switch v := raw["object"].(type) {
-			case string:
-				followActivityID = v
-			case map[string]interface{}:
-				followActivityID, _ = v["id"].(string)
-			}
-			if followActivityID != "" {
-				if err := updateFollowStateByActivityID(db, followActivityID, "accepted"); err != nil {
-					log.Printf("inbox Accept: update follow state for %s: %v", followActivityID, err)
-				}
-			}
-			w.WriteHeader(http.StatusAccepted)
-
-		default:
-			writeJSONError(w, http.StatusBadRequest, "unsupported activity type")
+func sharedInboxHandler(cfg *Config, db *sql.DB, client *DansalClient) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		body, err := io.ReadAll(io.LimitReader(r.Body, 1<<20))
+		if err != nil {
+			writeJSONError(w, http.StatusBadRequest, "read error")
+			return
 		}
+		var raw map[string]interface{}
+		if err := json.Unmarshal(body, &raw); err != nil {
+			writeJSONError(w, http.StatusBadRequest, "invalid JSON")
+			return
+		}
+		actor := resolveSharedInboxActor(cfg, db, raw)
+		if actor == nil {
+			w.WriteHeader(http.StatusAccepted)
+			return
+		}
+		processInboxActivity(w, r, cfg, db, client, actor, raw)
+	}
+}
+
+// resolveSharedInboxActor determines the target local actor for an activity
+// delivered to the shared inbox. Falls back to the relay actor for activities
+// (like Accept) that don't name a specific local target.
+func resolveSharedInboxActor(cfg *Config, db *sql.DB, raw map[string]interface{}) *ActorRecord {
+	prefix := "https://" + cfg.Domain + "/org/"
+	activityType, _ := raw["type"].(string)
+
+	var targetURL string
+	switch activityType {
+	case "Follow":
+		targetURL, _ = raw["object"].(string)
+	case "Undo":
+		if obj, ok := raw["object"].(map[string]interface{}); ok {
+			switch v := obj["object"].(type) {
+			case string:
+				targetURL = v
+			case map[string]interface{}:
+				targetURL, _ = v["id"].(string)
+			}
+		}
+	}
+
+	if strings.HasPrefix(targetURL, prefix) {
+		slug := strings.SplitN(strings.TrimPrefix(targetURL, prefix), "/", 2)[0]
+		if actor, err := getActorBySlug(db, slug); err == nil {
+			return actor
+		}
+	}
+
+	// Fallback: relay actor handles Accept and unroutable activities.
+	actor, err := getActorBySlug(db, "relay")
+	if err != nil {
+		return nil
+	}
+	return actor
+}
+
+func processInboxActivity(w http.ResponseWriter, r *http.Request, cfg *Config, db *sql.DB, client *DansalClient, actor *ActorRecord, raw map[string]interface{}) {
+	activityType, _ := raw["type"].(string)
+	actorField, _ := raw["actor"].(string)
+
+	switch activityType {
+	case "Follow":
+		if actorField == "" {
+			writeJSONError(w, http.StatusBadRequest, "missing actor")
+			return
+		}
+		inboxURL, err := resolveInboxURL(r.Context(), client, actorField)
+		if err != nil {
+			log.Printf("inbox: resolve actor %s: %v", actorField, err)
+			inboxURL = ""
+		}
+		if inboxURL == "" {
+			writeJSONError(w, http.StatusBadRequest, "could not resolve actor inbox")
+			return
+		}
+		if err := addFollower(db, actor.OrgID, actorField, inboxURL); err != nil {
+			writeJSONError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		go sendAccept(cfg, actor, raw, actorField, inboxURL)
+		w.WriteHeader(http.StatusAccepted)
+
+	case "Undo":
+		obj, _ := raw["object"].(map[string]interface{})
+		if obj == nil {
+			writeJSONError(w, http.StatusBadRequest, "missing object")
+			return
+		}
+		objType, _ := obj["type"].(string)
+		if objType != "Follow" {
+			writeJSONError(w, http.StatusBadRequest, "only Undo{Follow} supported")
+			return
+		}
+		undoActor := actorField
+		if undoActor == "" {
+			undoActor, _ = obj["actor"].(string)
+		}
+		if undoActor == "" {
+			writeJSONError(w, http.StatusBadRequest, "missing actor")
+			return
+		}
+		if err := removeFollower(db, actor.OrgID, undoActor); err != nil {
+			writeJSONError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		w.WriteHeader(http.StatusAccepted)
+
+	case "Accept":
+		// Accept{Follow}: update our outbound follow state to accepted.
+		var followActivityID string
+		switch v := raw["object"].(type) {
+		case string:
+			followActivityID = v
+		case map[string]interface{}:
+			followActivityID, _ = v["id"].(string)
+		}
+		if followActivityID != "" {
+			if err := updateFollowStateByActivityID(db, followActivityID, "accepted"); err != nil {
+				log.Printf("inbox Accept: update follow state for %s: %v", followActivityID, err)
+			}
+		}
+		w.WriteHeader(http.StatusAccepted)
+
+	default:
+		writeJSONError(w, http.StatusBadRequest, "unsupported activity type")
 	}
 }
 

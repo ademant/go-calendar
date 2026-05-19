@@ -703,15 +703,19 @@ func apActorHandler(cfg *Config, db *sql.DB, client *DansalClient) http.HandlerF
 		if actor.OrgID == 0 {
 			base := actorURL(cfg, "relay")
 			a := Actor{
-				Context:           APContext,
-				Type:              "Application",
-				ID:                base,
-				Name:              "relay@" + cfg.Domain,
-				URL:               "https://" + cfg.Domain,
-				PreferredUsername: "relay",
-				Inbox:             base + "/inbox",
-				Outbox:            base + "/outbox",
-				Followers:         base + "/followers",
+				Context:                   APContext,
+				Type:                      "Application",
+				ID:                        base,
+				Name:                      "relay@" + cfg.Domain,
+				URL:                       "https://" + cfg.Domain,
+				PreferredUsername:         "relay",
+				Inbox:                     base + "/inbox",
+				Outbox:                    base + "/outbox",
+				Followers:                 base + "/followers",
+				ManuallyApprovesFollowers: false,
+				Discoverable:              true,
+				Indexable:                 true,
+				Endpoints:                 &APEndpoints{SharedInbox: "https://" + cfg.Domain + "/inbox"},
 				PublicKey: PublicKey{
 					ID:           base + "#main-key",
 					Owner:        base,

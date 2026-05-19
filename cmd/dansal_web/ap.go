@@ -25,18 +25,27 @@ type PublicKey struct {
 	PublicKeyPem string `json:"publicKeyPem"`
 }
 
+type APEndpoints struct {
+	SharedInbox string `json:"sharedInbox"`
+}
+
 type Actor struct {
-	Context           interface{} `json:"@context"`
-	Type              string      `json:"type"`
-	ID                string      `json:"id"`
-	Name              string      `json:"name"`
-	Summary           string      `json:"summary,omitempty"`
-	URL               string      `json:"url,omitempty"`
-	PreferredUsername string      `json:"preferredUsername"`
-	Inbox             string      `json:"inbox"`
-	Outbox            string      `json:"outbox"`
-	Followers         string      `json:"followers"`
-	PublicKey         PublicKey   `json:"publicKey"`
+	Context                   interface{} `json:"@context"`
+	Type                      string      `json:"type"`
+	ID                        string      `json:"id"`
+	Name                      string      `json:"name"`
+	Summary                   string      `json:"summary,omitempty"`
+	URL                       string      `json:"url,omitempty"`
+	PreferredUsername         string      `json:"preferredUsername"`
+	Inbox                     string      `json:"inbox"`
+	Outbox                    string      `json:"outbox"`
+	Followers                 string      `json:"followers"`
+	ManuallyApprovesFollowers bool        `json:"manuallyApprovesFollowers"`
+	Discoverable              bool        `json:"discoverable"`
+	Indexable                 bool        `json:"indexable"`
+	Endpoints                 *APEndpoints `json:"endpoints,omitempty"`
+	Icon                      *APDocument `json:"icon,omitempty"`
+	PublicKey                 PublicKey   `json:"publicKey"`
 }
 
 type Activity struct {
