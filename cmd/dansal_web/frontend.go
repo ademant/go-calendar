@@ -66,8 +66,9 @@ func tmplData(r *http.Request, cfg *Config, i18n *I18n, title string, data inter
 }
 
 type IndexData struct {
-	Events []Event
-	OrgMap map[int]Organization
+	Events          []Event
+	OrgMap          map[int]Organization
+	FederatedEvents []FederatedEvent
 }
 
 type EventData struct {
@@ -464,7 +465,7 @@ func renderTemplate(w http.ResponseWriter, tmpl *template.Template, data interfa
 	}
 }
 
-func indexHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {
+func indexHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *DansalClient, i18n *I18n) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		events, err := client.GetEvents(r.Context(), "")
 		if err != nil {
@@ -477,8 +478,12 @@ func indexHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18
 				orgMap[o.ID] = o
 			}
 		}
+		var fedEvents []FederatedEvent
+		if cfg.ShowFederatedEvents {
+			fedEvents, _ = listFederatedEvents(db)
+		}
 		title := i18n.T(r, "events_title")
-		renderTemplate(w, tmpls.index, tmplData(r, cfg, i18n, title, IndexData{Events: events, OrgMap: orgMap}))
+		renderTemplate(w, tmpls.index, tmplData(r, cfg, i18n, title, IndexData{Events: events, OrgMap: orgMap, FederatedEvents: fedEvents}))
 	}
 }
 

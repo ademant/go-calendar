@@ -56,7 +56,7 @@ func main() {
 	r.HandleFunc("/favicon.svg", svgHandler(faviconData)).Methods("GET")
 	r.HandleFunc("/logo.svg", svgHandler(logoData)).Methods("GET")
 	r.HandleFunc("/banner.svg", svgHandler(bannerData)).Methods("GET")
-	r.HandleFunc("/", indexHandler(cfg, tmpls, client, i18n)).Methods("GET")
+	r.HandleFunc("/", indexHandler(cfg, tmpls, db, client, i18n)).Methods("GET")
 	r.HandleFunc("/events/{id}", eventHandler(cfg, tmpls, client, i18n)).Methods("GET")
 	r.HandleFunc("/events/{id}/board", contactBoardPostHandler(cfg, client, i18n)).Methods("POST")
 	r.HandleFunc("/events/{id}/board/{post_id}/delete", contactBoardDeleteHandler(cfg, client)).Methods("POST")
@@ -79,7 +79,7 @@ func main() {
 	r.HandleFunc("/feed/ball/events.{format}", feedTypeHandler(cfg, client, "ball")).Methods("GET")
 	r.HandleFunc("/feed/workshop/events.{format}", feedTypeHandler(cfg, client, "workshop")).Methods("GET")
 	r.HandleFunc("/feed/festival/events.{format}", feedTypeHandler(cfg, client, "festival")).Methods("GET")
-	r.HandleFunc("/feed/events.{format}", feedMainHandler(cfg, client)).Methods("GET")
+	r.HandleFunc("/feed/events.{format}", feedMainHandler(cfg, db, client)).Methods("GET")
 
 	r.HandleFunc("/login", loginPageHandler(cfg, tmpls, i18n)).Methods("GET")
 	r.HandleFunc("/login", loginHandler(cfg, tmpls, client, i18n)).Methods("POST")

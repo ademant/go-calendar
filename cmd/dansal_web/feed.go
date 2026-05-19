@@ -37,14 +37,33 @@ func feedEventICSHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 }
 
 // feedMainHandler serves all upcoming events.
-func feedMainHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
+func feedMainHandler(cfg *Config, db *sql.DB, client *DansalClient) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		events, err := client.GetEvents(r.Context(), "")
 		if err != nil {
 			http.Error(w, "could not load events", http.StatusBadGateway)
 			return
 		}
+		if cfg.ShowFederatedEvents {
+			if fes, err := listFederatedEvents(db); err == nil {
+				for _, fe := range fes {
+					events = append(events, federatedEventAsEvent(fe))
+				}
+			}
+		}
 		serveEventFeed(w, r, cfg, cfg.Domain+" events", events)
+	}
+}
+
+func federatedEventAsEvent(fe FederatedEvent) Event {
+	return Event{
+		ID:          int(fe.ID),
+		Title:       fe.Name,
+		StartTime:   fe.StartTime,
+		EndTime:     fe.EndTime,
+		URL:         fe.URL,
+		Location:    fe.LocationName,
+		IsPublished: true,
 	}
 }
 

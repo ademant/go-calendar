@@ -24,6 +24,9 @@ type Config struct {
 	NodeInfoMaintainerName  string `yaml:"nodeinfo_maintainer_name"`
 	NodeInfoMaintainerEmail string `yaml:"nodeinfo_maintainer_email"`
 
+	// Federation
+	ShowFederatedEvents bool `yaml:"show_federated_events"`
+
 	// Layout
 	ImagesDir        string `yaml:"images_dir"`         // directory for logo.svg, banner.svg, favicon.svg
 	BannerHeightMain int    `yaml:"banner_height_main"` // px; 0 = hidden

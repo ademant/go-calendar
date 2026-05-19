@@ -501,8 +501,104 @@ func processInboxActivity(w http.ResponseWriter, r *http.Request, cfg *Config, d
 		}
 		w.WriteHeader(http.StatusAccepted)
 
+	case "Create", "Announce":
+		eventObj := extractAPEventObject(raw)
+		if eventObj == nil {
+			w.WriteHeader(http.StatusAccepted)
+			return
+		}
+		fe := apObjectToFederatedEvent(eventObj, actorField)
+		if fe.APID == "" {
+			w.WriteHeader(http.StatusAccepted)
+			return
+		}
+		if err := upsertFederatedEvent(db, fe); err != nil {
+			log.Printf("inbox: upsert federated event %s: %v", fe.APID, err)
+		}
+		w.WriteHeader(http.StatusAccepted)
+
+	case "Update":
+		obj, _ := raw["object"].(map[string]interface{})
+		if obj == nil {
+			w.WriteHeader(http.StatusAccepted)
+			return
+		}
+		if t, _ := obj["type"].(string); t != "Event" {
+			w.WriteHeader(http.StatusAccepted)
+			return
+		}
+		fe := apObjectToFederatedEvent(obj, actorField)
+		if fe.APID == "" {
+			w.WriteHeader(http.StatusAccepted)
+			return
+		}
+		if err := upsertFederatedEvent(db, fe); err != nil {
+			log.Printf("inbox: update federated event %s: %v", fe.APID, err)
+		}
+		w.WriteHeader(http.StatusAccepted)
+
+	case "Delete":
+		var apID string
+		switch v := raw["object"].(type) {
+		case string:
+			apID = v
+		case map[string]interface{}:
+			apID, _ = v["id"].(string)
+		}
+		if apID != "" {
+			if err := deleteFederatedEvent(db, apID); err != nil {
+				log.Printf("inbox: delete federated event %s: %v", apID, err)
+			}
+		}
+		w.WriteHeader(http.StatusAccepted)
+
 	default:
 		writeJSONError(w, http.StatusBadRequest, "unsupported activity type")
+	}
+}
+
+// extractAPEventObject unwraps a Create{Event} or Announce{Create{Event}} activity
+// and returns the inner Event AP object, or nil if the structure is not recognised.
+func extractAPEventObject(raw map[string]interface{}) map[string]interface{} {
+	obj, _ := raw["object"].(map[string]interface{})
+	if obj == nil {
+		return nil
+	}
+	switch t, _ := obj["type"].(string); t {
+	case "Event":
+		return obj
+	case "Create":
+		inner, _ := obj["object"].(map[string]interface{})
+		if inner != nil {
+			if t2, _ := inner["type"].(string); t2 == "Event" {
+				return inner
+			}
+		}
+	}
+	return nil
+}
+
+func apObjectToFederatedEvent(obj map[string]interface{}, actorID string) FederatedEvent {
+	apID, _ := obj["id"].(string)
+	name, _ := obj["name"].(string)
+	startTime, _ := obj["startTime"].(string)
+	endTime, _ := obj["endTime"].(string)
+	eventURL, _ := obj["url"].(string)
+	var locationName string
+	if loc, ok := obj["location"].(map[string]interface{}); ok {
+		locationName, _ = loc["name"].(string)
+	}
+	rawBytes, _ := json.Marshal(obj)
+	return FederatedEvent{
+		APID:         apID,
+		ActorID:      actorID,
+		Name:         name,
+		StartTime:    startTime,
+		EndTime:      endTime,
+		URL:          eventURL,
+		LocationName: locationName,
+		RawJSON:      string(rawBytes),
+		ReceivedAt:   time.Now().Unix(),
 	}
 }
 
