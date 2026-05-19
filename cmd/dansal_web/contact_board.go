@@ -2,11 +2,15 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/gorilla/mux"
 )
+
+var boardThrottle = newSubmissionThrottle(10, 10*time.Minute)
 
 // POST /events/{id}/board
 func contactBoardPostHandler(cfg *Config, client *DansalClient, i18n *I18n) http.HandlerFunc {
@@ -14,6 +18,12 @@ func contactBoardPostHandler(cfg *Config, client *DansalClient, i18n *I18n) http
 		eventID, err := strconv.Atoi(mux.Vars(r)["id"])
 		if err != nil {
 			http.NotFound(w, r)
+			return
+		}
+		ip := getClientIP(r)
+		if boardThrottle.isBlocked(ip) {
+			log.Printf("board post blocked from %s: rate limit", ip)
+			http.Redirect(w, r, fmt.Sprintf("/events/%d?board_error=board_throttled", eventID), http.StatusSeeOther)
 			return
 		}
 		if err := r.ParseForm(); err != nil {
@@ -39,6 +49,7 @@ func contactBoardPostHandler(cfg *Config, client *DansalClient, i18n *I18n) http
 			http.Redirect(w, r, fmt.Sprintf("/events/%d?board_error=board_post_error", eventID), http.StatusSeeOther)
 			return
 		}
+		boardThrottle.record(ip)
 		http.Redirect(w, r, fmt.Sprintf("/events/%d?board_posted=1", eventID), http.StatusSeeOther)
 	}
 }
@@ -84,6 +95,12 @@ func contactBoardContactHandler(cfg *Config, client *DansalClient) http.HandlerF
 			http.NotFound(w, r)
 			return
 		}
+		ip := getClientIP(r)
+		if boardThrottle.isBlocked(ip) {
+			log.Printf("board contact blocked from %s: rate limit", ip)
+			http.Redirect(w, r, fmt.Sprintf("/events/%d?board_error=board_throttled", eventID), http.StatusSeeOther)
+			return
+		}
 		if err := r.ParseForm(); err != nil {
 			http.Redirect(w, r, fmt.Sprintf("/events/%d?board_error=board_form_error", eventID), http.StatusSeeOther)
 			return
@@ -96,6 +113,7 @@ func contactBoardContactHandler(cfg *Config, client *DansalClient) http.HandlerF
 			http.Redirect(w, r, fmt.Sprintf("/events/%d?board_error=board_contact_error", eventID), http.StatusSeeOther)
 			return
 		}
+		boardThrottle.record(ip)
 		http.Redirect(w, r, fmt.Sprintf("/events/%d?board_contacted=1", eventID), http.StatusSeeOther)
 	}
 }
