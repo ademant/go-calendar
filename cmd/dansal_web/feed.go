@@ -64,6 +64,7 @@ func federatedEventAsEvent(fe FederatedEvent) Event {
 		URL:         fe.URL,
 		Location:    fe.LocationName,
 		IsPublished: true,
+		SourceURL:   fe.URL,
 	}
 }
 

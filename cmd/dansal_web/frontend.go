@@ -387,6 +387,13 @@ var tmplFuncMap = template.FuncMap{
 		sort.Strings(out)
 		return out
 	},
+	"sourceDomain": func(actorID string) string {
+		u, err := url.Parse(actorID)
+		if err != nil || u.Host == "" {
+			return actorID
+		}
+		return u.Host
+	},
 }
 
 type Templates struct {
@@ -454,6 +461,34 @@ func loadTemplates() *Templates {
 		adminEventEdit:    load("admin_event_edit"),
 		impressum:         load("impressum"),
 		orgs:              load("orgs"),
+	}
+}
+
+func federatedEventHandler(db *sql.DB) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		id, err := strconv.Atoi(mux.Vars(r)["id"])
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		rows, err := db.QueryContext(r.Context(),
+			"SELECT url FROM federated_events WHERE id = ?", id)
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		defer rows.Close()
+		if !rows.Next() {
+			http.NotFound(w, r)
+			return
+		}
+		var eventURL string
+		rows.Scan(&eventURL)
+		if eventURL == "" {
+			http.NotFound(w, r)
+			return
+		}
+		http.Redirect(w, r, eventURL, http.StatusFound)
 	}
 }
 

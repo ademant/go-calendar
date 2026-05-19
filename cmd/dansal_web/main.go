@@ -56,6 +56,7 @@ func main() {
 	r.HandleFunc("/favicon.svg", svgHandler(faviconData)).Methods("GET")
 	r.HandleFunc("/logo.svg", svgHandler(logoData)).Methods("GET")
 	r.HandleFunc("/banner.svg", svgHandler(bannerData)).Methods("GET")
+	r.HandleFunc("/federated-events/{id}", federatedEventHandler(db)).Methods("GET")
 	r.HandleFunc("/", indexHandler(cfg, tmpls, db, client, i18n)).Methods("GET")
 	r.HandleFunc("/events/{id}", eventHandler(cfg, tmpls, client, i18n)).Methods("GET")
 	r.HandleFunc("/events/{id}/board", contactBoardPostHandler(cfg, client, i18n)).Methods("POST")

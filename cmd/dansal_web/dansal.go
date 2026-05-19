@@ -64,6 +64,7 @@ type Event struct {
 	Musicians       []Musician       `json:"musicians,omitempty"`
 	Timetable       []TimetableEntry `json:"timetable,omitempty"`
 	CreatedAt       string           `json:"created_at"`
+	SourceURL       string           `json:"source_url,omitempty"`
 }
 
 type TimetableEntry struct {
