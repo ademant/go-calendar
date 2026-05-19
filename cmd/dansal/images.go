@@ -80,8 +80,9 @@ func (c *imageCache) remove(id int) {
 
 var errNotImage = errors.New("data is not an image")
 
-// saveImageFromReader decodes image data from r, resizes, and stores as AVIF for the given event ID.
-func saveImageFromReader(eventID int, r io.Reader) error {
+// saveImageToDir decodes image data from r, resizes, and stores as AVIF in the given directory.
+// The file is named "{id}.avif". The caller is responsible for updating any cache.
+func saveImageToDir(id int, dir string, r io.Reader) error {
 	head := make([]byte, 512)
 	n, err := io.ReadFull(r, head)
 	if err != nil && err != io.ErrUnexpectedEOF {
@@ -95,10 +96,10 @@ func saveImageFromReader(eventID int, r io.Reader) error {
 		return fmt.Errorf("decode: %w", err)
 	}
 	img = fitImage(img, config.Server.ImageXMax, config.Server.ImageYMax)
-	if err := os.MkdirAll(config.Server.ImagesDir, 0o755); err != nil {
+	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return fmt.Errorf("mkdir: %w", err)
 	}
-	outPath := filepath.Join(config.Server.ImagesDir, fmt.Sprintf("%d.avif", eventID))
+	outPath := filepath.Join(dir, fmt.Sprintf("%d.avif", id))
 	f, err := os.Create(outPath)
 	if err != nil {
 		return fmt.Errorf("create: %w", err)
@@ -106,6 +107,14 @@ func saveImageFromReader(eventID int, r io.Reader) error {
 	defer f.Close()
 	if err := avif.Encode(f, img); err != nil {
 		return fmt.Errorf("encode avif: %w", err)
+	}
+	return nil
+}
+
+// saveImageFromReader decodes image data from r, resizes, and stores as AVIF for the given event ID.
+func saveImageFromReader(eventID int, r io.Reader) error {
+	if err := saveImageToDir(eventID, config.Server.ImagesDir, r); err != nil {
+		return err
 	}
 	imgCache.add(eventID)
 	return nil

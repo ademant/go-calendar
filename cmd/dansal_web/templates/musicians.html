@@ -4,26 +4,41 @@
 
 {{with .Data}}
 {{if .Musicians}}
-<ul class="musician-list">
+<div class="musician-grid">
 {{range .Musicians}}
-<li class="musician-item">
-  <a href="/musicians/{{.ID}}" class="musician-name">{{.Bandname}}</a>
-  {{with .ShortName}}<span class="musician-short">({{.}})</span>{{end}}
-  {{with .Description}}<p class="musician-desc">{{.}}</p>{{end}}
-</li>
+<a href="/musicians/{{.ID}}" class="musician-card">
+  {{if .ImageURL}}
+  <img src="{{.ImageURL}}" class="mcard-img" alt="{{.Bandname}}">
+  {{else}}
+  <div class="mcard-img mcard-placeholder"></div>
+  {{end}}
+  <div class="mcard-body">
+    <div class="mcard-name">{{.Bandname}}</div>
+    {{with .ShortName}}<div class="mcard-short">({{.}})</div>{{end}}
+    <div class="mcard-meta">
+      {{if .Country}}<span class="chip">{{.Country}}</span>{{end}}
+      {{if .BeginYear}}<span class="chip">{{.BeginYear}}</span>{{end}}
+    </div>
+    {{if .Biography}}<p class="mcard-desc">{{.Biography}}</p>{{else if .Description}}<p class="mcard-desc">{{.Description}}</p>{{end}}
+  </div>
+</a>
 {{end}}
-</ul>
+</div>
 {{else}}
 <p>{{$.Strings.T "musicians_none"}}</p>
 {{end}}
 {{end}}
 
 <style>
-.musician-list{list-style:none;padding:0;display:grid;gap:.6rem}
-.musician-item{background:#fff;border:1px solid #ddd;border-radius:6px;padding:.9rem 1.1rem}
-.musician-name{font-size:1.05rem;font-weight:600;color:#1a1a2e;text-decoration:none}
-.musician-name:hover{text-decoration:underline;color:#1a6eb5}
-.musician-short{color:#888;font-size:.9rem;margin-left:.35rem}
-.musician-desc{margin:.35rem 0 0;font-size:.9rem;color:#555;white-space:pre-wrap}
+.musician-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:1rem;margin-top:.5rem}
+.musician-card{display:flex;flex-direction:column;background:#fff;border:1px solid #ddd;border-radius:8px;overflow:hidden;text-decoration:none;color:#1a1a2e;transition:box-shadow .15s,border-color .15s}
+.musician-card:hover{border-color:#9ab0e8;box-shadow:0 2px 8px rgba(26,110,181,.12)}
+.mcard-img{width:100%;aspect-ratio:1;object-fit:cover;display:block}
+.mcard-placeholder{width:100%;aspect-ratio:1;background:linear-gradient(135deg,#e8ecf5 0%,#d0d8ee 100%)}
+.mcard-body{padding:.75rem .9rem;flex:1;display:flex;flex-direction:column;gap:.2rem}
+.mcard-name{font-weight:600;font-size:.95rem}
+.mcard-short{font-size:.8rem;color:#888}
+.mcard-meta{display:flex;flex-wrap:wrap;gap:.2rem;margin:.1rem 0}
+.mcard-desc{font-size:.82rem;color:#666;margin-top:.2rem;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;line-height:1.5}
 </style>
 {{end}}

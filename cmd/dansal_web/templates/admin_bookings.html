@@ -1,0 +1,81 @@
+{{template "base" .}}
+{{define "content"}}
+{{with .Data}}
+<div style="display:flex;align-items:center;gap:1rem;margin-bottom:.5rem;flex-wrap:wrap">
+  <h1 style="margin:0">{{$.Strings.T "admin_bookings_title"}} — <a href="/events/{{.Event.ID}}">{{.Event.Title}}</a></h1>
+  <a href="/admin/events/{{.Event.ID}}/edit" class="btn-sm">{{$.Strings.T "admin_edit"}}</a>
+</div>
+
+{{if and .Event.TicketsTotal (gt .Event.TicketsTotal 0)}}
+<div class="cap-bar-wrap">
+  <div class="cap-label">{{$.Strings.T "admin_bookings_capacity"}}: {{.ApprovedCount}} / {{.Event.TicketsTotal}}</div>
+  <div class="cap-bar"><div class="cap-fill" style="width:{{capPct .ApprovedCount .Event.TicketsTotal}}%"></div></div>
+</div>
+{{end}}
+
+{{if .Bookings}}
+<div class="table-wrap" style="margin-top:1rem">
+<table class="event-table">
+  <thead>
+    <tr>
+      <th>{{$.Strings.T "col_booking_name"}}</th>
+      <th>{{$.Strings.T "col_booking_persons"}}</th>
+      <th>{{$.Strings.T "col_booking_status"}}</th>
+      <th>{{$.Strings.T "col_booking_at"}}</th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+  {{range .Bookings}}
+  <tr>
+    <td>{{.Name}}<br><span class="bk-email">{{.Email}}</span></td>
+    <td>{{.Persons}}</td>
+    <td><span class="badge bk-{{.Status}}">{{$.Strings.T (print "booking_status_" .Status)}}</span></td>
+    <td style="white-space:nowrap;font-size:.82rem;color:#666">{{isoDate .CreatedAt}}</td>
+    <td style="white-space:nowrap">
+      {{if or (eq .Status "confirmed") (eq .Status "pending")}}
+      <form method="post" action="/admin/bookings/{{.ID}}/approve" style="display:inline">
+        <input type="hidden" name="event_id" value="{{$.Data.Event.ID}}">
+        <button type="submit" class="btn-sm btn-approve">{{$.Strings.T "booking_approve_btn"}}</button>
+      </form>
+      {{end}}
+      {{if ne .Status "cancelled"}}
+      <form method="post" action="/admin/bookings/{{.ID}}/cancel" style="display:inline">
+        <input type="hidden" name="event_id" value="{{$.Data.Event.ID}}">
+        <button type="submit" class="btn-sm btn-cancel">{{$.Strings.T "booking_cancel_btn"}}</button>
+      </form>
+      {{end}}
+      <form method="post" action="/admin/bookings/{{.ID}}/delete" style="display:inline" onsubmit="return confirm('{{$.Strings.T "booking_delete_confirm"}}')">
+        <input type="hidden" name="event_id" value="{{$.Data.Event.ID}}">
+        <button type="submit" class="btn-sm btn-del">{{$.Strings.T "booking_delete_btn"}}</button>
+      </form>
+    </td>
+  </tr>
+  {{end}}
+  </tbody>
+</table>
+</div>
+{{else}}
+<p style="color:#888;margin-top:1rem">{{$.Strings.T "booking_none"}}</p>
+{{end}}
+{{end}}
+
+<style>
+.cap-bar-wrap{margin:.75rem 0 .25rem;max-width:360px}
+.cap-label{font-size:.85rem;color:#555;margin-bottom:.3rem}
+.cap-bar{height:10px;background:#e0e4ef;border-radius:5px;overflow:hidden}
+.cap-fill{height:100%;background:#1a6eb5;border-radius:5px;transition:width .3s}
+.bk-email{font-size:.8rem;color:#888}
+.badge.bk-pending{background:#fff3cd;color:#856404}
+.badge.bk-confirmed{background:#d1ecf1;color:#0c5460}
+.badge.bk-approved{background:#d4edda;color:#155724}
+.badge.bk-checked_in{background:#c3e6cb;color:#0b4d1a;font-weight:700}
+.badge.bk-cancelled{background:#f8d7da;color:#721c24}
+.btn-approve{background:#d4edda;color:#155724;border-color:#b8d9c3}
+.btn-approve:hover{background:#c3e6cb}
+.btn-cancel{background:#fff3cd;color:#856404;border-color:#ffeeba}
+.btn-cancel:hover{background:#ffeeba}
+.btn-del{background:#fce8e8;color:#b00;border-color:#f5c6c6}
+.btn-del:hover{background:#f5c6c6}
+</style>
+{{end}}

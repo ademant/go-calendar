@@ -44,6 +44,7 @@
       <div class="evt-musician-tiles">
         {{range .Musicians}}
         <a href="/musicians/{{.ID}}" class="evt-musician-tile">
+          {{if .ImageURL}}<img src="{{.ImageURL}}" class="evt-musician-img" alt="">{{end}}
           <span class="evt-musician-name">{{.Bandname}}</span>
           {{with .ShortName}}<span class="evt-musician-short">({{.}})</span>{{end}}
         </a>
@@ -55,7 +56,7 @@
     {{if .Description}}
     <section class="evt-section">
       <h2>{{$.Strings.T "evt_description"}}</h2>
-      <div class="evt-description">{{.Description}}</div>
+      <div class="evt-description md-content">{{markdownHTML .Description}}</div>
     </section>
     {{end}}
 
@@ -176,7 +177,7 @@
 {{with .Org}}
 <div class="evt-org">
   <h2>{{$.Strings.T "evt_organised_by"}} <a href="/org/{{$.Data.OrgSlug}}">{{.Name}}</a></h2>
-  {{if .Description}}<p>{{.Description}}</p>{{end}}
+  {{if .Description}}<div class="md-content">{{markdownHTML .Description}}</div>{{end}}
   <div class="org-links">
     {{with .Website}}<a href="{{.}}" class="m-link m-link-web" target="_blank" rel="noopener">{{$.Strings.T "musician_website"}}</a>{{end}}
     {{with .Mastodon}}<a href="{{mastodonURL .}}" class="m-link m-link-mastodon" target="_blank" rel="noopener me">Mastodon</a>{{end}}
@@ -184,6 +185,46 @@
     {{with .Facebook}}<a href="https://facebook.com/{{.}}" class="m-link m-link-facebook" target="_blank" rel="noopener">Facebook</a>{{end}}
   </div>
 </div>
+{{end}}
+
+{{/* ── Booking form ───────────────────────────────────────────── */}}
+{{if and .Event.BookingEnabled (ne .Event.Availability "sold_out")}}
+<section class="booking-section">
+  <h2>{{$.Strings.T "book_title"}}</h2>
+
+  {{if .BookingOK}}
+  <p class="msg msg-ok">{{$.Strings.T "book_ok"}}</p>
+  {{end}}
+  {{if .BookingError}}
+  <p class="msg msg-error">{{$.Strings.T .BookingError}}</p>
+  {{end}}
+
+  {{if not .BookingOK}}
+  <details class="booking-details">
+    <summary>{{$.Strings.T "book_summary"}}</summary>
+    <form class="booking-form" method="post" action="/events/{{.Event.ID}}/book">
+      <div class="booking-form-row">
+        <label>{{$.Strings.T "book_name_label"}}</label>
+        <input type="text" name="name" required placeholder="{{$.Strings.T "book_name_placeholder"}}">
+      </div>
+      <div class="booking-form-row">
+        <label>{{$.Strings.T "book_email_label"}}</label>
+        <input type="email" name="email" required placeholder="{{$.Strings.T "book_email_placeholder"}}">
+        <span class="booking-hint">{{$.Strings.T "book_email_hint"}}</span>
+      </div>
+      <div class="booking-form-row">
+        <label>{{$.Strings.T "book_persons_label"}}</label>
+        <input type="number" name="persons" value="1" min="1" max="20" style="width:5rem">
+      </div>
+      <div class="booking-form-row">
+        <label>{{$.Strings.T "book_message_label"}}</label>
+        <textarea name="message" rows="2" placeholder="{{$.Strings.T "book_message_placeholder"}}"></textarea>
+      </div>
+      <button type="submit" class="btn-booking-submit">{{$.Strings.T "book_submit_btn"}}</button>
+    </form>
+  </details>
+  {{end}}
+</section>
 {{end}}
 
 {{/* ── Contact board ──────────────────────────────────────────── */}}
@@ -286,10 +327,11 @@
 @media(max-width:680px){.evt-layout{grid-template-columns:1fr}}
 .evt-section{margin-bottom:1.75rem}
 .evt-section h2{font-size:1.05rem;font-weight:700;color:#1a1a2e;margin-bottom:.6rem;text-transform:uppercase;letter-spacing:.04em}
-.evt-description{white-space:pre-wrap;color:#333;line-height:1.7}
+.evt-description{color:#333;line-height:1.7}
 .evt-musician-tiles{display:flex;flex-wrap:wrap;gap:.6rem}
-.evt-musician-tile{display:inline-flex;flex-direction:column;background:#f0f4ff;border:1px solid #c8d4f5;border-radius:8px;padding:.5rem .9rem;text-decoration:none;color:#1a1a2e;transition:background .15s}
+.evt-musician-tile{display:inline-flex;flex-direction:column;align-items:center;background:#f0f4ff;border:1px solid #c8d4f5;border-radius:8px;padding:.5rem .9rem;text-decoration:none;color:#1a1a2e;transition:background .15s;gap:.3rem}
 .evt-musician-tile:hover{background:#dce6ff;border-color:#9ab0e8}
+.evt-musician-img{width:48px;height:48px;border-radius:50%;object-fit:cover}
 .evt-musician-name{font-weight:600;font-size:.95rem}
 .evt-musician-short{color:#888;font-size:.8rem}
 .evt-timetable{display:flex;flex-direction:column;gap:.5rem}
@@ -317,6 +359,20 @@
 .evt-map{height:160px;border-radius:4px;overflow:hidden;margin-top:.5rem;background:#e8e8e8}
 .btn-booking{display:block;text-align:center;padding:.5rem 1rem;background:#1a6eb5;color:#fff;border-radius:4px;font-size:.9rem;font-weight:600;text-decoration:none}
 .btn-booking:hover{background:#0d4a80;color:#fff}
+.booking-section{margin-top:2rem;background:#fff;border:1px solid #ddd;border-radius:6px;padding:1.25rem}
+.booking-section h2{font-size:1.05rem;font-weight:700;color:#1a1a2e;text-transform:uppercase;letter-spacing:.04em;margin-bottom:.9rem}
+.booking-details{margin-top:.5rem}
+.booking-details summary{cursor:pointer;font-weight:600;font-size:.92rem;color:#1a6eb5;list-style:none;padding:.4rem 0}
+.booking-details summary::-webkit-details-marker{display:none}
+.booking-details summary::before{content:"+ ";font-weight:700}
+.booking-details[open] summary::before{content:"− "}
+.booking-form{margin-top:.75rem;display:flex;flex-direction:column;gap:.5rem}
+.booking-form-row{display:flex;flex-direction:column;gap:.2rem}
+.booking-form-row label{font-size:.82rem;font-weight:600;color:#555}
+.booking-form-row input,.booking-form-row textarea{padding:.4rem .6rem;border:1px solid #ccc;border-radius:4px;font-size:.9rem;font-family:inherit;width:100%}
+.booking-hint{font-size:.78rem;color:#888}
+.btn-booking-submit{align-self:flex-start;padding:.45rem 1.1rem;background:#1a6eb5;color:#fff;border:none;border-radius:4px;font-size:.9rem;cursor:pointer;margin-top:.25rem}
+.btn-booking-submit:hover{background:#0d4a80}
 .board-section{margin-top:2rem;background:#fff;border:1px solid #ddd;border-radius:6px;padding:1.25rem}
 .board-section h2{font-size:1.05rem;font-weight:700;color:#1a1a2e;text-transform:uppercase;letter-spacing:.04em;margin-bottom:.9rem}
 .board-list{display:flex;flex-direction:column;gap:.75rem;margin-bottom:1rem}

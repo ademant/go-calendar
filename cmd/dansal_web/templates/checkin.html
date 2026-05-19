@@ -1,0 +1,63 @@
+{{template "base" .}}
+{{define "content"}}
+{{with .Data}}
+<div class="ci-wrap">
+
+{{if .Done}}
+  {{/* ── Result card after POST ─────────────────────── */}}
+  <div class="ci-card ci-card-{{checkinColor .Status}}">
+    <div class="ci-icon">{{checkinIcon .Status}}</div>
+    <div class="ci-name">{{.Name}}</div>
+    <div class="ci-persons">{{.Persons}} {{$.Strings.T "checkin_persons"}}</div>
+    <div class="ci-status-label">{{$.Strings.T (print "booking_status_" .Status)}}</div>
+  </div>
+  <a href="/checkin/{{.QRToken}}" class="ci-again">{{$.Strings.T "checkin_scan_again"}}</a>
+
+{{else if .Err}}
+  <div class="ci-card ci-card-red">
+    <div class="ci-icon">✗</div>
+    <div class="ci-name">{{$.Strings.T "checkin_error"}}</div>
+  </div>
+  <a href="/checkin/{{.QRToken}}" class="ci-again">{{$.Strings.T "checkin_try_again"}}</a>
+
+{{else}}
+  {{/* ── Action card ─────────────────────────────────── */}}
+  <div class="ci-card ci-card-neutral">
+    <div class="ci-icon">🎟</div>
+    <div class="ci-label">{{$.Strings.T "checkin_ready"}}</div>
+  </div>
+  {{if .CanCheckin}}
+  <form method="post" action="/checkin/{{.QRToken}}" class="ci-form">
+    <button type="submit" class="ci-btn">{{$.Strings.T "checkin_btn"}}</button>
+  </form>
+  {{else}}
+  <p class="ci-login-hint">
+    <a href="/login?next=/checkin/{{.QRToken}}">{{$.Strings.T "checkin_login_hint"}}</a>
+  </p>
+  {{end}}
+{{end}}
+
+</div>
+
+<style>
+.ci-wrap{max-width:420px;margin:2rem auto;padding:0 .5rem;text-align:center}
+.ci-card{border-radius:12px;padding:2rem 1.5rem;margin-bottom:1.5rem}
+.ci-card-green{background:#d4edda;color:#155724;border:2px solid #c3e6cb}
+.ci-card-amber{background:#fff3cd;color:#856404;border:2px solid #ffeeba}
+.ci-card-red{background:#f8d7da;color:#721c24;border:2px solid #f5c6cb}
+.ci-card-neutral{background:#e8f0fe;color:#1a1a2e;border:2px solid #c8d4f5}
+.ci-icon{font-size:3.5rem;line-height:1;margin-bottom:.75rem}
+.ci-name{font-size:1.8rem;font-weight:700;margin-bottom:.3rem}
+.ci-persons{font-size:1.1rem;margin-bottom:.3rem;opacity:.85}
+.ci-status-label{font-size:.95rem;font-weight:600;text-transform:uppercase;letter-spacing:.06em;margin-top:.5rem;opacity:.75}
+.ci-label{font-size:1.1rem;font-weight:600}
+.ci-form{margin-top:.5rem}
+.ci-btn{width:100%;padding:1rem;font-size:1.25rem;font-weight:700;background:#1a6eb5;color:#fff;border:none;border-radius:8px;cursor:pointer}
+.ci-btn:hover{background:#0d4a80}
+.ci-btn:active{background:#0a3860}
+.ci-again,.ci-login-hint{display:block;margin-top:.75rem;font-size:.95rem;color:#1a6eb5}
+.ci-again:hover,.ci-login-hint a:hover{text-decoration:underline}
+.ci-login-hint a{color:#1a6eb5}
+</style>
+{{end}}
+{{end}}

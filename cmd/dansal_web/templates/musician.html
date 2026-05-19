@@ -1,20 +1,59 @@
 {{template "base" .}}
 {{define "content"}}
 {{with .Data}}
-<h1>{{.Musician.Bandname}}{{with .Musician.ShortName}} <small class="short-name">({{.}})</small>{{end}}</h1>
+<div class="musician-header">
+  {{if .Musician.ImageURL}}
+  <img src="{{.Musician.ImageURL}}" class="musician-photo" alt="{{.Musician.Bandname}}">
+  {{end}}
+  <div>
+    <h1>{{.Musician.Bandname}}{{with .Musician.ShortName}} <small class="short-name">({{.}})</small>{{end}}</h1>
+    <div class="musician-meta">
+      {{if .Musician.Country}}<span class="chip">{{.Musician.Country}}</span>{{end}}
+      {{if .Musician.BeginYear}}<span class="chip">est. {{.Musician.BeginYear}}</span>{{end}}
+    </div>
+  </div>
+</div>
 
-{{with .Musician.Description}}<p class="musician-desc">{{.}}</p>{{end}}
+{{if .Musician.Biography}}
+<div class="page-section">
+  <div class="md-content">{{markdownHTML .Musician.Biography}}</div>
+</div>
+{{else if .Musician.Description}}
+<div class="page-section">
+  <div class="md-content">{{markdownHTML .Musician.Description}}</div>
+</div>
+{{end}}
+
+{{if .Members}}
+<div class="page-section">
+  <h2 class="section-heading">{{$.Strings.T "musician_members"}}</h2>
+  <ul class="detail-list">
+    {{range .Members}}<li>{{.}}</li>{{end}}
+  </ul>
+</div>
+{{end}}
+
+{{if .Albums}}
+<div class="page-section">
+  <h2 class="section-heading">{{$.Strings.T "musician_albums"}}</h2>
+  <ul class="detail-list">
+    {{range .Albums}}<li>{{.}}</li>{{end}}
+  </ul>
+</div>
+{{end}}
 
 {{if or .Musician.Internetsite .Musician.Mastodon .Musician.Instagram .Musician.Facebook .Musician.Soundcloud .Musician.MBID}}
-<div class="musician-links">
-  {{with .Musician.Internetsite}}<a href="{{.}}" class="m-link m-link-web" target="_blank" rel="noopener">{{$.Strings.T "musician_website"}}</a>{{end}}
-  {{with .Musician.Mastodon}}
-    <a href="{{mastodonURL .}}" class="m-link m-link-mastodon" target="_blank" rel="noopener me">Mastodon</a>
-  {{end}}
-  {{with .Musician.Instagram}}<a href="https://instagram.com/{{.}}" class="m-link m-link-instagram" target="_blank" rel="noopener">Instagram</a>{{end}}
-  {{with .Musician.Facebook}}<a href="https://facebook.com/{{.}}" class="m-link m-link-facebook" target="_blank" rel="noopener">Facebook</a>{{end}}
-  {{with .Musician.Soundcloud}}<a href="https://soundcloud.com/{{.}}" class="m-link m-link-soundcloud" target="_blank" rel="noopener">SoundCloud</a>{{end}}
-  {{with .Musician.MBID}}<a href="https://musicbrainz.org/artist/{{.}}" class="m-link m-link-mb" target="_blank" rel="noopener">MusicBrainz</a>{{end}}
+<div class="page-section">
+  <div class="musician-links">
+    {{with .Musician.Internetsite}}<a href="{{.}}" class="m-link m-link-web" target="_blank" rel="noopener">{{$.Strings.T "musician_website"}}</a>{{end}}
+    {{with .Musician.Mastodon}}
+      <a href="{{mastodonURL .}}" class="m-link m-link-mastodon" target="_blank" rel="noopener me">Mastodon</a>
+    {{end}}
+    {{with .Musician.Instagram}}<a href="https://instagram.com/{{.}}" class="m-link m-link-instagram" target="_blank" rel="noopener">Instagram</a>{{end}}
+    {{with .Musician.Facebook}}<a href="https://facebook.com/{{.}}" class="m-link m-link-facebook" target="_blank" rel="noopener">Facebook</a>{{end}}
+    {{with .Musician.Soundcloud}}<a href="https://soundcloud.com/{{.}}" class="m-link m-link-soundcloud" target="_blank" rel="noopener">SoundCloud</a>{{end}}
+    {{with .Musician.MBID}}<a href="https://musicbrainz.org/artist/{{.}}" class="m-link m-link-mb" target="_blank" rel="noopener">MusicBrainz</a>{{end}}
+  </div>
 </div>
 {{end}}
 
@@ -25,33 +64,37 @@
   <a href="/feed/musician/{{.Slug}}/events.json" class="feed-link">JSON</a>
 </div>
 
-<h2>{{$.Strings.T "musician_upcoming_events"}}</h2>
-{{if .Events}}
-<ul class="event-list">
-{{range .Events}}
-<li class="event-item">
-  <h3><a href="/events/{{.ID}}">{{.Title}}</a></h3>
-  <div class="event-meta">
-    {{if .StartTime}}<span>{{formatTime $.LangCode .StartTime}}</span>{{end}}
-    {{if .Location}} &mdash; {{.Location}}{{else if .LocationTown}} &mdash; {{.LocationTown}}{{end}}
-    {{if .IsCancelled}}<span class="badge cancelled">{{$.Strings.T "badge_cancelled"}}</span>{{end}}
-    {{if .HasBall}}<span class="badge">{{$.Strings.T "filter_type_ball"}}</span>{{end}}
-    {{if .HasWorkshop}}<span class="badge">{{$.Strings.T "filter_type_workshop"}}</span>{{end}}
-    {{if .HasFestival}}<span class="badge">{{$.Strings.T "filter_type_festival"}}</span>{{end}}
-  </div>
-  {{if .Tags}}<div>{{range .Tags}}<span class="tag">#{{.}}</span>{{end}}</div>{{end}}
-  {{if .URL}}<div class="event-actions"><a href="{{.URL}}" class="evt-ext-link" target="_blank" rel="noopener">{{$.Strings.T "btn_website"}} ↗</a></div>{{end}}
-</li>
-{{end}}
-</ul>
-{{else}}<p>{{$.Strings.T "musician_no_events"}}</p>{{end}}
+<div class="page-section">
+  <h2 class="section-heading">{{$.Strings.T "musician_upcoming_events"}}</h2>
+  {{if .Events}}
+  <ul class="event-list">
+  {{range .Events}}
+  <li class="event-item">
+    <h3><a href="/events/{{.ID}}">{{.Title}}</a></h3>
+    <div class="event-meta">
+      {{if .StartTime}}<span>{{formatTime $.LangCode .StartTime}}</span>{{end}}
+      {{if .Location}} &mdash; {{.Location}}{{else if .LocationTown}} &mdash; {{.LocationTown}}{{end}}
+      {{if .IsCancelled}}<span class="badge cancelled">{{$.Strings.T "badge_cancelled"}}</span>{{end}}
+      {{if .HasBall}}<span class="badge">{{$.Strings.T "filter_type_ball"}}</span>{{end}}
+      {{if .HasWorkshop}}<span class="badge">{{$.Strings.T "filter_type_workshop"}}</span>{{end}}
+      {{if .HasFestival}}<span class="badge">{{$.Strings.T "filter_type_festival"}}</span>{{end}}
+    </div>
+    {{if .Tags}}<div>{{range .Tags}}<span class="tag">#{{.}}</span>{{end}}</div>{{end}}
+    {{if .URL}}<div class="event-actions"><a href="{{.URL}}" class="evt-ext-link" target="_blank" rel="noopener">{{$.Strings.T "btn_website"}} ↗</a></div>{{end}}
+  </li>
+  {{end}}
+  </ul>
+  {{else}}<p class="empty-msg">{{$.Strings.T "musician_no_events"}}</p>{{end}}
+</div>
 
 {{end}}{{/* .Data */}}
 
 <style>
+.musician-header{display:flex;align-items:flex-start;gap:1.25rem;margin-bottom:1.25rem;flex-wrap:wrap}
+.musician-photo{width:120px;height:120px;object-fit:cover;border-radius:8px;flex-shrink:0;border:1px solid #ddd}
 .short-name{font-size:1rem;font-weight:400;color:#888}
-.musician-desc{margin-bottom:1.25rem;white-space:pre-wrap;color:#444}
-.musician-links{display:flex;flex-wrap:wrap;gap:.5rem;margin-bottom:1.5rem}
+.musician-meta{display:flex;gap:.4rem;flex-wrap:wrap;margin-top:.4rem}
+.musician-links{display:flex;flex-wrap:wrap;gap:.5rem}
 .m-link{display:inline-block;padding:.3rem .8rem;border-radius:20px;font-size:.85rem;font-weight:600;text-decoration:none;color:#fff}
 .m-link-web{background:#1a6eb5}.m-link-web:hover{background:#0d4a80}
 .m-link-mastodon{background:#563acc}.m-link-mastodon:hover{background:#3c278e}
@@ -59,8 +102,11 @@
 .m-link-facebook{background:#1877f2}.m-link-facebook:hover{background:#0d5ab5}
 .m-link-soundcloud{background:#ff5500}.m-link-soundcloud:hover{background:#cc4400}
 .m-link-mb{background:#ba2025}.m-link-mb:hover{background:#8a1519}
-.feed-links{margin:1rem 0;font-size:.85rem;color:#666}
+.detail-list{margin:.25rem 0;padding-left:1.25rem;color:#444;font-size:.95rem}
+.detail-list li{margin-bottom:.2rem}
+.feed-links{margin:1rem 0 1.5rem;font-size:.85rem;color:#666}
 .feed-link{display:inline-block;margin-left:.4rem;padding:.15rem .5rem;border:1px solid #ccc;border-radius:3px;font-size:.8rem;color:#555;text-decoration:none}
 .feed-link:hover{border-color:#888;color:#222}
+.empty-msg{color:#888;font-size:.9rem}
 </style>
 {{end}}

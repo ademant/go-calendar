@@ -1,7 +1,10 @@
 # Build output
 /dansal
+/dansal_web
 /web
 /dansal_admin
+cmd/dansal/dansal
+cmd/dansal_web/dansal_web
 *.deb
 
 # Admin socket

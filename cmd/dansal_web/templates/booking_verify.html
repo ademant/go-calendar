@@ -1,0 +1,30 @@
+{{template "base" .}}
+{{define "content"}}
+<div class="bv-wrap">
+  {{with .Data}}
+  {{if .Success}}
+    <div class="bv-box bv-ok">
+      <p>{{$.Strings.T "book_verify_ok"}}</p>
+      {{if .CheckinURL}}
+      <p class="bv-qr-label">{{$.Strings.T "book_verify_qr_link"}}</p>
+      <a class="bv-qr-link" href="{{.CheckinURL}}">{{.CheckinURL}}</a>
+      {{end}}
+    </div>
+  {{else}}
+    <div class="bv-box bv-error">
+      <p>{{$.Strings.T .ErrorKey}}</p>
+    </div>
+  {{end}}
+  {{end}}
+</div>
+
+<style>
+.bv-wrap{max-width:520px;margin:3rem auto}
+.bv-box{border-radius:6px;padding:1.5rem;text-align:center;font-size:1rem}
+.bv-ok{background:#d4edda;color:#155724;border:1px solid #c3e6cb}
+.bv-error{background:#f8d7da;color:#721c24;border:1px solid #f5c6cb}
+.bv-box p{margin-bottom:.75rem;font-size:1.05rem}
+.bv-qr-label{font-size:.88rem;font-weight:600;margin-bottom:.3rem}
+.bv-qr-link{display:inline-block;word-break:break-all;color:#155724;font-weight:600;font-size:.9rem}
+</style>
+{{end}}

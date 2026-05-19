@@ -137,19 +137,29 @@ func adminOrgCreateHandler(cfg *Config, tmpls *Templates, client *DansalClient, 
 			http.Error(w, "Forbidden", http.StatusForbidden)
 			return
 		}
-		if err := r.ParseForm(); err != nil {
-			http.Error(w, "bad request", http.StatusBadRequest)
-			return
+		if err := r.ParseMultipartForm(10 << 20); err != nil {
+			if err := r.ParseForm(); err != nil {
+				http.Error(w, "bad request", http.StatusBadRequest)
+				return
+			}
 		}
 		org := orgFromForm(r)
 		token := getSessionToken(r)
-		if _, err := client.CreateOrganization(r.Context(), org, token); err != nil {
+		created, err := client.CreateOrganization(r.Context(), org, token)
+		if err != nil {
 			title := i18n.T(r, "admin_new")
 			renderTemplate(w, tmpls.adminOrgEdit, tmplData(r, cfg, i18n, title, AdminOrgEditData{
 				Org:      org,
 				ErrorKey: "admin_save_error",
 			}))
 			return
+		}
+		if file, header, ferr := r.FormFile("image"); ferr == nil {
+			data, _ := io.ReadAll(file)
+			file.Close()
+			if uerr := client.UploadOrgImage(r.Context(), created.ID, data, header.Filename, token); uerr != nil {
+				log.Printf("upload org image error: %v", uerr)
+			}
 		}
 		http.Redirect(w, r, "/admin/organizations", http.StatusSeeOther)
 	}
@@ -195,9 +205,11 @@ func adminOrgSaveHandler(cfg *Config, tmpls *Templates, client *DansalClient, i1
 			http.NotFound(w, r)
 			return
 		}
-		if err := r.ParseForm(); err != nil {
-			http.Error(w, "bad request", http.StatusBadRequest)
-			return
+		if err := r.ParseMultipartForm(10 << 20); err != nil {
+			if err := r.ParseForm(); err != nil {
+				http.Error(w, "bad request", http.StatusBadRequest)
+				return
+			}
 		}
 		org := orgFromForm(r)
 		token := getSessionToken(r)
@@ -208,6 +220,13 @@ func adminOrgSaveHandler(cfg *Config, tmpls *Templates, client *DansalClient, i1
 				ErrorKey: "admin_save_error",
 			}))
 			return
+		}
+		if file, header, ferr := r.FormFile("image"); ferr == nil {
+			data, _ := io.ReadAll(file)
+			file.Close()
+			if uerr := client.UploadOrgImage(r.Context(), id, data, header.Filename, token); uerr != nil {
+				log.Printf("upload org image error: %v", uerr)
+			}
 		}
 		http.Redirect(w, r, "/admin/organizations", http.StatusSeeOther)
 	}
@@ -275,17 +294,40 @@ type AdminMusicianEditData struct {
 }
 
 func musicianFromForm(r *http.Request) Musician {
+	beginYear, _ := strconv.Atoi(strings.TrimSpace(r.FormValue("begin_year")))
 	return Musician{
 		Bandname:     strings.TrimSpace(r.FormValue("bandname")),
 		ShortName:    strings.TrimSpace(r.FormValue("short_name")),
 		Internetsite: strings.TrimSpace(r.FormValue("internetsite")),
 		Description:  strings.TrimSpace(r.FormValue("description")),
 		MBID:         strings.TrimSpace(r.FormValue("mbid")),
+		WikidataID:   strings.TrimSpace(r.FormValue("wikidata_id")),
+		Country:      strings.TrimSpace(r.FormValue("country")),
+		BeginYear:    beginYear,
+		Biography:    strings.TrimSpace(r.FormValue("biography")),
+		MembersJSON:  linesToJSON(r.FormValue("members")),
+		AlbumsJSON:   linesToJSON(r.FormValue("albums")),
 		Mastodon:     strings.TrimSpace(r.FormValue("mastodon")),
 		Instagram:    strings.TrimSpace(r.FormValue("instagram")),
 		Facebook:     strings.TrimSpace(r.FormValue("facebook")),
 		Soundcloud:   strings.TrimSpace(r.FormValue("soundcloud")),
 	}
+}
+
+// linesToJSON converts a newline-separated text input to a JSON string array.
+func linesToJSON(s string) string {
+	var items []string
+	for _, line := range strings.Split(s, "\n") {
+		line = strings.TrimSpace(line)
+		if line != "" {
+			items = append(items, line)
+		}
+	}
+	if len(items) == 0 {
+		return ""
+	}
+	b, _ := json.Marshal(items)
+	return string(b)
 }
 
 func adminMusiciansHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {
@@ -321,17 +363,27 @@ func adminMusicianCreateHandler(cfg *Config, tmpls *Templates, client *DansalCli
 		if !ok {
 			return
 		}
-		if err := r.ParseForm(); err != nil {
-			http.Error(w, "bad request", http.StatusBadRequest)
-			return
+		if err := r.ParseMultipartForm(10 << 20); err != nil {
+			if err := r.ParseForm(); err != nil {
+				http.Error(w, "bad request", http.StatusBadRequest)
+				return
+			}
 		}
 		m := musicianFromForm(r)
-		if _, err := client.CreateMusician(r.Context(), m, getSessionToken(r)); err != nil {
+		created, err := client.CreateMusician(r.Context(), m, getSessionToken(r))
+		if err != nil {
 			title := i18n.T(r, "admin_new")
 			renderTemplate(w, tmpls.adminMusicianEdit, tmplData(r, cfg, i18n, title, AdminMusicianEditData{
 				Musician: m, IsNew: true, ErrorKey: "admin_save_error",
 			}))
 			return
+		}
+		if file, header, ferr := r.FormFile("image"); ferr == nil {
+			data, _ := io.ReadAll(file)
+			file.Close()
+			if uerr := client.UploadMusicianImage(r.Context(), created.ID, data, header.Filename, getSessionToken(r)); uerr != nil {
+				log.Printf("upload musician image error: %v", uerr)
+			}
 		}
 		http.Redirect(w, r, "/admin/musicians", http.StatusSeeOther)
 	}
@@ -373,9 +425,11 @@ func adminMusicianSaveHandler(cfg *Config, tmpls *Templates, client *DansalClien
 			http.NotFound(w, r)
 			return
 		}
-		if err := r.ParseForm(); err != nil {
-			http.Error(w, "bad request", http.StatusBadRequest)
-			return
+		if err := r.ParseMultipartForm(10 << 20); err != nil {
+			if err := r.ParseForm(); err != nil {
+				http.Error(w, "bad request", http.StatusBadRequest)
+				return
+			}
 		}
 		m := musicianFromForm(r)
 		if err := client.UpdateMusician(r.Context(), id, m, getSessionToken(r)); err != nil {
@@ -384,6 +438,13 @@ func adminMusicianSaveHandler(cfg *Config, tmpls *Templates, client *DansalClien
 				Musician: m, ErrorKey: "admin_save_error",
 			}))
 			return
+		}
+		if file, header, ferr := r.FormFile("image"); ferr == nil {
+			data, _ := io.ReadAll(file)
+			file.Close()
+			if uerr := client.UploadMusicianImage(r.Context(), id, data, header.Filename, getSessionToken(r)); uerr != nil {
+				log.Printf("upload musician image error: %v", uerr)
+			}
 		}
 		http.Redirect(w, r, "/admin/musicians", http.StatusSeeOther)
 	}

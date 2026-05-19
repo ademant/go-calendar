@@ -5,7 +5,21 @@
 <div class="edit-wrap">
 {{with .Data}}
 {{if .ErrorKey}}<p class="form-error" role="alert">{{$.Strings.T .ErrorKey}}</p>{{end}}
-<form method="post" class="edit-form">
+<form method="post" enctype="multipart/form-data" class="edit-form">
+
+  <fieldset class="image-fieldset">
+    <legend>{{$.Strings.T "org_image"}}</legend>
+    {{with .Org.ImageURL}}<img src="{{.}}" alt="" id="existing-image" style="max-height:200px;border-radius:4px;margin-bottom:.5rem;display:block">{{end}}
+    <div id="drop-zone" class="drop-zone">
+      <input type="file" id="image" name="image" accept="image/*" style="display:none">
+      <div id="drop-label" class="drop-label">
+        <span>{{$.Strings.T "evt_image_hint"}}</span>
+        <button type="button" onclick="document.getElementById('image').click()" class="btn-sm-secondary">{{$.Strings.T "evt_image_browse"}}</button>
+      </div>
+      <img id="image-preview" style="display:none;max-height:200px;border-radius:4px;margin-top:.5rem">
+    </div>
+  </fieldset>
+
   <label for="name">{{$.Strings.T "org_name"}}</label>
   <input id="name" type="text" name="name" value="{{.Org.Name}}" required>
 
@@ -51,12 +65,41 @@
 .edit-form input,.edit-form textarea{padding:.45rem .6rem;border:1px solid #ccc;border-radius:4px;font-size:1rem;width:100%;resize:vertical}
 .edit-form input:focus,.edit-form textarea:focus{outline:2px solid #1a6eb5;border-color:#1a6eb5}
 .field-hint{margin:0;font-size:.8rem;color:#777}
-.social-fieldset{border:1px solid #ddd;border-radius:4px;padding:.75rem 1rem;display:flex;flex-direction:column;gap:.5rem;margin-top:.25rem}
-.social-fieldset legend{font-weight:600;font-size:.9rem;color:#444;padding:0 .25rem}
+.image-fieldset,.social-fieldset{border:1px solid #ddd;border-radius:4px;padding:.75rem 1rem;display:flex;flex-direction:column;gap:.5rem;margin-top:.25rem}
+.image-fieldset legend,.social-fieldset legend{font-weight:600;font-size:.9rem;color:#444;padding:0 .25rem}
+.drop-zone{border:2px dashed #ccc;border-radius:6px;padding:1.5rem;text-align:center;cursor:pointer;transition:border-color .2s}
+.drop-zone.drag-over{border-color:#1a6eb5;background:#f0f4ff}
+.drop-label{display:flex;flex-direction:column;align-items:center;gap:.5rem;color:#888;font-size:.9rem}
+.btn-sm-secondary{padding:.3rem .75rem;border:1px solid #ccc;border-radius:4px;background:#f5f5f5;cursor:pointer;font-size:.85rem}
+.btn-sm-secondary:hover{background:#e8e8e8}
 .form-actions{display:flex;gap:.75rem;margin-top:.75rem}
 .btn-primary{padding:.45rem 1.2rem;background:#1a6eb5;color:#fff;border:none;border-radius:4px;font-size:.95rem;cursor:pointer}
 .btn-primary:hover{background:#0d4a80}
 .btn-secondary{padding:.45rem 1.2rem;background:#f5f5f5;color:#333;border:1px solid #ccc;border-radius:4px;font-size:.95rem;text-decoration:none;cursor:pointer}
 .btn-secondary:hover{background:#e8e8e8}
 </style>
+<script>
+(function(){
+  var dz=document.getElementById('drop-zone');
+  var inp=document.getElementById('image');
+  var prev=document.getElementById('image-preview');
+  var lbl=document.getElementById('drop-label');
+  function showPreview(file){
+    var url=URL.createObjectURL(file);
+    prev.src=url;prev.style.display='block';
+    lbl.style.display='none';
+  }
+  inp.addEventListener('change',function(){if(this.files[0])showPreview(this.files[0]);});
+  dz.addEventListener('dragover',function(e){e.preventDefault();dz.classList.add('drag-over');});
+  dz.addEventListener('dragleave',function(){dz.classList.remove('drag-over');});
+  dz.addEventListener('drop',function(e){
+    e.preventDefault();dz.classList.remove('drag-over');
+    var f=e.dataTransfer.files[0];
+    if(f&&f.type.startsWith('image/')){
+      var dt=new DataTransfer();dt.items.add(f);inp.files=dt.files;
+      showPreview(f);
+    }
+  });
+})();
+</script>
 {{end}}

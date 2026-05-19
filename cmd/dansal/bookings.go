@@ -25,6 +25,30 @@ type Booking struct {
 	CreatedAt string `json:"created_at"`
 }
 
+// updateEventAvailability recalculates events.availability from approved/checked_in booking counts.
+// Skipped when tickets_total is 0 (no capacity configured).
+func updateEventAvailability(eventID int) {
+	var ticketsTotal int
+	if err := db.QueryRow("SELECT COALESCE(tickets_total,0) FROM events WHERE id=?", eventID).Scan(&ticketsTotal); err != nil || ticketsTotal <= 0 {
+		return
+	}
+	var approvedCount int
+	db.QueryRow(
+		"SELECT COUNT(*) FROM bookings WHERE event_id=? AND status IN ('approved','checked_in')",
+		eventID,
+	).Scan(&approvedCount)
+
+	var avail string
+	switch {
+	case approvedCount >= ticketsTotal:
+		avail = "sold_out"
+	case approvedCount*2 >= ticketsTotal:
+		avail = "limited"
+	}
+	db.Exec("UPDATE events SET availability=? WHERE id=?", avail, eventID)
+	log.Printf("bookings: event %d availability → %q (%d/%d)", eventID, avail, approvedCount, ticketsTotal)
+}
+
 // bookingVerifyExpiry returns now + VerificationExpiryHours.
 func bookingVerifyExpiry() time.Time {
 	h := config.Server.VerificationExpiryHours
@@ -162,10 +186,12 @@ func createBooking(w http.ResponseWriter, r *http.Request) {
 
 	expiresAt := bookingVerifyExpiry()
 
+	lang := bookingLangFromRequest(r)
+
 	result, err := db.Exec(
-		`INSERT INTO bookings (event_id, name, email, persons, message, verify_token, expires_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?)`,
-		eventID, req.Name, req.Email, req.Persons, req.Message, verifyToken, expiresAt.Format(time.RFC3339),
+		`INSERT INTO bookings (event_id, name, email, persons, message, verify_token, expires_at, lang)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+		eventID, req.Name, req.Email, req.Persons, req.Message, verifyToken, expiresAt.Format(time.RFC3339), lang,
 	)
 	if err != nil {
 		http.Error(w, "failed to create booking", http.StatusInternalServerError)
@@ -173,13 +199,11 @@ func createBooking(w http.ResponseWriter, r *http.Request) {
 	}
 	id, _ := result.LastInsertId()
 
+	s := bookingMailStringsFor(lang)
 	base := strings.TrimRight(config.Server.BaseURL, "/")
 	verifyURL := base + "/api/v1/bookings/verify/" + verifyToken
-	body := fmt.Sprintf(
-		"Hello %s,\n\nThank you for your booking request. Please confirm your email address by clicking this link:\n\n  %s\n\nThis link expires in %d hours.\n\nIf you did not make this booking request, please ignore this email.\n",
-		req.Name, verifyURL, config.Server.VerificationExpiryHours,
-	)
-	if err := SendEmail(req.Email, "Confirm your booking", body); err != nil {
+	verifyBody := fmt.Sprintf(s.VerifyBody, req.Name, verifyURL, config.Server.VerificationExpiryHours)
+	if err := SendEmail(req.Email, s.VerifySubject, verifyBody); err != nil {
 		log.Printf("bookings: verify email failed for booking %d: %v", id, err)
 	}
 
@@ -197,10 +221,10 @@ func verifyBooking(w http.ResponseWriter, r *http.Request) {
 	token := mux.Vars(r)["token"]
 
 	var id, eventID int
-	var expiresAt string
+	var expiresAt, name, email, lang string
 	err := db.QueryRow(
-		"SELECT id, event_id, expires_at FROM bookings WHERE verify_token=? AND status='pending'", token,
-	).Scan(&id, &eventID, &expiresAt)
+		"SELECT id, event_id, expires_at, name, email, COALESCE(lang,'') FROM bookings WHERE verify_token=? AND status='pending'", token,
+	).Scan(&id, &eventID, &expiresAt, &name, &email, &lang)
 	if err == sql.ErrNoRows {
 		http.Error(w, "invalid or already used verification link", http.StatusNotFound)
 		return
@@ -229,6 +253,7 @@ func verifyBooking(w http.ResponseWriter, r *http.Request) {
 		qrToken, longExpiry.Format(time.RFC3339), id,
 	)
 	log.Printf("bookings: verified booking %d for event %d", id, eventID)
+	go sendBookingConfirmedEmail(name, email, lang, eventID, qrToken)
 
 	base := strings.TrimRight(config.Server.BaseURL, "/")
 	checkinURL := base + "/checkin/" + qrToken
@@ -253,7 +278,8 @@ func updateBookingStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if _, ok := bookingAuthCheck(w, bookingID, callerID, callerRole); !ok {
+	eventID, ok := bookingAuthCheck(w, bookingID, callerID, callerRole)
+	if !ok {
 		return
 	}
 
@@ -279,6 +305,15 @@ func updateBookingStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	log.Printf("bookings: booking %d set to %s by user %d", bookingID, req.Status, callerID)
+	updateEventAvailability(eventID)
+	if req.Status == "approved" {
+		var name, email, lang, qrToken string
+		if err := db.QueryRow(
+			"SELECT name, email, COALESCE(lang,''), COALESCE(qr_token,'') FROM bookings WHERE id=?", bookingID,
+		).Scan(&name, &email, &lang, &qrToken); err == nil && qrToken != "" {
+			go sendBookingApprovedEmail(name, email, lang, eventID, qrToken)
+		}
+	}
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -313,6 +348,7 @@ func checkinBooking(w http.ResponseWriter, r *http.Request) {
 		db.Exec("UPDATE bookings SET status='checked_in' WHERE id=?", b.ID)
 		b.Status = "checked_in"
 		log.Printf("bookings: booking %d checked in by user %d", b.ID, callerID)
+		updateEventAvailability(b.EventID)
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -331,11 +367,13 @@ func deleteBooking(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if _, ok := bookingAuthCheck(w, bookingID, callerID, callerRole); !ok {
+	eventID, ok := bookingAuthCheck(w, bookingID, callerID, callerRole)
+	if !ok {
 		return
 	}
 
 	db.Exec("DELETE FROM bookings WHERE id=?", bookingID)
 	log.Printf("bookings: booking %d deleted by user %d", bookingID, callerID)
+	updateEventAvailability(eventID)
 	w.WriteHeader(http.StatusNoContent)
 }

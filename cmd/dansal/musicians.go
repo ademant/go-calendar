@@ -17,10 +17,17 @@ type Musician struct {
 	Internetsite string `json:"internetsite,omitempty"`
 	Description  string `json:"description,omitempty"`
 	MBID         string `json:"mbid,omitempty"`
+	WikidataID   string `json:"wikidata_id,omitempty"`
+	Country      string `json:"country,omitempty"`
+	BeginYear    int    `json:"begin_year,omitempty"`
+	Biography    string `json:"biography,omitempty"`
+	MembersJSON  string `json:"members_json,omitempty"`
+	AlbumsJSON   string `json:"albums_json,omitempty"`
 	Mastodon     string `json:"mastodon,omitempty"`
 	Instagram    string `json:"instagram,omitempty"`
 	Facebook     string `json:"facebook,omitempty"`
 	Soundcloud   string `json:"soundcloud,omitempty"`
+	ImageURL     string `json:"image_url,omitempty"`
 	CreatedAt    string `json:"created_at"`
 }
 
@@ -30,6 +37,12 @@ type MusicianCreateRequest struct {
 	Internetsite string `json:"internetsite"`
 	Description  string `json:"description"`
 	MBID         string `json:"mbid"`
+	WikidataID   string `json:"wikidata_id"`
+	Country      string `json:"country"`
+	BeginYear    int    `json:"begin_year"`
+	Biography    string `json:"biography"`
+	MembersJSON  string `json:"members_json"`
+	AlbumsJSON   string `json:"albums_json"`
 	Mastodon     string `json:"mastodon"`
 	Instagram    string `json:"instagram"`
 	Facebook     string `json:"facebook"`
@@ -42,6 +55,12 @@ type MusicianUpdateRequest struct {
 	Internetsite string `json:"internetsite"`
 	Description  string `json:"description"`
 	MBID         string `json:"mbid"`
+	WikidataID   string `json:"wikidata_id"`
+	Country      string `json:"country"`
+	BeginYear    int    `json:"begin_year"`
+	Biography    string `json:"biography"`
+	MembersJSON  string `json:"members_json"`
+	AlbumsJSON   string `json:"albums_json"`
 	Mastodon     string `json:"mastodon"`
 	Instagram    string `json:"instagram"`
 	Facebook     string `json:"facebook"`
@@ -50,20 +69,39 @@ type MusicianUpdateRequest struct {
 
 const musicianCols = `id, bandname,
 	COALESCE(short_name,''), COALESCE(internetsite,''), COALESCE(description,''),
-	COALESCE(mbid,''), COALESCE(mastodon,''), COALESCE(instagram,''),
+	COALESCE(mbid,''), COALESCE(wikidata_id,''), COALESCE(country,''), COALESCE(begin_year,0),
+	COALESCE(biography,''), COALESCE(members_json,''), COALESCE(albums_json,''),
+	COALESCE(mastodon,''), COALESCE(instagram,''),
 	COALESCE(facebook,''), COALESCE(soundcloud,''), created_at`
 
 func scanMusician(row interface{ Scan(...any) error }) (Musician, error) {
 	var m Musician
-	return m, row.Scan(&m.ID, &m.Bandname, &m.ShortName, &m.Internetsite, &m.Description,
-		&m.MBID, &m.Mastodon, &m.Instagram, &m.Facebook, &m.Soundcloud, &m.CreatedAt)
+	err := row.Scan(&m.ID, &m.Bandname, &m.ShortName, &m.Internetsite, &m.Description,
+		&m.MBID, &m.WikidataID, &m.Country, &m.BeginYear, &m.Biography, &m.MembersJSON, &m.AlbumsJSON,
+		&m.Mastodon, &m.Instagram, &m.Facebook, &m.Soundcloud, &m.CreatedAt)
+	if err == nil {
+		m.ImageURL = musicianImageURL(m.ID)
+	}
+	return m, err
 }
 
-// GET /api/v1/musicians - List all musicians
+// GET /api/v1/musicians - List all musicians; optional ?organization_id=N filter
 func getMusicians(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
-	rows, err := db.Query("SELECT " + musicianCols + " FROM musicians ORDER BY bandname")
+	var rows *sql.Rows
+	var err error
+	if orgIDStr := r.URL.Query().Get("organization_id"); orgIDStr != "" {
+		rows, err = db.Query(
+			`SELECT `+musicianCols+` FROM musicians
+			 WHERE id IN (
+			   SELECT DISTINCT em.musician_id FROM event_musicians em
+			   JOIN events e ON e.id = em.event_id
+			   WHERE e.organization_id = ? AND e.is_published = 1
+			 ) ORDER BY bandname`, orgIDStr)
+	} else {
+		rows, err = db.Query("SELECT " + musicianCols + " FROM musicians ORDER BY bandname")
+	}
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -133,9 +171,10 @@ func createMusician(w http.ResponseWriter, r *http.Request) {
 	musicians := make([]Musician, 0, len(reqs))
 	for _, req := range reqs {
 		m, err := scanMusician(db.QueryRow(
-			`INSERT INTO musicians (bandname, short_name, internetsite, description, mbid, mastodon, instagram, facebook, soundcloud)
-			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING `+musicianCols,
+			`INSERT INTO musicians (bandname, short_name, internetsite, description, mbid, wikidata_id, country, begin_year, biography, members_json, albums_json, mastodon, instagram, facebook, soundcloud)
+			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING `+musicianCols,
 			req.Bandname, req.ShortName, req.Internetsite, req.Description, req.MBID,
+			req.WikidataID, req.Country, req.BeginYear, req.Biography, req.MembersJSON, req.AlbumsJSON,
 			req.Mastodon, req.Instagram, req.Facebook, req.Soundcloud,
 		))
 		if err != nil {
@@ -169,8 +208,10 @@ func updateMusician(w http.ResponseWriter, r *http.Request) {
 
 	result, err := db.Exec(
 		`UPDATE musicians SET bandname=?, short_name=?, internetsite=?, description=?, mbid=?,
+		 wikidata_id=?, country=?, begin_year=?, biography=?, members_json=?, albums_json=?,
 		 mastodon=?, instagram=?, facebook=?, soundcloud=? WHERE id=?`,
 		req.Bandname, req.ShortName, req.Internetsite, req.Description, req.MBID,
+		req.WikidataID, req.Country, req.BeginYear, req.Biography, req.MembersJSON, req.AlbumsJSON,
 		req.Mastodon, req.Instagram, req.Facebook, req.Soundcloud, id,
 	)
 	if err != nil {

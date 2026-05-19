@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"database/sql"
 	"embed"
 	"encoding/json"
@@ -8,12 +9,15 @@ import (
 	"html/template"
 	"log"
 	"net/http"
+	"net/url"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/gorilla/mux"
+	"github.com/yuin/goldmark"
 )
 
 type TemplateData struct {
@@ -58,17 +62,22 @@ type EventData struct {
 	Org            *Organization
 	OrgSlug        string
 	ContactPosts   []ContactPost
-	CanManageBoard bool   // admin or org member
-	BoardPosted    bool   // form submitted successfully
-	BoardContacted bool   // contact message forwarded
-	BoardError     string // i18n key for error
+	CanManageBoard bool
+	BoardPosted    bool
+	BoardContacted bool
+	BoardError     string
+	BookingOK      bool
+	BookingError   string
 }
 
 type OrgData struct {
-	Org    Organization
-	Events []Event
-	Slug   string
-	Handle string
+	Org            Organization
+	UpcomingEvents []Event
+	PastEvents     []Event
+	AllEvents      []Event
+	Musicians      []Musician
+	Slug           string
+	Handle         string
 }
 
 type OrgListItem struct {
@@ -144,6 +153,35 @@ func parseTime(s string) (time.Time, bool) {
 		}
 	}
 	return time.Time{}, false
+}
+
+// reURLAttr matches href="..." and src="..." produced by goldmark's renderer.
+var reURLAttr = regexp.MustCompile(`(?i)(href|src)="([^"]*)"`)
+
+// safeSchemes lists URL schemes allowed in rendered markdown output.
+var safeSchemes = map[string]bool{
+	"http": true, "https": true, "mailto": true, "tel": true,
+}
+
+// sanitizeMarkdownHTML strips dangerous URI schemes (javascript:, data:,
+// vbscript:) from href and src attributes in goldmark-rendered HTML.
+// Relative URLs (no scheme) are left untouched.
+func sanitizeMarkdownHTML(s string) string {
+	return reURLAttr.ReplaceAllStringFunc(s, func(m string) string {
+		parts := reURLAttr.FindStringSubmatch(m)
+		if parts == nil {
+			return m
+		}
+		u, err := url.Parse(parts[2])
+		if err != nil {
+			return parts[1] + `="#"`
+		}
+		scheme := strings.ToLower(u.Scheme)
+		if scheme != "" && !safeSchemes[scheme] {
+			return parts[1] + `="#"`
+		}
+		return m
+	})
 }
 
 var tmplFuncMap = template.FuncMap{
@@ -273,6 +311,53 @@ var tmplFuncMap = template.FuncMap{
 		return ""
 	},
 	"orgSlug": orgSlug,
+	"checkinColor": func(status string) string {
+		switch status {
+		case "approved", "checked_in":
+			return "green"
+		case "confirmed":
+			return "amber"
+		default:
+			return "red"
+		}
+	},
+	"checkinIcon": func(status string) string {
+		switch status {
+		case "approved", "checked_in":
+			return "✓"
+		case "confirmed":
+			return "?"
+		default:
+			return "✗"
+		}
+	},
+	"capPct": func(approved, total int) int {
+		if total <= 0 {
+			return 0
+		}
+		pct := approved * 100 / total
+		if pct > 100 {
+			return 100
+		}
+		return pct
+	},
+	"markdownHTML": func(s string) template.HTML {
+		var buf bytes.Buffer
+		if err := goldmark.Convert([]byte(s), &buf); err != nil {
+			return template.HTML(template.HTMLEscapeString(s))
+		}
+		return template.HTML(sanitizeMarkdownHTML(buf.String()))
+	},
+	"jsonLines": func(s string) string {
+		if s == "" {
+			return ""
+		}
+		var arr []string
+		if err := json.Unmarshal([]byte(s), &arr); err != nil {
+			return s
+		}
+		return strings.Join(arr, "\n")
+	},
 	"countryList": func(events []Event) []string {
 		seen := make(map[string]bool)
 		var out []string
@@ -294,6 +379,9 @@ type Templates struct {
 	login              *template.Template
 	settings           *template.Template
 	verify             *template.Template
+	bookingVerify      *template.Template
+	checkin            *template.Template
+	adminBookings      *template.Template
 	adminOrgs          *template.Template
 	adminOrgEdit       *template.Template
 	adminFetchurls     *template.Template
@@ -328,6 +416,9 @@ func loadTemplates() *Templates {
 		login:             load("login"),
 		settings:          load("settings"),
 		verify:            load("verify"),
+		bookingVerify:     load("booking_verify"),
+		checkin:           load("checkin"),
+		adminBookings:     load("admin_bookings"),
 		adminOrgs:         load("admin_orgs"),
 		adminOrgEdit:      load("admin_org_edit"),
 		adminFetchurls:    load("admin_fetchurls"),
@@ -420,6 +511,8 @@ func eventHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18
 		boardPosted := r.URL.Query().Get("board_posted") == "1"
 		boardContacted := r.URL.Query().Get("board_contacted") == "1"
 		boardError := r.URL.Query().Get("board_error")
+		bookingOK := r.URL.Query().Get("book_ok") == "1"
+		bookingError := r.URL.Query().Get("book_error")
 
 		renderTemplate(w, tmpls.event, tmplData(r, cfg, i18n, event.Title, EventData{
 			Event:          event,
@@ -430,6 +523,8 @@ func eventHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18
 			BoardPosted:    boardPosted,
 			BoardContacted: boardContacted,
 			BoardError:     boardError,
+			BookingOK:      bookingOK,
+			BookingError:   bookingError,
 		}))
 	}
 }
@@ -466,17 +561,32 @@ func orgFrontendHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *Dansa
 			return
 		}
 
-		events, err := client.GetEventsByOrg(r.Context(), actor.OrgID)
-		if err != nil {
-			events = nil
+		allEvents, _ := client.GetAllEventsByOrg(r.Context(), actor.OrgID)
+		musicians, _ := client.GetMusiciansByOrg(r.Context(), actor.OrgID)
+
+		now := time.Now().Unix()
+		var upcoming, past []Event
+		for _, e := range allEvents {
+			if ts, err2 := strconv.ParseInt(e.EndTime, 10, 64); err2 == nil && ts < now {
+				past = append(past, e)
+			} else {
+				upcoming = append(upcoming, e)
+			}
+		}
+		// Past events: most recent first
+		for i, j := 0, len(past)-1; i < j; i, j = i+1, j-1 {
+			past[i], past[j] = past[j], past[i]
 		}
 
 		handle := "@" + slug + "@" + cfg.Domain
 		renderTemplate(w, tmpls.org, tmplData(r, cfg, i18n, org.Name, OrgData{
-			Org:    org,
-			Events: events,
-			Slug:   slug,
-			Handle: handle,
+			Org:            org,
+			UpcomingEvents: upcoming,
+			PastEvents:     past,
+			AllEvents:      allEvents,
+			Musicians:      musicians,
+			Slug:           slug,
+			Handle:         handle,
 		}))
 	}
 }

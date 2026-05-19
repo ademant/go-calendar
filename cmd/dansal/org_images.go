@@ -1,0 +1,156 @@
+package main
+
+import (
+	"errors"
+	"net/http"
+	"os"
+	"path/filepath"
+	"strconv"
+	"strings"
+	"sync"
+
+	"github.com/gorilla/mux"
+)
+
+var orgImagesDir string
+
+type orgImageCache struct {
+	mu  sync.RWMutex
+	ids map[int]struct{}
+}
+
+var orgImgCache = &orgImageCache{ids: make(map[int]struct{})}
+
+func initOrgImageCache(dir string) {
+	orgImagesDir = dir
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return
+	}
+	orgImgCache.mu.Lock()
+	defer orgImgCache.mu.Unlock()
+	for _, e := range entries {
+		if e.IsDir() {
+			continue
+		}
+		name := e.Name()
+		if !strings.HasSuffix(name, ".avif") {
+			continue
+		}
+		if id, err := strconv.Atoi(strings.TrimSuffix(name, ".avif")); err == nil {
+			orgImgCache.ids[id] = struct{}{}
+		}
+	}
+}
+
+func hasOrgImage(id int) bool {
+	orgImgCache.mu.RLock()
+	_, ok := orgImgCache.ids[id]
+	orgImgCache.mu.RUnlock()
+	return ok
+}
+
+func orgImageURL(id int) string {
+	if hasOrgImage(id) {
+		return "/api/v1/org-images/" + strconv.Itoa(id)
+	}
+	return ""
+}
+
+func (c *orgImageCache) add(id int) {
+	c.mu.Lock()
+	c.ids[id] = struct{}{}
+	c.mu.Unlock()
+}
+
+func (c *orgImageCache) remove(id int) {
+	c.mu.Lock()
+	delete(c.ids, id)
+	c.mu.Unlock()
+}
+
+// GET /api/v1/org-images/{id}
+func getOrgImage(w http.ResponseWriter, r *http.Request) {
+	idStr := mux.Vars(r)["id"]
+	for _, c := range idStr {
+		if c < '0' || c > '9' {
+			http.Error(w, "Invalid organization ID", http.StatusBadRequest)
+			return
+		}
+	}
+	imgPath := filepath.Join(orgImagesDir, idStr+".avif")
+	if _, err := os.Stat(imgPath); os.IsNotExist(err) {
+		http.Error(w, "Image not found", http.StatusNotFound)
+		return
+	}
+	w.Header().Set("Content-Type", "image/avif")
+	http.ServeFile(w, r, imgPath)
+}
+
+// POST /api/v1/org-images/{id}
+func uploadOrgImage(w http.ResponseWriter, r *http.Request) {
+	userRole := r.Header.Get("X-User-Role")
+	if userRole != RoleAdmin && userRole != RoleUser {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
+	idStr := mux.Vars(r)["id"]
+	id, err := strconv.Atoi(idStr)
+	if err != nil {
+		http.Error(w, "Invalid organization ID", http.StatusBadRequest)
+		return
+	}
+	var exists int
+	if err := db.QueryRow("SELECT id FROM organizations WHERE id=?", id).Scan(&exists); err != nil {
+		http.Error(w, "Organization not found", http.StatusNotFound)
+		return
+	}
+	if err := r.ParseMultipartForm(config.Server.MaxBodyBytes); err != nil {
+		http.Error(w, "Failed to parse form", http.StatusBadRequest)
+		return
+	}
+	file, _, err := r.FormFile("image")
+	if err != nil {
+		http.Error(w, "Missing image field", http.StatusBadRequest)
+		return
+	}
+	defer file.Close()
+	if err := saveImageToDir(id, orgImagesDir, file); err != nil {
+		if errors.Is(err, errNotImage) {
+			http.Error(w, "File is not an image", http.StatusUnsupportedMediaType)
+		} else {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
+		return
+	}
+	orgImgCache.add(id)
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// DELETE /api/v1/org-images/{id}
+func deleteOrgImage(w http.ResponseWriter, r *http.Request) {
+	userRole := r.Header.Get("X-User-Role")
+	if userRole != RoleAdmin && userRole != RoleUser {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
+	idStr := mux.Vars(r)["id"]
+	for _, c := range idStr {
+		if c < '0' || c > '9' {
+			http.Error(w, "Invalid organization ID", http.StatusBadRequest)
+			return
+		}
+	}
+	id, _ := strconv.Atoi(idStr)
+	imgPath := filepath.Join(orgImagesDir, idStr+".avif")
+	if err := os.Remove(imgPath); err != nil {
+		if os.IsNotExist(err) {
+			http.Error(w, "Image not found", http.StatusNotFound)
+			return
+		}
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	orgImgCache.remove(id)
+	w.WriteHeader(http.StatusNoContent)
+}

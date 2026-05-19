@@ -4,37 +4,29 @@
 
 {{with .Data}}
 {{if .Items}}
-<div class="table-wrap">
-<table class="orgs-table">
-  <thead>
-    <tr>
-      <th>{{$.Strings.T "org_name"}}</th>
-      <th>{{$.Strings.T "col_location"}}</th>
-      <th class="col-num">{{$.Strings.T "org_locations"}}</th>
-      <th class="col-num">{{$.Strings.T "org_events_title"}}</th>
-    </tr>
-  </thead>
-  <tbody>
-  {{range .Items}}
-  <tr class="orgs-row" onclick="window.location.href='/org/{{.Slug}}'">
-    <td>{{.Org.Name}}</td>
-    <td>{{.FirstTown}}</td>
-    <td class="col-num">{{.LocationCount}}</td>
-    <td class="col-num">{{.EventCount}}</td>
-  </tr>
-  {{end}}
-  </tbody>
-</table>
+<div class="orgs-grid">
+{{range .Items}}
+<a href="/org/{{.Slug}}" class="org-card">
+  <div class="org-card-name">{{.Org.Name}}</div>
+  {{if .FirstTown}}<div class="org-card-town">{{.FirstTown}}</div>{{end}}
+  {{if .Org.Description}}<p class="org-card-desc">{{.Org.Description}}</p>{{end}}
+  <div class="org-card-meta">
+    {{if .EventCount}}<span class="chip">{{.EventCount}} {{$.Strings.T "org_events_title"}}</span>{{end}}
+    {{if .LocationCount}}<span class="chip">{{.LocationCount}} {{$.Strings.T "org_locations"}}</span>{{end}}
+  </div>
+</a>
+{{end}}
 </div>
 {{end}}
 {{end}}
 
 <style>
-.orgs-table{width:100%;border-collapse:collapse;font-size:.9rem}
-.orgs-table th,.orgs-table td{padding:.5rem .65rem;text-align:left;border-bottom:1px solid #eee;vertical-align:top}
-.orgs-table thead th{background:#f4f6fb;font-weight:600;color:#333;white-space:nowrap}
-.orgs-table tbody tr{cursor:pointer}
-.orgs-table tbody tr:hover{background:#f0f4ff}
-.col-num{text-align:right!important;width:90px}
+.orgs-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:1rem;margin-top:.5rem}
+.org-card{display:flex;flex-direction:column;gap:.35rem;background:#fff;border:1px solid #ddd;border-radius:8px;padding:1rem 1.1rem;text-decoration:none;color:#1a1a2e;transition:box-shadow .15s,border-color .15s}
+.org-card:hover{border-color:#9ab0e8;box-shadow:0 2px 8px rgba(26,110,181,.12)}
+.org-card-name{font-weight:700;font-size:1rem}
+.org-card-town{font-size:.85rem;color:#888}
+.org-card-desc{font-size:.85rem;color:#555;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;line-height:1.5;margin:0}
+.org-card-meta{display:flex;flex-wrap:wrap;gap:.3rem;margin-top:.15rem}
 </style>
 {{end}}

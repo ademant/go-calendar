@@ -486,6 +486,13 @@ func migrateDB() {
 	db.Exec("CREATE INDEX IF NOT EXISTS idx_bookings_event_id ON bookings(event_id)")
 	db.Exec("CREATE INDEX IF NOT EXISTS idx_bookings_verify_token ON bookings(verify_token)")
 	db.Exec("CREATE INDEX IF NOT EXISTS idx_bookings_qr_token ON bookings(qr_token)")
+	db.Exec("ALTER TABLE bookings ADD COLUMN lang TEXT NOT NULL DEFAULT ''")
+	db.Exec("ALTER TABLE musicians ADD COLUMN wikidata_id TEXT")
+	db.Exec("ALTER TABLE musicians ADD COLUMN country TEXT")
+	db.Exec("ALTER TABLE musicians ADD COLUMN begin_year INTEGER")
+	db.Exec("ALTER TABLE musicians ADD COLUMN biography TEXT")
+	db.Exec("ALTER TABLE musicians ADD COLUMN members_json TEXT")
+	db.Exec("ALTER TABLE musicians ADD COLUMN albums_json TEXT")
 }
 
 func createTables() error {
@@ -758,6 +765,8 @@ func main() {
 	}
 	migrateDB()
 	initImageCache(config.Server.ImagesDir)
+	initMusicianImageCache(config.Server.ImagesDir + "/musicians")
+	initOrgImageCache(config.Server.ImagesDir + "/orgs")
 	initMetrics()
 	startTokenCleanup()
 	log.Println("Database initialized successfully")
@@ -821,6 +830,8 @@ func main() {
 	router.Handle("/api/v1/musicians/{id}", optAuth(http.HandlerFunc(getMusician))).Methods("GET")
 	router.Handle("/api/v1/tags", optAuth(http.HandlerFunc(getTags))).Methods("GET")
 	router.Handle("/api/v1/images/{event_id}", optAuth(http.HandlerFunc(getEventImage))).Methods("GET")
+	router.HandleFunc("/api/v1/musician-images/{id}", getMusicianImage).Methods("GET")
+	router.HandleFunc("/api/v1/org-images/{id}", getOrgImage).Methods("GET")
 
 	// Protected event writes
 	eventRoutes := router.PathPrefix("/api/v1/events").Subrouter()
@@ -857,6 +868,18 @@ func main() {
 	imageRoutes.Use(TokenMiddleware)
 	imageRoutes.HandleFunc("/{event_id}", uploadEventImage).Methods("POST")
 	imageRoutes.HandleFunc("/{event_id}", deleteEventImage).Methods("DELETE")
+
+	// Protected musician image writes
+	musicianImgRoutes := router.PathPrefix("/api/v1/musician-images").Subrouter()
+	musicianImgRoutes.Use(TokenMiddleware)
+	musicianImgRoutes.HandleFunc("/{id}", uploadMusicianImage).Methods("POST")
+	musicianImgRoutes.HandleFunc("/{id}", deleteMusicianImage).Methods("DELETE")
+
+	// Protected org image writes
+	orgImgRoutes := router.PathPrefix("/api/v1/org-images").Subrouter()
+	orgImgRoutes.Use(TokenMiddleware)
+	orgImgRoutes.HandleFunc("/{id}", uploadOrgImage).Methods("POST")
+	orgImgRoutes.HandleFunc("/{id}", deleteOrgImage).Methods("DELETE")
 
 	// User endpoints (protected)
 	userRoutes := router.PathPrefix("/api/v1/users").Subrouter()

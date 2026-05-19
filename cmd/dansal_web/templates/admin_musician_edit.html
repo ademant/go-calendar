@@ -6,9 +6,9 @@
 {{with .Data}}
 {{if .ErrorKey}}<p class="form-error" role="alert">{{$.Strings.T .ErrorKey}}</p>{{end}}
 
-<!-- MusicBrainz search widget -->
+<!-- Multi-service search widget -->
 <div class="mb-widget">
-  <label for="mb-search">{{$.Strings.T "musician_mb_search"}}</label>
+  <label>{{$.Strings.T "musician_search_label"}}</label>
   <div class="mb-row">
     <input id="mb-search" type="text" placeholder="{{.Musician.Bandname}}" autocomplete="off">
     <button type="button" id="mb-btn">{{$.Strings.T "musician_mb_btn"}}</button>
@@ -19,18 +19,41 @@
     <a href="https://musicbrainz.org/artist/{{.Musician.MBID}}" target="_blank" rel="noopener"><code>{{.Musician.MBID}}</code></a>
   </p>
   {{end}}
+  <div class="mb-tabs">
+    <button type="button" class="mb-tab active" data-svc="mb">MusicBrainz</button>
+    <button type="button" class="mb-tab" data-svc="discogs">Discogs</button>
+    <button type="button" class="mb-tab" data-svc="bandcamp">Bandcamp</button>
+  </div>
   <ul id="mb-results" class="mb-results"></ul>
+  <ul id="discogs-results" class="mb-results" style="display:none"></ul>
+  <ul id="bandcamp-results" class="mb-results" style="display:none"></ul>
+  <div id="match-hint" class="match-hint" style="display:none"></div>
 </div>
 
-<form method="post" class="edit-form">
+<form method="post" enctype="multipart/form-data" class="edit-form">
   <label for="bandname">{{$.Strings.T "musician_bandname"}}</label>
   <input id="bandname" type="text" name="bandname" value="{{.Musician.Bandname}}" required>
 
   <label for="short_name">{{$.Strings.T "musician_short_name"}}</label>
   <input id="short_name" type="text" name="short_name" value="{{.Musician.ShortName}}">
 
+  <label for="country">{{$.Strings.T "musician_country"}}</label>
+  <input id="country" type="text" name="country" value="{{.Musician.Country}}" placeholder="DE, FR, …">
+
+  <label for="begin_year">{{$.Strings.T "musician_begin_year"}}</label>
+  <input id="begin_year" type="number" name="begin_year" value="{{if .Musician.BeginYear}}{{.Musician.BeginYear}}{{end}}" min="1900" max="2099" placeholder="1985">
+
   <label for="description">{{$.Strings.T "musician_description"}}</label>
-  <textarea id="description" name="description" rows="4">{{.Musician.Description}}</textarea>
+  <textarea id="description" name="description" rows="3">{{.Musician.Description}}</textarea>
+
+  <label for="biography">{{$.Strings.T "musician_biography"}}</label>
+  <textarea id="biography" name="biography" rows="5">{{.Musician.Biography}}</textarea>
+
+  <label for="members">{{$.Strings.T "musician_members"}} <span class="hint">{{$.Strings.T "musician_one_per_line"}}</span></label>
+  <textarea id="members" name="members" rows="3">{{jsonLines .Musician.MembersJSON}}</textarea>
+
+  <label for="albums">{{$.Strings.T "musician_albums"}} <span class="hint">{{$.Strings.T "musician_one_per_line"}}</span></label>
+  <textarea id="albums" name="albums" rows="3">{{jsonLines .Musician.AlbumsJSON}}</textarea>
 
   <label for="internetsite">{{$.Strings.T "musician_website"}}</label>
   <input id="internetsite" type="url" name="internetsite" value="{{.Musician.Internetsite}}" placeholder="https://…">
@@ -43,6 +66,9 @@
     <a href="https://musicbrainz.org/artist/{{.Musician.MBID}}" target="_blank" rel="noopener" class="btn-sm mb-open">↗ MusicBrainz</a>
     {{end}}
   </div>
+
+  <label for="wikidata_id">{{$.Strings.T "musician_wikidata"}}</label>
+  <input id="wikidata_id" type="text" name="wikidata_id" value="{{.Musician.WikidataID}}" placeholder="Q12345">
 
   <fieldset class="social-fieldset">
     <legend>{{$.Strings.T "musician_social"}}</legend>
@@ -58,6 +84,19 @@
 
     <label for="soundcloud">{{$.Strings.T "musician_soundcloud"}}</label>
     <input id="soundcloud" type="text" name="soundcloud" value="{{.Musician.Soundcloud}}" placeholder="bandname">
+  </fieldset>
+
+  <fieldset class="image-fieldset">
+    <legend>{{$.Strings.T "musician_image"}}</legend>
+    {{with .Musician.ImageURL}}<img src="{{.}}" alt="" id="existing-image" style="max-height:200px;border-radius:4px;margin-bottom:.5rem;display:block">{{end}}
+    <div id="drop-zone" class="drop-zone">
+      <input type="file" id="image" name="image" accept="image/*" style="display:none">
+      <div id="drop-label" class="drop-label">
+        <span>{{$.Strings.T "evt_image_hint"}}</span>
+        <button type="button" onclick="document.getElementById('image').click()" class="btn-sm-secondary">{{$.Strings.T "evt_image_browse"}}</button>
+      </div>
+      <img id="image-preview" style="display:none;max-height:200px;border-radius:4px;margin-top:.5rem">
+    </div>
   </fieldset>
 
   <div class="form-actions">
@@ -78,28 +117,40 @@
 .mb-row button{padding:.4rem .9rem;background:#ba2025;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:.9rem;white-space:nowrap}
 .mb-row button:hover{background:#8a1519}
 .mb-current{font-size:.85rem;color:#555;margin-top:.5rem}
+.mb-tabs{display:flex;gap:.35rem;margin-top:.6rem}
+.mb-tab{padding:.25rem .7rem;border:1px solid #b3d4f5;border-radius:4px;background:#fff;color:#1a6eb5;font-size:.82rem;cursor:pointer}
+.mb-tab.active{background:#1a6eb5;color:#fff;border-color:#1a6eb5}
 .mb-results{list-style:none;padding:0;margin-top:.5rem}
 .mb-results li{padding:.4rem .5rem;border-bottom:1px solid #ddeeff;font-size:.85rem;cursor:pointer;display:flex;justify-content:space-between;align-items:flex-start;gap:.5rem}
 .mb-results li:hover{background:#ddeeff}
 .mb-results li .mb-meta{color:#666;font-size:.8rem;white-space:nowrap;text-align:right;flex-shrink:0}
 .mb-results li button{background:#ba2025;color:#fff;border:none;border-radius:3px;padding:.15rem .5rem;font-size:.8rem;cursor:pointer;flex-shrink:0}
+.mb-results li.match-row{border-left:3px solid #1a6eb5}
+.match-hint{font-size:.8rem;color:#1a6eb5;margin-top:.25rem;padding:.2rem .4rem;background:#e8f3ff;border-radius:3px}
 .edit-form{display:flex;flex-direction:column;gap:.5rem;background:#fff;border:1px solid #ddd;border-radius:6px;padding:1.5rem}
 .edit-form label{font-weight:600;font-size:.9rem;color:#444;margin-top:.2rem}
 .edit-form input,.edit-form textarea{padding:.45rem .6rem;border:1px solid #ccc;border-radius:4px;font-size:1rem;width:100%;resize:vertical}
 .edit-form input:focus,.edit-form textarea:focus{outline:2px solid #1a6eb5;border-color:#1a6eb5}
+.drop-zone{border:2px dashed #ccc;border-radius:6px;padding:1.5rem;text-align:center;cursor:pointer;transition:border-color .2s}
+.drop-zone.drag-over{border-color:#1a6eb5;background:#f0f4ff}
+.drop-label{display:flex;flex-direction:column;align-items:center;gap:.5rem;color:#888;font-size:.9rem}
+.btn-sm-secondary{padding:.3rem .75rem;border:1px solid #ccc;border-radius:4px;background:#f5f5f5;cursor:pointer;font-size:.85rem}
+.btn-sm-secondary:hover{background:#e8e8e8}
+.hint{font-weight:400;font-size:.78rem;color:#888}
 .mbid-row{display:flex;gap:.5rem;align-items:center}
 .mbid-row input{flex:1}
 .mb-open{flex-shrink:0}
-.social-fieldset{border:1px solid #ddd;border-radius:4px;padding:.75rem 1rem;display:flex;flex-direction:column;gap:.5rem;margin-top:.25rem}
-.social-fieldset legend{font-weight:600;font-size:.9rem;color:#444;padding:0 .25rem}
+.social-fieldset,.image-fieldset{border:1px solid #ddd;border-radius:4px;padding:.75rem 1rem;display:flex;flex-direction:column;gap:.5rem;margin-top:.25rem}
+.social-fieldset legend,.image-fieldset legend{font-weight:600;font-size:.9rem;color:#444;padding:0 .25rem}
+.musician-thumb{max-width:160px;max-height:160px;border-radius:4px;margin-bottom:.5rem;object-fit:cover}
 .form-actions{display:flex;gap:.75rem;margin-top:.75rem}
-.upcoming-events{max-width:560px;margin-top:2rem}
-.upcoming-events h2{font-size:1.1rem;margin-bottom:.75rem;color:#333}
-.badge.unpublished{background:#fff3cd;color:#856404}
 .btn-primary{padding:.45rem 1.2rem;background:#1a6eb5;color:#fff;border:none;border-radius:4px;font-size:.95rem;cursor:pointer}
 .btn-primary:hover{background:#0d4a80}
 .btn-secondary{padding:.45rem 1.2rem;background:#f5f5f5;color:#333;border:1px solid #ccc;border-radius:4px;font-size:.95rem;text-decoration:none;cursor:pointer}
 .btn-secondary:hover{background:#e8e8e8}
+.upcoming-events{max-width:560px;margin-top:2rem}
+.upcoming-events h2{font-size:1.1rem;margin-bottom:.75rem;color:#333}
+.badge.unpublished{background:#fff3cd;color:#856404}
 </style>
 
 {{if and (not .Data.IsNew) .Data.Events}}
@@ -123,68 +174,215 @@
 
 <script>
 (function(){
-  var btn     = document.getElementById('mb-btn');
-  var input   = document.getElementById('mb-search');
-  var results = document.getElementById('mb-results');
-  var mbidInp = document.getElementById('mbid');
-  var nameInp = document.getElementById('bandname');
+  var searchInput = document.getElementById('mb-search');
+  var searchBtn   = document.getElementById('mb-btn');
+  var mbResults   = document.getElementById('mb-results');
+  var discogsRes  = document.getElementById('discogs-results');
+  var bcRes       = document.getElementById('bandcamp-results');
+  var matchHint   = document.getElementById('match-hint');
+  var mbidInp     = document.getElementById('mbid');
+  var nameInp     = document.getElementById('bandname');
+  var countryInp  = document.getElementById('country');
+  var yearInp     = document.getElementById('begin_year');
+  var siteInp     = document.getElementById('internetsite');
+  var activeSvc   = 'mb';
 
-  btn.addEventListener('click', function(){
-    var q = input.value.trim() || nameInp.value.trim();
-    if (!q) return;
-    btn.disabled = true;
-    results.innerHTML = '<li style="color:#666">…</li>';
-    fetch('https://musicbrainz.org/ws/2/artist?query=' + encodeURIComponent(q) + '&fmt=json&limit=8', {
-      headers: {'Accept': 'application/json'}
-    })
-    .then(function(r){ return r.json(); })
-    .then(function(data){
-      results.innerHTML = '';
-      var artists = data.artists || [];
-      if (!artists.length) {
-        results.innerHTML = '<li style="color:#999">{{$.Strings.T "musician_mb_no_results"}}</li>';
-        return;
-      }
-      artists.forEach(function(a){
-        var li = document.createElement('li');
-
-        var info = document.createElement('span');
-        var label = a.name;
-        if (a.disambiguation) label += ' (' + a.disambiguation + ')';
-        info.textContent = label;
-
-        var meta = document.createElement('span');
-        meta.className = 'mb-meta';
-        var parts = [];
-        if (a['life-span'] && a['life-span'].begin) parts.push(a['life-span'].begin.slice(0,4));
-        if (a.country) parts.push(a.country);
-        if (a.type) parts.push(a.type);
-        meta.textContent = parts.join(' · ');
-
-        var pickBtn = document.createElement('button');
-        pickBtn.type = 'button';
-        pickBtn.textContent = '↙';
-        pickBtn.title = a.id;
-        pickBtn.addEventListener('click', function(e){
-          e.stopPropagation();
-          mbidInp.value = a.id;
-          if (!nameInp.value.trim()) nameInp.value = a.name;
-          results.innerHTML = '';
-          mbidInp.focus();
-        });
-
-        li.appendChild(info);
-        li.appendChild(meta);
-        li.appendChild(pickBtn);
-        results.appendChild(li);
-      });
-    })
-    .catch(function(){ results.innerHTML = '<li style="color:#c00">{{$.Strings.T "musician_mb_error"}}</li>'; })
-    .finally(function(){ btn.disabled = false; });
+  var tabs = document.querySelectorAll('.mb-tab');
+  tabs.forEach(function(tab){
+    tab.addEventListener('click', function(){
+      tabs.forEach(function(t){ t.classList.remove('active'); });
+      tab.classList.add('active');
+      activeSvc = tab.dataset.svc;
+      mbResults.style.display  = activeSvc === 'mb'       ? '' : 'none';
+      discogsRes.style.display = activeSvc === 'discogs'  ? '' : 'none';
+      bcRes.style.display      = activeSvc === 'bandcamp' ? '' : 'none';
+    });
   });
 
-  input.addEventListener('keydown', function(e){
-    if (e.key === 'Enter'){ e.preventDefault(); btn.click(); }
+  // Store raw results for cross-service matching
+  var mbData      = [];
+  var discogsData = [];
+  var bcData      = [];
+
+  function normName(s){ return s.toLowerCase().replace(/[^a-z0-9]/g,''); }
+
+  function findMatches(nameA, listB){
+    var nA = normName(nameA);
+    return listB.filter(function(item){ return normName(item.name) === nA; });
+  }
+
+  function highlightMatches(){
+    matchHint.style.display = 'none';
+    // Check if the currently shown service has matches in others
+    var visibleList = activeSvc === 'mb' ? mbResults : activeSvc === 'discogs' ? discogsRes : bcRes;
+    visibleList.querySelectorAll('li').forEach(function(li){
+      li.classList.remove('match-row');
+    });
+    if (activeSvc === 'mb' && mbData.length && discogsData.length){
+      mbData.forEach(function(a, i){
+        var matches = findMatches(a.name, discogsData).length + findMatches(a.name, bcData).length;
+        if (matches > 0) mbResults.children[i] && mbResults.children[i].classList.add('match-row');
+      });
+    }
+    if (activeSvc === 'discogs' && discogsData.length && mbData.length){
+      discogsData.forEach(function(a, i){
+        var matches = findMatches(a.name, mbData).length + findMatches(a.name, bcData).length;
+        if (matches > 0) discogsRes.children[i] && discogsRes.children[i].classList.add('match-row');
+      });
+    }
+    if (activeSvc === 'bandcamp' && bcData.length && mbData.length){
+      bcData.forEach(function(a, i){
+        var matches = findMatches(a.name, mbData).length + findMatches(a.name, discogsData).length;
+        if (matches > 0) bcRes.children[i] && bcRes.children[i].classList.add('match-row');
+      });
+    }
+  }
+
+  function makePickBtn(onClick){
+    var btn = document.createElement('button');
+    btn.type = 'button';
+    btn.textContent = '↙';
+    btn.addEventListener('click', function(e){ e.stopPropagation(); onClick(); });
+    return btn;
+  }
+
+  function renderMB(artists){
+    mbData = artists.map(function(a){ return {name: a.name, id: a.id, country: a.country, year: a['life-span'] && a['life-span'].begin ? a['life-span'].begin.slice(0,4) : ''}; });
+    mbResults.innerHTML = '';
+    if (!artists.length){ mbResults.innerHTML = '<li style="color:#999">{{$.Strings.T "musician_mb_no_results"}}</li>'; return; }
+    artists.forEach(function(a, i){
+      var li   = document.createElement('li');
+      var info = document.createElement('span');
+      var label = a.name;
+      if (a.disambiguation) label += ' (' + a.disambiguation + ')';
+      info.textContent = label;
+      var meta = document.createElement('span');
+      meta.className = 'mb-meta';
+      var parts = [];
+      if (a['life-span'] && a['life-span'].begin) parts.push(a['life-span'].begin.slice(0,4));
+      if (a.country) parts.push(a.country);
+      if (a.type) parts.push(a.type);
+      meta.textContent = parts.join(' · ');
+      var btn = makePickBtn(function(){
+        mbidInp.value = a.id;
+        if (!nameInp.value.trim()) nameInp.value = a.name;
+        if (!countryInp.value.trim() && a.country) countryInp.value = a.country;
+        if (!yearInp.value.trim() && a['life-span'] && a['life-span'].begin) yearInp.value = a['life-span'].begin.slice(0,4);
+        mbResults.innerHTML = '';
+        mbidInp.focus();
+      });
+      li.appendChild(info); li.appendChild(meta); li.appendChild(btn);
+      mbResults.appendChild(li);
+    });
+    highlightMatches();
+  }
+
+  function renderDiscogs(results){
+    discogsData = results.map(function(r){ return {name: r.title, id: r.id, country: r.country||'', year: r.year||'', url: r.uri||''}; });
+    discogsRes.innerHTML = '';
+    if (!results.length){ discogsRes.innerHTML = '<li style="color:#999">{{$.Strings.T "musician_mb_no_results"}}</li>'; return; }
+    results.forEach(function(r){
+      var li   = document.createElement('li');
+      var info = document.createElement('span');
+      info.textContent = r.title;
+      var meta = document.createElement('span');
+      meta.className = 'mb-meta';
+      var parts = [];
+      if (r.year) parts.push(r.year);
+      if (r.country) parts.push(r.country);
+      meta.textContent = parts.join(' · ');
+      var btn = makePickBtn(function(){
+        if (!nameInp.value.trim()) nameInp.value = r.title;
+        if (!countryInp.value.trim() && r.country) countryInp.value = r.country;
+        if (!yearInp.value.trim() && r.year) yearInp.value = r.year;
+        discogsRes.innerHTML = '';
+      });
+      li.appendChild(info); li.appendChild(meta); li.appendChild(btn);
+      discogsRes.appendChild(li);
+    });
+    highlightMatches();
+  }
+
+  function renderBandcamp(results){
+    bcData = results.map(function(r){ return {name: r.name, url: r.url||''}; });
+    bcRes.innerHTML = '';
+    if (!results.length){ bcRes.innerHTML = '<li style="color:#999">{{$.Strings.T "musician_mb_no_results"}}</li>'; return; }
+    results.forEach(function(r){
+      var li   = document.createElement('li');
+      var info = document.createElement('span');
+      info.textContent = r.name;
+      var meta = document.createElement('span');
+      meta.className = 'mb-meta';
+      if (r.url) meta.textContent = r.url.replace(/^https?:\/\//, '');
+      var btn = makePickBtn(function(){
+        if (!nameInp.value.trim()) nameInp.value = r.name;
+        if (!siteInp.value.trim() && r.url) siteInp.value = r.url;
+        bcRes.innerHTML = '';
+      });
+      li.appendChild(info); li.appendChild(meta); li.appendChild(btn);
+      bcRes.appendChild(li);
+    });
+    highlightMatches();
+  }
+
+  function doSearch(){
+    var q = searchInput.value.trim() || nameInp.value.trim();
+    if (!q) return;
+    searchBtn.disabled = true;
+    mbData = []; discogsData = []; bcData = [];
+    mbResults.innerHTML      = '<li style="color:#666">…</li>';
+    discogsRes.innerHTML     = '<li style="color:#666">…</li>';
+    bcRes.innerHTML          = '<li style="color:#666">…</li>';
+    matchHint.style.display  = 'none';
+
+    // MusicBrainz
+    fetch('https://musicbrainz.org/ws/2/artist?query=' + encodeURIComponent(q) + '&fmt=json&limit=8', {headers:{'Accept':'application/json'}})
+      .then(function(r){ return r.json(); })
+      .then(function(data){ renderMB(data.artists||[]); })
+      .catch(function(){ mbResults.innerHTML = '<li style="color:#c00">{{$.Strings.T "musician_mb_error"}}</li>'; });
+
+    // Discogs
+    fetch('https://api.discogs.com/database/search?q=' + encodeURIComponent(q) + '&type=artist&per_page=8', {headers:{'User-Agent':'dansal/1.0','Accept':'application/json'}})
+      .then(function(r){ return r.json(); })
+      .then(function(data){ renderDiscogs(data.results||[]); })
+      .catch(function(){ discogsRes.innerHTML = '<li style="color:#c00">{{$.Strings.T "musician_mb_error"}}</li>'; })
+      .finally(function(){ searchBtn.disabled = false; });
+
+    // Bandcamp
+    fetch('https://bandcamp.com/api/bcsearch_public_api/1/autocomplete_elastic?q=' + encodeURIComponent(q) + '&obj_type=band')
+      .then(function(r){ return r.json(); })
+      .then(function(data){
+        var items = (data.results||[]).filter(function(r){ return r.type==='b'; }).slice(0,8);
+        renderBandcamp(items);
+      })
+      .catch(function(){ bcRes.innerHTML = '<li style="color:#999">{{$.Strings.T "musician_mb_no_results"}}</li>'; });
+  }
+
+  searchBtn.addEventListener('click', doSearch);
+  searchInput.addEventListener('keydown', function(e){ if (e.key==='Enter'){ e.preventDefault(); doSearch(); } });
+})();
+
+// Image drop zone
+(function(){
+  var dz=document.getElementById('drop-zone');
+  var inp=document.getElementById('image');
+  var prev=document.getElementById('image-preview');
+  var lbl=document.getElementById('drop-label');
+  function showPreview(file){
+    var url=URL.createObjectURL(file);
+    prev.src=url;prev.style.display='block';
+    lbl.style.display='none';
+  }
+  inp.addEventListener('change',function(){if(this.files[0])showPreview(this.files[0]);});
+  dz.addEventListener('dragover',function(e){e.preventDefault();dz.classList.add('drag-over');});
+  dz.addEventListener('dragleave',function(){dz.classList.remove('drag-over');});
+  dz.addEventListener('drop',function(e){
+    e.preventDefault();dz.classList.remove('drag-over');
+    var f=e.dataTransfer.files[0];
+    if(f&&f.type.startsWith('image/')){
+      var dt=new DataTransfer();dt.items.add(f);inp.files=dt.files;
+      showPreview(f);
+    }
   });
 })();
 </script>

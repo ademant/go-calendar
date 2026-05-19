@@ -57,6 +57,7 @@
     <td style="white-space:nowrap">
       <a href="/admin/events/{{.ID}}/edit" class="btn-sm">{{$.Strings.T "admin_edit"}}</a>
       <a href="/events/{{.ID}}" class="btn-sm">{{$.Strings.T "btn_details"}}</a>
+      {{if .BookingEnabled}}<a href="/admin/events/{{.ID}}/bookings" class="btn-sm">{{$.Strings.T "admin_bookings_title"}}</a>{{end}}
     </td>
   </tr>
   {{end}}

@@ -6,7 +6,7 @@
   {{if and $.User (eq $.User.Role "admin")}}<a href="/admin/organizations/{{.Org.ID}}/edit" class="btn-edit-event">{{$.Strings.T "admin_edit"}}</a>{{end}}
 </div>
 
-{{with .Org.Description}}<p>{{.}}</p>{{end}}
+{{with .Org.Description}}<div class="org-desc">{{markdownHTML .}}</div>{{end}}
 
 {{if or .Org.Website .Org.ContactEmail .Org.Mastodon .Org.Instagram .Org.Facebook}}
 <div class="org-links">
@@ -34,10 +34,38 @@
   <a href="/feed/org/{{.Slug}}/events.json" class="feed-link">JSON</a>
 </div>
 
-<h2>{{$.Strings.T "org_events_title"}}</h2>
-{{if .Events}}
+{{/* Map with event locations */}}
+{{$geo := eventsGeoJSON .AllEvents}}
+{{if ne (printf "%s" $geo) "[]"}}
+<div id="org-map" style="height:280px;border-radius:6px;margin:1.25rem 0;border:1px solid #ddd"></div>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+(function(){
+  var geo = {{$geo}};
+  if (!geo.length) return;
+  var map = L.map('org-map');
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'&copy; OpenStreetMap'}).addTo(map);
+  var bounds = [];
+  geo.forEach(function(e){
+    if (!e.lat || !e.lng) return;
+    var popup = '<strong>' + e.t + '</strong>';
+    if (e.loc) popup += '<br>' + e.loc;
+    else if (e.town) popup += '<br>' + e.town;
+    L.marker([e.lat, e.lng]).addTo(map).bindPopup(popup);
+    bounds.push([e.lat, e.lng]);
+  });
+  if (bounds.length === 1) map.setView(bounds[0], 12);
+  else if (bounds.length > 1) map.fitBounds(bounds, {padding:[20,20]});
+})();
+</script>
+{{end}}
+
+{{/* Upcoming events */}}
+<h2 class="section-heading">{{$.Strings.T "org_events_title"}}</h2>
+{{if .UpcomingEvents}}
 <ul class="event-list">
-{{range .Events}}
+{{range .UpcomingEvents}}
 <li class="event-item">
   <h3><a href="/events/{{.ID}}">{{.Title}}</a></h3>
   <div class="event-meta">
@@ -55,25 +83,67 @@
 </ul>
 {{else}}<p>{{$.Strings.T "org_no_events"}}</p>{{end}}
 
+{{/* Past events toggle */}}
+{{if .PastEvents}}
+<div class="past-events-section">
+  <button type="button" class="past-toggle" id="past-toggle" onclick="document.getElementById('past-list').hidden=!document.getElementById('past-list').hidden;this.textContent=document.getElementById('past-list').hidden?'{{$.Strings.T "org_show_past"}} ({{len .PastEvents}})':'{{$.Strings.T "org_hide_past"}}'">
+    {{$.Strings.T "org_show_past"}} ({{len .PastEvents}})
+  </button>
+  <ul class="event-list" id="past-list" hidden>
+  {{range .PastEvents}}
+  <li class="event-item past-item">
+    <h3><a href="/events/{{.ID}}">{{.Title}}</a></h3>
+    <div class="event-meta">
+      {{if .StartTime}}<span>{{formatTime $.LangCode .StartTime}}</span>{{end}}
+      {{if .Location}} &mdash; {{.Location}}{{else if .LocationTown}} &mdash; {{.LocationTown}}{{end}}
+      {{if .IsCancelled}}<span class="badge cancelled">{{$.Strings.T "badge_cancelled"}}</span>{{end}}
+    </div>
+  </li>
+  {{end}}
+  </ul>
+</div>
+{{end}}
+
+{{/* Musicians */}}
+{{if .Musicians}}
+<div class="org-musicians">
+  <h2 class="section-heading">{{$.Strings.T "org_musicians_title"}}</h2>
+  <ul class="musician-chips">
+  {{range .Musicians}}
+  <li><a href="/musicians/{{.ID}}">{{if .ShortName}}{{.ShortName}}{{else}}{{.Bandname}}{{end}}</a></li>
+  {{end}}
+  </ul>
+</div>
+{{end}}
+
 {{end}}{{/* .Data */}}
 
 <style>
 .org-page-header{display:flex;align-items:center;gap:.75rem;margin-bottom:.5rem}
 .org-page-header h1{margin:0}
+.org-desc{margin-bottom:1.25rem;color:#444;line-height:1.6}
+.org-desc p{margin:.5rem 0}
+.org-desc h1,.org-desc h2,.org-desc h3{font-size:1.1rem;margin:.75rem 0 .25rem}
+.org-desc a{color:#1a6eb5}
 .org-links{display:flex;flex-wrap:wrap;gap:.5rem;margin-bottom:1.25rem}
 .org-link{display:inline-block;padding:.3rem .8rem;border-radius:20px;font-size:.85rem;font-weight:600;text-decoration:none;color:#fff}
-.org-link-web{background:#1a6eb5}
-.org-link-web:hover{background:#0d4a80}
-.org-link-email{background:#555}
-.org-link-email:hover{background:#333}
-.org-link-mastodon{background:#563acc}
-.org-link-mastodon:hover{background:#3c278e}
-.org-link-instagram{background:#c13584}
-.org-link-instagram:hover{background:#8a255e}
-.org-link-facebook{background:#1877f2}
-.org-link-facebook:hover{background:#0d5ab5}
+.org-link-web{background:#1a6eb5}.org-link-web:hover{background:#0d4a80}
+.org-link-email{background:#555}.org-link-email:hover{background:#333}
+.org-link-mastodon{background:#563acc}.org-link-mastodon:hover{background:#3c278e}
+.org-link-instagram{background:#c13584}.org-link-instagram:hover{background:#8a255e}
+.org-link-facebook{background:#1877f2}.org-link-facebook:hover{background:#0d5ab5}
 .feed-links{margin:1rem 0;font-size:.85rem;color:#666}
 .feed-link{display:inline-block;margin-left:.4rem;padding:.15rem .5rem;border:1px solid #ccc;border-radius:3px;font-size:.8rem;color:#555;text-decoration:none}
 .feed-link:hover{border-color:#888;color:#222}
+.past-events-section{margin-top:1.25rem}
+.past-toggle{padding:.35rem .9rem;background:#f5f5f5;border:1px solid #ccc;border-radius:4px;cursor:pointer;font-size:.88rem;color:#555}
+.past-toggle:hover{background:#e8e8e8;color:#222}
+.past-item h3{font-size:.95rem}
+.past-item .event-meta{font-size:.82rem}
+.org-musicians{margin-top:1.5rem}
+.org-musicians h2{font-size:1.1rem;margin-bottom:.6rem}
+.musician-chips{list-style:none;padding:0;display:flex;flex-wrap:wrap;gap:.4rem}
+.musician-chips li a{display:inline-block;padding:.25rem .7rem;background:#f0f4ff;border:1px solid #c8d6f5;border-radius:20px;font-size:.85rem;color:#1a6eb5;text-decoration:none}
+.musician-chips li a:hover{background:#dce8ff;border-color:#a0bce8}
 </style>
 {{end}}

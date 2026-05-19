@@ -22,6 +22,7 @@ type Organization struct {
 	Facebook     string `json:"facebook,omitempty"`
 	ContactEmail string `json:"contact_email,omitempty"`
 	CreatedAt    string `json:"created_at"`
+	ImageURL     string `json:"image_url,omitempty"`
 }
 
 type OrganizationMember struct {
@@ -111,7 +112,11 @@ const orgSelectCols = `id, name, COALESCE(description,''), COALESCE(actor_name,'
 
 func scanOrg(row interface{ Scan(...any) error }) (Organization, error) {
 	var o Organization
-	return o, row.Scan(&o.ID, &o.Name, &o.Description, &o.ActorName, &o.Website, &o.Instagram, &o.Mastodon, &o.Facebook, &o.ContactEmail, &o.CreatedAt)
+	if err := row.Scan(&o.ID, &o.Name, &o.Description, &o.ActorName, &o.Website, &o.Instagram, &o.Mastodon, &o.Facebook, &o.ContactEmail, &o.CreatedAt); err != nil {
+		return o, err
+	}
+	o.ImageURL = orgImageURL(o.ID)
+	return o, nil
 }
 
 // GET /api/v1/organizations

@@ -72,6 +72,7 @@ type Organization struct {
 	Facebook     string `json:"facebook,omitempty"`
 	ContactEmail string `json:"contact_email,omitempty"`
 	CreatedAt    string `json:"created_at"`
+	ImageURL     string `json:"image_url,omitempty"`
 }
 
 type Pricing struct {
@@ -93,10 +94,17 @@ type Musician struct {
 	Internetsite string `json:"internetsite,omitempty"`
 	Description  string `json:"description,omitempty"`
 	MBID         string `json:"mbid,omitempty"`
+	WikidataID   string `json:"wikidata_id,omitempty"`
+	Country      string `json:"country,omitempty"`
+	BeginYear    int    `json:"begin_year,omitempty"`
+	Biography    string `json:"biography,omitempty"`
+	MembersJSON  string `json:"members_json,omitempty"`
+	AlbumsJSON   string `json:"albums_json,omitempty"`
 	Mastodon     string `json:"mastodon,omitempty"`
 	Instagram    string `json:"instagram,omitempty"`
 	Facebook     string `json:"facebook,omitempty"`
 	Soundcloud   string `json:"soundcloud,omitempty"`
+	ImageURL     string `json:"image_url,omitempty"`
 	CreatedAt    string `json:"created_at,omitempty"`
 }
 
@@ -310,6 +318,64 @@ func (c *DansalClient) DeleteMusician(ctx context.Context, id int, token string)
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusNoContent {
 		return fmt.Errorf("dansal API: %s", resp.Status)
+	}
+	return nil
+}
+
+func (c *DansalClient) UploadMusicianImage(ctx context.Context, id int, data []byte, filename, token string) error {
+	var buf bytes.Buffer
+	mw := multipart.NewWriter(&buf)
+	fw, err := mw.CreateFormFile("image", filename)
+	if err != nil {
+		return err
+	}
+	if _, err := fw.Write(data); err != nil {
+		return err
+	}
+	mw.Close()
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost,
+		fmt.Sprintf("%s/api/v1/musician-images/%d", c.BaseURL, id), &buf)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Content-Type", mw.FormDataContentType())
+	resp, err := c.HTTP.Do(req)
+	if err != nil {
+		return err
+	}
+	resp.Body.Close()
+	if resp.StatusCode >= 300 {
+		return fmt.Errorf("upload musician image: %s", resp.Status)
+	}
+	return nil
+}
+
+func (c *DansalClient) UploadOrgImage(ctx context.Context, id int, data []byte, filename, token string) error {
+	var buf bytes.Buffer
+	mw := multipart.NewWriter(&buf)
+	fw, err := mw.CreateFormFile("image", filename)
+	if err != nil {
+		return err
+	}
+	if _, err := fw.Write(data); err != nil {
+		return err
+	}
+	mw.Close()
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost,
+		fmt.Sprintf("%s/api/v1/org-images/%d", c.BaseURL, id), &buf)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Content-Type", mw.FormDataContentType())
+	resp, err := c.HTTP.Do(req)
+	if err != nil {
+		return err
+	}
+	resp.Body.Close()
+	if resp.StatusCode >= 300 {
+		return fmt.Errorf("upload org image: %s", resp.Status)
 	}
 	return nil
 }
@@ -598,6 +664,25 @@ func (c *DansalClient) GetEventsByOrg(ctx context.Context, orgID int) ([]Event, 
 		}
 	}
 	return events, nil
+}
+
+func (c *DansalClient) GetAllEventsByOrg(ctx context.Context, orgID int) ([]Event, error) {
+	var all []Event
+	if err := c.get(ctx, "/api/v1/events?is_published=true&include_past=true", &all); err != nil {
+		return nil, err
+	}
+	var events []Event
+	for _, e := range all {
+		if e.OrganizationID != nil && *e.OrganizationID == orgID {
+			events = append(events, e)
+		}
+	}
+	return events, nil
+}
+
+func (c *DansalClient) GetMusiciansByOrg(ctx context.Context, orgID int) ([]Musician, error) {
+	var ms []Musician
+	return ms, c.get(ctx, fmt.Sprintf("/api/v1/musicians?organization_id=%d", orgID), &ms)
 }
 
 func (c *DansalClient) GetUser(ctx context.Context, id int, token string) (UserInfo, error) {
@@ -975,6 +1060,138 @@ func (c *DansalClient) DeleteContactPost(ctx context.Context, id int, token stri
 		return fmt.Errorf("dansal API: %s", resp.Status)
 	}
 	return nil
+}
+
+// ── bookings ─────────────────────────────────────────────────────────────────
+
+type Booking struct {
+	ID        int    `json:"id"`
+	EventID   int    `json:"event_id"`
+	Name      string `json:"name"`
+	Email     string `json:"email,omitempty"`
+	Persons   int    `json:"persons"`
+	Message   string `json:"message,omitempty"`
+	Status    string `json:"status"`
+	QRToken   string `json:"qr_token,omitempty"`
+	CreatedAt string `json:"created_at"`
+}
+
+func (c *DansalClient) GetBookings(ctx context.Context, eventID int, token string) ([]Booking, error) {
+	resp, err := c.authed(ctx, http.MethodGet, fmt.Sprintf("/api/v1/events/%d/bookings", eventID), token, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode == http.StatusForbidden {
+		return nil, fmt.Errorf("forbidden")
+	}
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("dansal API: %s", resp.Status)
+	}
+	var out []Booking
+	return out, json.NewDecoder(resp.Body).Decode(&out)
+}
+
+func (c *DansalClient) UpdateBookingStatus(ctx context.Context, bookingID int, status, token string) error {
+	body, _ := json.Marshal(map[string]string{"status": status})
+	resp, err := c.authed(ctx, http.MethodPatch, fmt.Sprintf("/api/v1/bookings/%d/status", bookingID), token, body)
+	if err != nil {
+		return err
+	}
+	resp.Body.Close()
+	if resp.StatusCode == http.StatusForbidden {
+		return fmt.Errorf("forbidden")
+	}
+	if resp.StatusCode != http.StatusNoContent {
+		return fmt.Errorf("dansal API: %s", resp.Status)
+	}
+	return nil
+}
+
+func (c *DansalClient) DeleteBooking(ctx context.Context, bookingID int, token string) error {
+	resp, err := c.authed(ctx, http.MethodDelete, fmt.Sprintf("/api/v1/bookings/%d", bookingID), token, nil)
+	if err != nil {
+		return err
+	}
+	resp.Body.Close()
+	if resp.StatusCode == http.StatusForbidden {
+		return fmt.Errorf("forbidden")
+	}
+	if resp.StatusCode != http.StatusNoContent {
+		return fmt.Errorf("dansal API: %s", resp.Status)
+	}
+	return nil
+}
+
+func (c *DansalClient) CheckinBooking(ctx context.Context, qrToken, authToken string) (Booking, error) {
+	resp, err := c.authed(ctx, http.MethodGet, "/api/v1/bookings/checkin/"+qrToken, authToken, nil)
+	if err != nil {
+		return Booking{}, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode == http.StatusForbidden {
+		return Booking{}, fmt.Errorf("forbidden")
+	}
+	if resp.StatusCode == http.StatusNotFound {
+		return Booking{}, fmt.Errorf("not found")
+	}
+	if resp.StatusCode != http.StatusOK {
+		return Booking{}, fmt.Errorf("dansal API: %s", resp.Status)
+	}
+	var b Booking
+	return b, json.NewDecoder(resp.Body).Decode(&b)
+}
+
+func (c *DansalClient) CreateBooking(ctx context.Context, eventID int, fields map[string]interface{}) error {
+	body, _ := json.Marshal(fields)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost,
+		c.BaseURL+fmt.Sprintf("/api/v1/events/%d/bookings", eventID),
+		bytes.NewReader(body))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := c.HTTP.Do(req)
+	if err != nil {
+		return err
+	}
+	resp.Body.Close()
+	if resp.StatusCode == http.StatusForbidden {
+		return fmt.Errorf("booking_disabled")
+	}
+	if resp.StatusCode != http.StatusCreated {
+		return fmt.Errorf("dansal API: %s", resp.Status)
+	}
+	return nil
+}
+
+type BookingVerifyResult struct {
+	QRToken    string `json:"qr_token"`
+	CheckinURL string `json:"checkin_url"`
+}
+
+func (c *DansalClient) VerifyBooking(ctx context.Context, token string) (BookingVerifyResult, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet,
+		c.BaseURL+"/api/v1/bookings/verify/"+token, nil)
+	if err != nil {
+		return BookingVerifyResult{}, err
+	}
+	resp, err := c.HTTP.Do(req)
+	if err != nil {
+		return BookingVerifyResult{}, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode == http.StatusNotFound {
+		return BookingVerifyResult{}, fmt.Errorf("invalid")
+	}
+	if resp.StatusCode == http.StatusGone {
+		return BookingVerifyResult{}, fmt.Errorf("expired")
+	}
+	if resp.StatusCode != http.StatusOK {
+		return BookingVerifyResult{}, fmt.Errorf("dansal API: %s", resp.Status)
+	}
+	var result BookingVerifyResult
+	return result, json.NewDecoder(resp.Body).Decode(&result)
 }
 
 func (c *DansalClient) ContactPoster(ctx context.Context, id int, email, message string) error {
