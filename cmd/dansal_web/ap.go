@@ -46,17 +46,31 @@ type APHashtag struct {
 	Href string `json:"href"`
 }
 
+type APDocument struct {
+	Type      string `json:"type"`
+	MediaType string `json:"mediaType"`
+	URL       string `json:"url"`
+	Name      string `json:"name,omitempty"`
+}
+
 type APEvent struct {
-	Context   interface{} `json:"@context,omitempty"`
-	Type      string      `json:"type"`
-	ID        string      `json:"id"`
-	Name      string      `json:"name"`
-	Content   string      `json:"content,omitempty"`
-	StartTime string      `json:"startTime,omitempty"`
-	EndTime   string      `json:"endTime,omitempty"`
-	Location  *APPlace    `json:"location,omitempty"`
-	URL       string      `json:"url,omitempty"`
-	Tag       []APHashtag `json:"tag,omitempty"`
+	Context      interface{} `json:"@context,omitempty"`
+	Type         string      `json:"type"`
+	ID           string      `json:"id"`
+	Name         string      `json:"name"`
+	Content      string      `json:"content,omitempty"`
+	MediaType    string      `json:"mediaType,omitempty"`
+	StartTime    string      `json:"startTime,omitempty"`
+	EndTime      string      `json:"endTime,omitempty"`
+	Published    string      `json:"published,omitempty"`
+	Updated      string      `json:"updated,omitempty"`
+	AttributedTo string      `json:"attributedTo,omitempty"`
+	To           []string    `json:"to,omitempty"`
+	CC           []string    `json:"cc,omitempty"`
+	Location     *APPlace    `json:"location,omitempty"`
+	URL          string      `json:"url,omitempty"`
+	Tag          []APHashtag `json:"tag,omitempty"`
+	Attachment   []APDocument `json:"attachment,omitempty"`
 }
 
 type OrderedCollection struct {

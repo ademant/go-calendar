@@ -483,14 +483,25 @@ func sendAccept(cfg *Config, actor *ActorRecord, followActivity map[string]inter
 func buildCreateActivity(cfg *Config, slug string, e Event) Activity {
 	base := actorURL(cfg, slug)
 	eventID := fmt.Sprintf("https://%s/events/%d", cfg.Domain, e.ID)
+
+	var published string
+	if t, ok := parseTime(e.CreatedAt); ok {
+		published = t.UTC().Format(time.RFC3339)
+	}
+
 	apEvent := APEvent{
-		Type:      "Event",
-		ID:        eventID,
-		Name:      e.Title,
-		Content:   e.Description,
-		StartTime: e.StartTime,
-		EndTime:   e.EndTime,
-		URL:       e.URL,
+		Type:         "Event",
+		ID:           eventID,
+		Name:         e.Title,
+		Content:      e.Description,
+		MediaType:    "text/html",
+		StartTime:    e.StartTime,
+		EndTime:      e.EndTime,
+		Published:    published,
+		AttributedTo: base,
+		To:           []string{"https://www.w3.org/ns/activitystreams#Public"},
+		CC:           []string{base + "/followers"},
+		URL:          e.URL,
 	}
 	if e.Location != "" {
 		apEvent.Location = &APPlace{
@@ -510,14 +521,22 @@ func buildCreateActivity(cfg *Config, slug string, e Event) Activity {
 			Href: fmt.Sprintf("https://%s/?tag=%s", cfg.Domain, tag),
 		})
 	}
+	if e.ImageURL != "" {
+		apEvent.Attachment = []APDocument{{
+			Type:      "Document",
+			MediaType: "image/jpeg",
+			URL:       e.ImageURL,
+			Name:      e.Title,
+		}}
+	}
 
 	return Activity{
-		Type:  "Create",
-		ID:    eventID + "/activity",
-		Actor: base,
+		Type:   "Create",
+		ID:     eventID + "/activity",
+		Actor:  base,
 		Object: apEvent,
-		To:    []string{"https://www.w3.org/ns/activitystreams#Public"},
-		CC:    []string{base + "/followers"},
+		To:     []string{"https://www.w3.org/ns/activitystreams#Public"},
+		CC:     []string{base + "/followers"},
 	}
 }
 
