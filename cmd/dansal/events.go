@@ -233,6 +233,7 @@ func scanEventRow(s scanner) (Event, error) {
 	event.HasFestival = hasFestivalInt == 1
 	event.IsCancelled = isCancelledInt == 1
 	event.IsPublished = isPublishedInt == 1
+	event.BookingEnabled = bookingEnabledInt == 1
 	event.ImageURL = eventImageURL(event.ID)
 	if orgID.Valid {
 		v := int(orgID.Int64)
@@ -257,65 +258,9 @@ func scanEventRow(s scanner) (Event, error) {
 	return event, nil
 }
 
-// fetchEventByID loads a single event by primary key, including location fields via JOIN.
+// fetchEventByID loads a single event by primary key using the shared eventListSelect query.
 func fetchEventByID(q querier, id int) (Event, error) {
-	var event Event
-	var hasBallInt, hasWorkshopInt, hasFestivalInt, isCancelledInt, isPublishedInt, bookingEnabledInt int
-	var startEpoch, endEpoch int64
-	var orgID, locID sql.NullInt64
-	var uid sql.NullString
-	var danceNamesCSV string
-	err := q.QueryRow(
-		`SELECT e.id, e.uid, e.title, e.description, e.start_time, e.end_time, e.has_ball, e.has_workshop,
-		 e.has_festival, e.is_cancelled, e.tags, e.is_published, e.short_code, COALESCE(e.url,''), COALESCE(e.source,''),
-		 e.created_at, e.organization_id, COALESCE(e.pricing,''), e.location_id,
-		 COALESCE(l.location,''), COALESCE(l.short_name,''), COALESCE(l.address,''), COALESCE(l.zipcode,''),
-		 COALESCE(l.town,''), COALESCE(l.country,''), COALESCE(e.workshop_difficulty,''), COALESCE(e.booking_url,''),
-		 COALESCE(e.availability,''), COALESCE(e.tickets_total,0), COALESCE(e.booking_enabled,0),
-		 COALESCE((SELECT GROUP_CONCAT(d.name,',') FROM event_dances ed JOIN dances d ON d.id=ed.dance_id WHERE ed.event_id=e.id),'')
-		 FROM events e LEFT JOIN locations l ON e.location_id = l.id WHERE e.id = ?`, id,
-	).Scan(&event.ID, &uid, &event.Title, &event.Description, &startEpoch, &endEpoch,
-		&hasBallInt, &hasWorkshopInt, &hasFestivalInt, &isCancelledInt, &event.TagsJSON, &isPublishedInt,
-		&event.ShortCode, &event.URL, &event.Source, &event.CreatedAt, &orgID, &event.PricingJSON,
-		&locID, &event.Location, &event.LocationShortName, &event.LocationAddress, &event.LocationZipcode,
-		&event.LocationTown, &event.LocationCountry, &event.WorkshopDifficulty, &event.BookingURL,
-		&event.Availability, &event.TicketsTotal, &bookingEnabledInt, &danceNamesCSV)
-	if uid.Valid {
-		event.UID = uid.String
-	}
-	if err != nil {
-		return Event{}, err
-	}
-	event.StartTime = epochToLocal(startEpoch)
-	event.EndTime = epochToLocal(endEpoch)
-	event.HasBall = hasBallInt == 1
-	event.HasWorkshop = hasWorkshopInt == 1
-	event.HasFestival = hasFestivalInt == 1
-	event.IsCancelled = isCancelledInt == 1
-	event.IsPublished = isPublishedInt == 1
-	event.BookingEnabled = bookingEnabledInt == 1
-	event.ImageURL = eventImageURL(event.ID)
-	if orgID.Valid {
-		v := int(orgID.Int64)
-		event.OrganizationID = &v
-	}
-	if locID.Valid {
-		v := int(locID.Int64)
-		event.LocationID = &v
-	}
-	if event.TagsJSON != "" {
-		json.Unmarshal([]byte(event.TagsJSON), &event.Tags)
-	}
-	if event.PricingJSON != "" {
-		var p Pricing
-		if json.Unmarshal([]byte(event.PricingJSON), &p) == nil {
-			event.Pricing = &p
-		}
-	}
-	if danceNamesCSV != "" {
-		event.DanceNames = strings.Split(danceNamesCSV, ",")
-	}
-	return event, nil
+	return scanEventRow(q.QueryRow(eventListSelect+" WHERE e.id = ?", id))
 }
 
 // ── iCal helpers ───────────────────────────────────────────────────────────

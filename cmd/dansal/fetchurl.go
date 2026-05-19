@@ -160,17 +160,21 @@ func parseICalCategories(event *ics.VEvent) []string {
 
 func scanFetchSource(s scanner) (FetchSource, error) {
 	var src FetchSource
-	var tagsJSON, danceIDsJSON string
+	var tagsJSON, danceIDsCSV string
 	var lastFetched sql.NullString
 	var orgID sql.NullInt64
-	if err := s.Scan(&src.ID, &src.URL, &src.Type, &tagsJSON, &danceIDsJSON, &orgID, &lastFetched, &src.CreatedAt); err != nil {
+	if err := s.Scan(&src.ID, &src.URL, &src.Type, &tagsJSON, &danceIDsCSV, &orgID, &lastFetched, &src.CreatedAt); err != nil {
 		return FetchSource{}, err
 	}
 	if tagsJSON != "" {
 		json.Unmarshal([]byte(tagsJSON), &src.Tags)
 	}
-	if danceIDsJSON != "" && danceIDsJSON != "[]" {
-		json.Unmarshal([]byte(danceIDsJSON), &src.DanceIDs)
+	if danceIDsCSV != "" {
+		for _, part := range strings.Split(danceIDsCSV, ",") {
+			if id, err := strconv.Atoi(strings.TrimSpace(part)); err == nil {
+				src.DanceIDs = append(src.DanceIDs, id)
+			}
+		}
 	}
 	if orgID.Valid {
 		id := int(orgID.Int64)
@@ -213,14 +217,20 @@ func upsertFetchSource(rawURL, typ string, tags []string, orgID *int) (int64, er
 }
 
 func setFetchSourceDances(id int, danceIDs []int) error {
-	j, _ := json.Marshal(danceIDs)
-	_, err := db.Exec("UPDATE fetch_sources SET dance_ids = ? WHERE id = ?", string(j), id)
-	return err
+	if _, err := db.Exec("DELETE FROM fetch_source_dances WHERE fetch_source_id = ?", id); err != nil {
+		return err
+	}
+	for _, danceID := range danceIDs {
+		if _, err := db.Exec("INSERT OR IGNORE INTO fetch_source_dances (fetch_source_id, dance_id) VALUES (?, ?)", id, danceID); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // GET /api/v1/fetchurl
 func getFetchSources(w http.ResponseWriter, r *http.Request) {
-	rows, err := db.Query("SELECT id, url, type, tags, COALESCE(dance_ids,'[]'), organization_id, last_fetched_at, created_at FROM fetch_sources ORDER BY id ASC")
+	rows, err := db.Query("SELECT id, url, type, tags, COALESCE((SELECT GROUP_CONCAT(dance_id) FROM fetch_source_dances WHERE fetch_source_id = id),''), organization_id, last_fetched_at, created_at FROM fetch_sources ORDER BY id ASC")
 	if err != nil {
 		writeError(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -245,7 +255,7 @@ func getFetchSources(w http.ResponseWriter, r *http.Request) {
 func getFetchSource(w http.ResponseWriter, r *http.Request) {
 	id := mux.Vars(r)["id"]
 	src, err := scanFetchSource(db.QueryRow(
-		"SELECT id, url, type, tags, COALESCE(dance_ids,'[]'), organization_id, last_fetched_at, created_at FROM fetch_sources WHERE id = ?", id,
+		"SELECT id, url, type, tags, COALESCE((SELECT GROUP_CONCAT(dance_id) FROM fetch_source_dances WHERE fetch_source_id = id),''), organization_id, last_fetched_at, created_at FROM fetch_sources WHERE id = ?", id,
 	))
 	if err == sql.ErrNoRows {
 		writeError(w, "Fetch source not found", http.StatusNotFound)
@@ -263,7 +273,7 @@ func getFetchSource(w http.ResponseWriter, r *http.Request) {
 func patchFetchSource(w http.ResponseWriter, r *http.Request) {
 	id := mux.Vars(r)["id"]
 	src, err := scanFetchSource(db.QueryRow(
-		"SELECT id, url, type, tags, COALESCE(dance_ids,'[]'), organization_id, last_fetched_at, created_at FROM fetch_sources WHERE id = ?", id,
+		"SELECT id, url, type, tags, COALESCE((SELECT GROUP_CONCAT(dance_id) FROM fetch_source_dances WHERE fetch_source_id = id),''), organization_id, last_fetched_at, created_at FROM fetch_sources WHERE id = ?", id,
 	))
 	if err == sql.ErrNoRows {
 		writeError(w, "not found", http.StatusNotFound)
@@ -294,15 +304,18 @@ func patchFetchSource(w http.ResponseWriter, r *http.Request) {
 	src.OrganizationID = req.OrganizationID
 
 	tagsJSON, _ := json.Marshal(src.Tags)
-	danceIDsJSON, _ := json.Marshal(src.DanceIDs)
 	var orgVal interface{}
 	if src.OrganizationID != nil {
 		orgVal = *src.OrganizationID
 	}
 	if _, err := db.Exec(
-		"UPDATE fetch_sources SET type = ?, tags = ?, dance_ids = ?, organization_id = ? WHERE id = ?",
-		src.Type, string(tagsJSON), string(danceIDsJSON), orgVal, src.ID,
+		"UPDATE fetch_sources SET type = ?, tags = ?, organization_id = ? WHERE id = ?",
+		src.Type, string(tagsJSON), orgVal, src.ID,
 	); err != nil {
+		writeError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if err := setFetchSourceDances(src.ID, src.DanceIDs); err != nil {
 		writeError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -585,7 +598,7 @@ func bulkFetchURLsByIDs(w http.ResponseWriter, r *http.Request) {
 		placeholders[i] = "?"
 		args[i] = id
 	}
-	query := "SELECT id, url, type, tags, COALESCE(dance_ids,'[]'), organization_id, last_fetched_at, created_at FROM fetch_sources WHERE id IN (" + strings.Join(placeholders, ",") + ")"
+	query := "SELECT id, url, type, tags, COALESCE((SELECT GROUP_CONCAT(dance_id) FROM fetch_source_dances WHERE fetch_source_id = id),''), organization_id, last_fetched_at, created_at FROM fetch_sources WHERE id IN (" + strings.Join(placeholders, ",") + ")"
 	rows, err := db.Query(query, args...)
 	if err != nil {
 		writeError(w, err.Error(), http.StatusInternalServerError)
@@ -652,7 +665,7 @@ func fetchURLByID(w http.ResponseWriter, r *http.Request) {
 
 	id := mux.Vars(r)["id"]
 	src, err := scanFetchSource(db.QueryRow(
-		"SELECT id, url, type, tags, COALESCE(dance_ids,'[]'), organization_id, last_fetched_at, created_at FROM fetch_sources WHERE id = ?", id,
+		"SELECT id, url, type, tags, COALESCE((SELECT GROUP_CONCAT(dance_id) FROM fetch_source_dances WHERE fetch_source_id = id),''), organization_id, last_fetched_at, created_at FROM fetch_sources WHERE id = ?", id,
 	))
 	if err == sql.ErrNoRows {
 		writeError(w, "Fetch source not found", http.StatusNotFound)

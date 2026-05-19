@@ -358,6 +358,69 @@ func migrateUsersRoles() {
 	conn.ExecContext(context.Background(), "PRAGMA foreign_keys=ON")
 }
 
+func migrateLocationsLatLng() {
+	var schema string
+	if err := db.QueryRow(
+		"SELECT sql FROM sqlite_master WHERE type='table' AND name='locations'",
+	).Scan(&schema); err != nil || strings.Contains(schema, "latitude REAL") {
+		return
+	}
+
+	conn, err := db.Conn(context.Background())
+	if err != nil {
+		log.Printf("migrateLocationsLatLng: %v", err)
+		return
+	}
+	defer conn.Close()
+
+	if _, err = conn.ExecContext(context.Background(), "PRAGMA foreign_keys=OFF"); err != nil {
+		log.Printf("migrateLocationsLatLng: pragma off: %v", err)
+		return
+	}
+
+	tx, err := conn.BeginTx(context.Background(), nil)
+	if err != nil {
+		conn.ExecContext(context.Background(), "PRAGMA foreign_keys=ON")
+		log.Printf("migrateLocationsLatLng: begin: %v", err)
+		return
+	}
+
+	stmts := []string{
+		`CREATE TABLE locations_v2 (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			location TEXT NOT NULL,
+			short_name TEXT,
+			address TEXT,
+			zipcode TEXT,
+			town TEXT,
+			country TEXT,
+			latitude REAL,
+			longitude REAL,
+			internetsite TEXT,
+			organization_id INTEGER,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+		)`,
+		`INSERT INTO locations_v2 SELECT id, location, short_name, address, zipcode, town, country,
+			CASE WHEN latitude IS NULL OR latitude = '' THEN NULL ELSE CAST(latitude AS REAL) END,
+			CASE WHEN longitude IS NULL OR longitude = '' THEN NULL ELSE CAST(longitude AS REAL) END,
+			internetsite, organization_id, created_at FROM locations`,
+		`DROP TABLE locations`,
+		`ALTER TABLE locations_v2 RENAME TO locations`,
+	}
+	for _, stmt := range stmts {
+		if _, err := tx.ExecContext(context.Background(), stmt); err != nil {
+			tx.Rollback()
+			conn.ExecContext(context.Background(), "PRAGMA foreign_keys=ON")
+			log.Printf("migrateLocationsLatLng: %v", err)
+			return
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		log.Printf("migrateLocationsLatLng: commit: %v", err)
+	}
+	conn.ExecContext(context.Background(), "PRAGMA foreign_keys=ON")
+}
+
 func migrateDB() {
 	// Errors are silently ignored (column already exists).
 	db.Exec("ALTER TABLE events ADD COLUMN organization_id INTEGER")
@@ -499,6 +562,8 @@ func migrateDB() {
 	db.Exec("ALTER TABLE musicians ADD COLUMN spotify TEXT")
 	db.Exec("ALTER TABLE musicians ADD COLUMN deezer TEXT")
 	db.Exec("ALTER TABLE musicians ADD COLUMN genre TEXT")
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_event_musicians_musician_id ON event_musicians(musician_id)")
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_events_organization_id ON events(organization_id) WHERE organization_id IS NOT NULL")
 	db.Exec(`CREATE TABLE IF NOT EXISTS dances (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		name TEXT UNIQUE NOT NULL
@@ -514,6 +579,20 @@ func migrateDB() {
 	for _, name := range []string{"balfolk", "bretonic", "swedish", "occitan", "balkan", "israelic", "tango", "forro", "salsa", "social dance"} {
 		db.Exec("INSERT OR IGNORE INTO dances (name) VALUES (?)", name)
 	}
+	db.Exec(`CREATE TABLE IF NOT EXISTS fetch_source_dances (
+		fetch_source_id INTEGER NOT NULL,
+		dance_id INTEGER NOT NULL,
+		PRIMARY KEY (fetch_source_id, dance_id),
+		FOREIGN KEY (fetch_source_id) REFERENCES fetch_sources(id) ON DELETE CASCADE,
+		FOREIGN KEY (dance_id) REFERENCES dances(id) ON DELETE CASCADE
+	)`)
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_fetch_source_dances_source_id ON fetch_source_dances(fetch_source_id)")
+	db.Exec(`INSERT OR IGNORE INTO fetch_source_dances (fetch_source_id, dance_id)
+		SELECT fs.id, CAST(j.value AS INTEGER)
+		FROM fetch_sources fs, json_each(COALESCE(fs.dance_ids,'[]')) j
+		JOIN dances d ON d.id = CAST(j.value AS INTEGER)
+		WHERE fs.dance_ids IS NOT NULL AND fs.dance_ids != '[]'`)
+	migrateLocationsLatLng()
 }
 
 func createTables() error {
@@ -532,6 +611,11 @@ func createTables() error {
 		disabled INTEGER DEFAULT 0,
 		failed_login_count INTEGER DEFAULT 0,
 		failed_login_since DATETIME,
+		last_magic_sent_at DATETIME,
+		description TEXT,
+		mastodon TEXT,
+		website TEXT,
+		telegram_chat_id TEXT,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 	);
 	CREATE TABLE IF NOT EXISTS events (
@@ -545,6 +629,7 @@ func createTables() error {
 		organization_id INTEGER,
 		has_ball INTEGER DEFAULT 0,
 		has_workshop INTEGER DEFAULT 0,
+		has_festival INTEGER DEFAULT 0,
 		is_cancelled INTEGER DEFAULT 0,
 		tags TEXT,
 		is_published INTEGER DEFAULT 0,
@@ -553,6 +638,11 @@ func createTables() error {
 		source TEXT,
 		source_last_modified INTEGER,
 		pricing TEXT,
+		workshop_difficulty TEXT DEFAULT '',
+		booking_url TEXT DEFAULT '',
+		availability TEXT DEFAULT '',
+		tickets_total INTEGER DEFAULT 0,
+		booking_enabled INTEGER DEFAULT 0,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		FOREIGN KEY (location_id) REFERENCES locations(id)
 	);
@@ -576,8 +666,8 @@ func createTables() error {
 		zipcode TEXT,
 		town TEXT,
 		country TEXT,
-		latitude TEXT,
-		longitude TEXT,
+		latitude REAL,
+		longitude REAL,
 		internetsite TEXT,
 		organization_id INTEGER,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
@@ -588,7 +678,26 @@ func createTables() error {
 		short_name TEXT,
 		internetsite TEXT,
 		description TEXT,
+		mbid TEXT,
+		wikidata_id TEXT,
+		discogs_id TEXT,
+		country TEXT,
+		begin_year INTEGER,
+		biography TEXT,
+		members_json TEXT,
+		albums_json TEXT,
+		mastodon TEXT,
+		instagram TEXT,
+		facebook TEXT,
+		soundcloud TEXT,
+		spotify TEXT,
+		deezer TEXT,
+		genre TEXT,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+	);
+	CREATE TABLE IF NOT EXISTS dances (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		name TEXT UNIQUE NOT NULL
 	);
 	CREATE TABLE IF NOT EXISTS fetch_sources (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -599,11 +708,20 @@ func createTables() error {
 		last_fetched_at DATETIME,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 	);
+	CREATE TABLE IF NOT EXISTS fetch_source_dances (
+		fetch_source_id INTEGER NOT NULL,
+		dance_id INTEGER NOT NULL,
+		PRIMARY KEY (fetch_source_id, dance_id),
+		FOREIGN KEY (fetch_source_id) REFERENCES fetch_sources(id) ON DELETE CASCADE,
+		FOREIGN KEY (dance_id) REFERENCES dances(id) ON DELETE CASCADE
+	);
+	CREATE INDEX IF NOT EXISTS idx_fetch_source_dances_source_id ON fetch_source_dances(fetch_source_id);
 	CREATE TABLE IF NOT EXISTS api_keys (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		user_id INTEGER NOT NULL,
 		name TEXT NOT NULL,
 		api_key TEXT UNIQUE NOT NULL,
+		expires_at DATETIME,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 	);
@@ -611,6 +729,12 @@ func createTables() error {
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		name TEXT UNIQUE NOT NULL,
 		description TEXT DEFAULT '',
+		actor_name TEXT,
+		website TEXT,
+		instagram TEXT,
+		mastodon TEXT,
+		facebook TEXT,
+		contact_email TEXT,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 	);
 	CREATE TABLE IF NOT EXISTS organization_members (
@@ -683,6 +807,15 @@ func createTables() error {
 		FOREIGN KEY (musician_id) REFERENCES musicians(id) ON DELETE CASCADE
 	);
 	CREATE INDEX IF NOT EXISTS idx_event_musicians_event_id ON event_musicians(event_id);
+	CREATE INDEX IF NOT EXISTS idx_event_musicians_musician_id ON event_musicians(musician_id);
+	CREATE TABLE IF NOT EXISTS event_dances (
+		event_id INTEGER NOT NULL,
+		dance_id INTEGER NOT NULL,
+		PRIMARY KEY (event_id, dance_id),
+		FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE CASCADE,
+		FOREIGN KEY (dance_id) REFERENCES dances(id) ON DELETE CASCADE
+	);
+	CREATE INDEX IF NOT EXISTS idx_event_dances_event_id ON event_dances(event_id);
 	CREATE TABLE IF NOT EXISTS contact_posts (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		event_id INTEGER NOT NULL,
@@ -711,6 +844,7 @@ func createTables() error {
 		status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','confirmed','approved','checked_in','cancelled')),
 		verify_token TEXT UNIQUE,
 		qr_token TEXT UNIQUE,
+		lang TEXT NOT NULL DEFAULT '',
 		expires_at DATETIME NOT NULL,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE CASCADE
@@ -718,10 +852,11 @@ func createTables() error {
 	CREATE INDEX IF NOT EXISTS idx_bookings_event_id ON bookings(event_id);
 	CREATE INDEX IF NOT EXISTS idx_bookings_verify_token ON bookings(verify_token);
 	CREATE INDEX IF NOT EXISTS idx_bookings_qr_token ON bookings(qr_token);
-	CREATE INDEX IF NOT EXISTS idx_events_url            ON events(url) WHERE url IS NOT NULL;
+	CREATE INDEX IF NOT EXISTS idx_events_url             ON events(url) WHERE url IS NOT NULL;
 	CREATE INDEX IF NOT EXISTS idx_events_published_start ON events(is_published, start_time);
 	CREATE INDEX IF NOT EXISTS idx_events_title_location  ON events(title, location_id);
 	CREATE INDEX IF NOT EXISTS idx_events_location_id     ON events(location_id);
+	CREATE INDEX IF NOT EXISTS idx_events_organization_id ON events(organization_id) WHERE organization_id IS NOT NULL;
 	CREATE INDEX IF NOT EXISTS idx_locations_location     ON locations(location);
 	CREATE INDEX IF NOT EXISTS idx_tokens_expires_at      ON tokens(expires_at);
 	`

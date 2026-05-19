@@ -57,27 +57,6 @@ type MusicianCreateRequest struct {
 	Genre        string `json:"genre"`
 }
 
-type MusicianUpdateRequest struct {
-	Bandname     string `json:"bandname"`
-	ShortName    string `json:"short_name"`
-	Internetsite string `json:"internetsite"`
-	Description  string `json:"description"`
-	MBID         string `json:"mbid"`
-	WikidataID   string `json:"wikidata_id"`
-	DiscogsID    string `json:"discogs_id"`
-	Country      string `json:"country"`
-	BeginYear    int    `json:"begin_year"`
-	Biography    string `json:"biography"`
-	MembersJSON  string `json:"members_json"`
-	AlbumsJSON   string `json:"albums_json"`
-	Mastodon     string `json:"mastodon"`
-	Instagram    string `json:"instagram"`
-	Facebook     string `json:"facebook"`
-	Soundcloud   string `json:"soundcloud"`
-	Spotify      string `json:"spotify"`
-	Deezer       string `json:"deezer"`
-	Genre        string `json:"genre"`
-}
 
 const musicianCols = `id, bandname,
 	COALESCE(short_name,''), COALESCE(internetsite,''), COALESCE(description,''),
@@ -215,7 +194,7 @@ func updateMusician(w http.ResponseWriter, r *http.Request) {
 
 	id := mux.Vars(r)["id"]
 
-	var req MusicianUpdateRequest
+	var req MusicianCreateRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, err.Error(), http.StatusBadRequest)
 		return
