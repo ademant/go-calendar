@@ -503,16 +503,31 @@ func buildCreateActivity(cfg *Config, slug string, e Event) Activity {
 		CC:           []string{base + "/followers"},
 		URL:          e.URL,
 	}
-	if e.Location != "" {
-		apEvent.Location = &APPlace{
+	locationName := e.Location
+	if locationName == "" {
+		locationName = e.LocationTown
+	}
+	if locationName != "" {
+		place := &APPlace{
 			Type: "Place",
-			Name: e.Location,
+			Name: locationName,
 		}
-	} else if e.LocationTown != "" {
-		apEvent.Location = &APPlace{
-			Type: "Place",
-			Name: e.LocationTown,
+		if lat, err := strconv.ParseFloat(e.LocationLat, 64); err == nil {
+			place.Latitude = &lat
 		}
+		if lng, err := strconv.ParseFloat(e.LocationLng, 64); err == nil {
+			place.Longitude = &lng
+		}
+		if e.LocationAddress != "" || e.LocationZipcode != "" || e.LocationTown != "" || e.LocationCountry != "" {
+			place.Address = &APPostalAddress{
+				Type:            "PostalAddress",
+				StreetAddress:   e.LocationAddress,
+				PostalCode:      e.LocationZipcode,
+				AddressLocality: e.LocationTown,
+				AddressCountry:  e.LocationCountry,
+			}
+		}
+		apEvent.Location = place
 	}
 	for _, tag := range e.Tags {
 		apEvent.Tag = append(apEvent.Tag, APHashtag{

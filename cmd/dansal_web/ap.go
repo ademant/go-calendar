@@ -35,9 +35,20 @@ type Activity struct {
 	CC      []string    `json:"cc,omitempty"`
 }
 
+type APPostalAddress struct {
+	Type            string `json:"type"`
+	StreetAddress   string `json:"streetAddress,omitempty"`
+	PostalCode      string `json:"postalCode,omitempty"`
+	AddressLocality string `json:"addressLocality,omitempty"`
+	AddressCountry  string `json:"addressCountry,omitempty"`
+}
+
 type APPlace struct {
-	Type string `json:"type"`
-	Name string `json:"name"`
+	Type      string           `json:"type"`
+	Name      string           `json:"name"`
+	Latitude  *float64         `json:"latitude,omitempty"`
+	Longitude *float64         `json:"longitude,omitempty"`
+	Address   *APPostalAddress `json:"address,omitempty"`
 }
 
 type APHashtag struct {
