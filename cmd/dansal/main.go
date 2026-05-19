@@ -978,6 +978,12 @@ func main() {
 	sessionRoutes.HandleFunc("", getSessions).Methods("GET")
 	sessionRoutes.HandleFunc("/{id}", deleteSession).Methods("DELETE")
 
+	// Admin site config (protected, admin-only)
+	adminCfgRoutes := router.PathPrefix("/api/v1/admin/config").Subrouter()
+	adminCfgRoutes.Use(TokenMiddleware)
+	adminCfgRoutes.HandleFunc("", getAdminConfig).Methods("GET")
+	adminCfgRoutes.HandleFunc("", patchAdminConfig).Methods("PATCH")
+
 	adminLn := startAdminSocket(config.Server.AdminSocket)
 	startMetricsServer()
 

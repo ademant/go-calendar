@@ -36,6 +36,10 @@ type Config struct {
 	DarkMode         string `yaml:"dark_mode"`          // "auto" (default), "light", "dark"
 
 	pagesContent *PagesContent
+
+	// Loaded from web.db at startup; overridden via admin site-config page.
+	SiteName       string
+	ContactOverride string
 }
 
 // publicBaseURL returns the canonical public URL of the web app.

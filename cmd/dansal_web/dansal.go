@@ -1437,3 +1437,36 @@ func (c *DansalClient) VerifyContactPost(ctx context.Context, token string) erro
 	}
 	return nil
 }
+
+type AdminConfig struct {
+	TelegramBotToken  string `json:"telegram_bot_token"`
+	TelegramBotName   string `json:"telegram_bot_name"`
+	MatrixHomeserver  string `json:"matrix_homeserver"`
+	MatrixAccessToken string `json:"matrix_access_token"`
+}
+
+func (c *DansalClient) GetAdminConfig(ctx context.Context, token string) (AdminConfig, error) {
+	resp, err := c.authed(ctx, http.MethodGet, "/api/v1/admin/config", token, nil)
+	if err != nil {
+		return AdminConfig{}, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return AdminConfig{}, apiErr(resp)
+	}
+	var ac AdminConfig
+	return ac, json.NewDecoder(resp.Body).Decode(&ac)
+}
+
+func (c *DansalClient) PatchAdminConfig(ctx context.Context, token string, ac AdminConfig) error {
+	body, _ := json.Marshal(ac)
+	resp, err := c.authed(ctx, http.MethodPatch, "/api/v1/admin/config", token, body)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusNoContent {
+		return apiErr(resp)
+	}
+	return nil
+}

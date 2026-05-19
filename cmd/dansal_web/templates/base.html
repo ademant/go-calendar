@@ -12,7 +12,7 @@
 </script>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>{{.Title}} — {{.Domain}}</title>
+<title>{{.Title}} — {{.SiteName}}</title>
 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
 <style>
 :root{
@@ -129,7 +129,7 @@ footer{text-align:center;color:var(--fg-hint);font-size:.8rem;margin-top:2rem;pa
 </head>
 <body>
 <nav>
-  <a class="nav-brand" href="/"><img src="/logo.svg" alt="{{.Domain}}"></a>
+  <a class="nav-brand" href="/"><img src="/logo.svg" alt="{{.SiteName}}"></a>
   <div class="nav-lang">
     <select class="lang-select" aria-label="Language" onchange="location.href='/lang?code='+this.value">
       {{range .Languages}}<option value="{{.Code}}"{{if .Active}} selected{{end}}>{{.Flag}} {{.Name}}</option>{{end}}
@@ -144,6 +144,7 @@ footer{text-align:center;color:var(--fg-hint);font-size:.8rem;margin-top:2rem;pa
     <a href="/admin/dances">Dance styles</a>
     <a href="/admin/fetchurls">{{.Strings.T "nav_admin_fetchurls"}}</a>
     <a href="/admin/users">{{.Strings.T "nav_admin_users"}}</a>
+    <a href="/admin/site-config">Site config</a>
     {{else}}
     <a href="/">{{.Strings.T "nav_events"}}</a>
     <a href="/musicians">{{.Strings.T "nav_musicians"}}</a>

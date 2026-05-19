@@ -20,6 +20,12 @@ func main() {
 	cfg := loadConfig()
 	cfg.pagesContent = loadPagesContent(cfg.PagesFile)
 	db := initDB(cfg.DBPath)
+	if v := getSiteSetting(db, "site_name"); v != "" {
+		cfg.SiteName = v
+	}
+	if v := getSiteSetting(db, "contact"); v != "" {
+		cfg.ContactOverride = v
+	}
 	client := &DansalClient{
 		BaseURL: cfg.DansalURL,
 		HTTP:    &http.Client{Timeout: 15 * time.Second},
@@ -53,9 +59,9 @@ func main() {
 			bannerData = b
 		}
 	}
-	r.HandleFunc("/favicon.svg", svgHandler(faviconData)).Methods("GET")
-	r.HandleFunc("/logo.svg", svgHandler(logoData)).Methods("GET")
-	r.HandleFunc("/banner.svg", svgHandler(bannerData)).Methods("GET")
+	r.HandleFunc("/favicon.svg", dynamicSVGHandler(db, "favicon", faviconData)).Methods("GET")
+	r.HandleFunc("/logo.svg", dynamicSVGHandler(db, "logo", logoData)).Methods("GET")
+	r.HandleFunc("/banner.svg", dynamicSVGHandler(db, "banner", bannerData)).Methods("GET")
 	r.HandleFunc("/federated-events/{id}", federatedEventHandler(db)).Methods("GET")
 	r.HandleFunc("/", indexHandler(cfg, tmpls, db, client, i18n)).Methods("GET")
 	r.HandleFunc("/events/{id}", eventHandler(cfg, tmpls, client, i18n)).Methods("GET")
@@ -131,6 +137,9 @@ func main() {
 	r.HandleFunc("/admin/dances", adminDancesHandler(cfg, tmpls, client, i18n)).Methods("GET")
 	r.HandleFunc("/admin/dances", adminDanceCreateHandler(cfg, client)).Methods("POST")
 	r.HandleFunc("/admin/dances/{id}/delete", adminDanceDeleteHandler(cfg, client)).Methods("POST")
+
+	r.HandleFunc("/admin/site-config", adminSiteConfigHandler(cfg, tmpls, db, client, i18n)).Methods("GET")
+	r.HandleFunc("/admin/site-config", adminSiteConfigSaveHandler(cfg, db, client)).Methods("POST")
 
 	r.HandleFunc("/admin/fetchurls", adminFetchurlsHandler(cfg, tmpls, client, i18n)).Methods("GET")
 	r.HandleFunc("/admin/fetchurls/new", adminFetchurlNewPageHandler(cfg, tmpls, client, i18n)).Methods("GET")

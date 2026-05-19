@@ -58,6 +58,15 @@ CREATE TABLE IF NOT EXISTS federated_events (
     raw_json TEXT,
     received_at INTEGER NOT NULL
 );
+CREATE TABLE IF NOT EXISTS site_settings (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL DEFAULT ''
+);
+CREATE TABLE IF NOT EXISTS site_assets (
+    key TEXT PRIMARY KEY,
+    data BLOB NOT NULL,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
 `); err != nil {
 		log.Fatalf("init db schema: %v", err)
 	}
@@ -246,6 +255,34 @@ func updateFollowStateByActivityID(db *sql.DB, followActivityID, state string) e
 	_, err := db.Exec(
 		"UPDATE follows SET state=? WHERE follow_activity_id=?",
 		state, followActivityID,
+	)
+	return err
+}
+
+func getSiteSetting(db *sql.DB, key string) string {
+	var v string
+	db.QueryRow("SELECT value FROM site_settings WHERE key = ?", key).Scan(&v)
+	return v
+}
+
+func setSiteSetting(db *sql.DB, key, value string) error {
+	_, err := db.Exec(
+		"INSERT INTO site_settings(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+		key, value,
+	)
+	return err
+}
+
+func getSiteAsset(db *sql.DB, key string) []byte {
+	var data []byte
+	db.QueryRow("SELECT data FROM site_assets WHERE key = ?", key).Scan(&data)
+	return data
+}
+
+func setSiteAsset(db *sql.DB, key string, data []byte) error {
+	_, err := db.Exec(
+		"INSERT INTO site_assets(key,data,updated_at) VALUES(?,?,CURRENT_TIMESTAMP) ON CONFLICT(key) DO UPDATE SET data=excluded.data,updated_at=CURRENT_TIMESTAMP",
+		key, data,
 	)
 	return err
 }

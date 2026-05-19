@@ -2117,3 +2117,104 @@ func adminDanceDeleteHandler(cfg *Config, client *DansalClient) http.HandlerFunc
 		http.Redirect(w, r, "/admin/dances", http.StatusSeeOther)
 	}
 }
+
+// ── Admin Site Config ─────────────────────────────────────────────────────────
+
+type AdminSiteConfigData struct {
+	SiteName          string
+	Contact           string
+	TelegramBotToken  string
+	TelegramBotName   string
+	MatrixHomeserver  string
+	MatrixAccessToken string
+	HasLogo           bool
+	HasBanner         bool
+	HasFavicon        bool
+	ErrorMsg          string
+	Success           bool
+}
+
+func adminSiteConfigHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *DansalClient, i18n *I18n) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		user, ok := requireLogin(w, r)
+		if !ok {
+			return
+		}
+		if user.Role != "admin" {
+			http.Error(w, "Forbidden", http.StatusForbidden)
+			return
+		}
+		token := getSessionToken(r)
+		ac, _ := client.GetAdminConfig(r.Context(), token)
+		data := AdminSiteConfigData{
+			SiteName:          getSiteSetting(db, "site_name"),
+			Contact:           getSiteSetting(db, "contact"),
+			TelegramBotToken:  ac.TelegramBotToken,
+			TelegramBotName:   ac.TelegramBotName,
+			MatrixHomeserver:  ac.MatrixHomeserver,
+			MatrixAccessToken: ac.MatrixAccessToken,
+			HasLogo:           len(getSiteAsset(db, "logo")) > 0,
+			HasBanner:         len(getSiteAsset(db, "banner")) > 0,
+			HasFavicon:        len(getSiteAsset(db, "favicon")) > 0,
+			Success:           r.URL.Query().Get("saved") == "1",
+		}
+		renderTemplate(w, tmpls.adminSiteConfig, tmplData(r, cfg, i18n, "Site Configuration", data))
+	}
+}
+
+func adminSiteConfigSaveHandler(cfg *Config, db *sql.DB, client *DansalClient) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		user, ok := requireLogin(w, r)
+		if !ok {
+			return
+		}
+		if user.Role != "admin" {
+			http.Error(w, "Forbidden", http.StatusForbidden)
+			return
+		}
+		if err := r.ParseMultipartForm(4 << 20); err != nil {
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+		token := getSessionToken(r)
+
+		// Text settings
+		siteName := strings.TrimSpace(r.FormValue("site_name"))
+		contact := strings.TrimSpace(r.FormValue("contact"))
+		_ = setSiteSetting(db, "site_name", siteName)
+		_ = setSiteSetting(db, "contact", contact)
+		cfg.SiteName = siteName
+		cfg.ContactOverride = contact
+
+		// Telegram / Matrix via dansal API
+		ac := AdminConfig{
+			TelegramBotToken:  strings.TrimSpace(r.FormValue("telegram_bot_token")),
+			TelegramBotName:   strings.TrimSpace(r.FormValue("telegram_bot_name")),
+			MatrixHomeserver:  strings.TrimSpace(r.FormValue("matrix_homeserver")),
+			MatrixAccessToken: strings.TrimSpace(r.FormValue("matrix_access_token")),
+		}
+		_ = client.PatchAdminConfig(r.Context(), token, ac)
+
+		// SVG uploads
+		for _, key := range []string{"logo", "banner", "favicon"} {
+			f, _, err := r.FormFile(key)
+			if err != nil {
+				continue
+			}
+			data, err := io.ReadAll(f)
+			f.Close()
+			if err != nil || !isSVG(data) {
+				continue
+			}
+			_ = setSiteAsset(db, key, data)
+		}
+
+		http.Redirect(w, r, "/admin/site-config?saved=1", http.StatusSeeOther)
+	}
+}
+
+// isSVG returns true if data looks like an SVG file.
+func isSVG(data []byte) bool {
+	s := strings.TrimSpace(string(data))
+	return strings.HasPrefix(s, "<svg") || strings.HasPrefix(s, "<?xml") || strings.Contains(s, "<svg")
+}

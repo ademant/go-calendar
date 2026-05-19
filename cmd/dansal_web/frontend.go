@@ -23,6 +23,7 @@ import (
 type TemplateData struct {
 	Title        string
 	Domain       string
+	SiteName     string // display name; defaults to Domain when empty
 	User         *SessionUser
 	Strings      I18nStrings
 	LangCode     string
@@ -37,7 +38,10 @@ type TemplateData struct {
 
 func tmplData(r *http.Request, cfg *Config, i18n *I18n, title string, data interface{}) TemplateData {
 	lang := i18n.detectLang(r)
-	contact := cfg.pagesContent.ContactText(lang)
+	contact := cfg.ContactOverride
+	if contact == "" {
+		contact = cfg.pagesContent.ContactText(lang)
+	}
 	impressumURL := ""
 	if cfg.pagesContent.ImpressumText(lang) != "" {
 		impressumURL = "/impressum"
@@ -49,9 +53,14 @@ func tmplData(r *http.Request, cfg *Config, i18n *I18n, title string, data inter
 		bannerHeight = cfg.BannerHeightMain
 		logoHeight = cfg.LogoHeightMain
 	}
+	siteName := cfg.SiteName
+	if siteName == "" {
+		siteName = cfg.Domain
+	}
 	return TemplateData{
 		Title:        title,
 		Domain:       cfg.Domain,
+		SiteName:     siteName,
 		User:         getSessionUser(r),
 		Strings:      i18n.Strings(lang),
 		LangCode:     lang,
@@ -124,6 +133,18 @@ func svgHandler(data []byte) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "image/svg+xml")
 		w.Header().Set("Cache-Control", "public, max-age=86400")
+		w.Write(data)
+	}
+}
+
+func dynamicSVGHandler(db *sql.DB, key string, fallback []byte) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		data := getSiteAsset(db, key)
+		if len(data) == 0 {
+			data = fallback
+		}
+		w.Header().Set("Content-Type", "image/svg+xml")
+		w.Header().Set("Cache-Control", "public, max-age=3600")
 		w.Write(data)
 	}
 }
@@ -423,6 +444,7 @@ type Templates struct {
 	adminEventNew      *template.Template
 	adminEventEdit     *template.Template
 	adminDances        *template.Template
+	adminSiteConfig    *template.Template
 	impressum          *template.Template
 	orgs               *template.Template
 }
@@ -462,6 +484,7 @@ func loadTemplates() *Templates {
 		adminEventNew:     load("admin_event_new"),
 		adminEventEdit:    load("admin_event_edit"),
 		adminDances:       load("admin_dances"),
+		adminSiteConfig:   load("admin_site_config"),
 		impressum:         load("impressum"),
 		orgs:              load("orgs"),
 	}

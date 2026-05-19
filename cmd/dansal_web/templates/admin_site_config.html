@@ -1,0 +1,94 @@
+{{template "base" .}}
+{{define "content"}}
+<div class="page-header">
+  <h1>Site Configuration</h1>
+</div>
+
+{{with .Data}}
+{{if .Success}}<div class="flash-ok">Settings saved.</div>{{end}}
+{{if .ErrorMsg}}<div class="flash-err">{{.ErrorMsg}}</div>{{end}}
+
+<form method="post" action="/admin/site-config" enctype="multipart/form-data" class="cfg-form">
+
+  <section class="cfg-section">
+    <h2>Appearance</h2>
+    <div class="field">
+      <label>Site name</label>
+      <input type="text" name="site_name" value="{{.SiteName}}" placeholder="Displayed in page title and nav">
+      <p class="hint">Leave blank to use the domain name.</p>
+    </div>
+    <div class="field">
+      <label>Logo <span class="hint-inline">(SVG only)</span></label>
+      <input type="file" name="logo" accept=".svg,image/svg+xml">
+      {{if .HasLogo}}<p class="hint">Custom logo is set. Upload a new file to replace.</p>{{end}}
+    </div>
+    <div class="field">
+      <label>Banner <span class="hint-inline">(SVG only)</span></label>
+      <input type="file" name="banner" accept=".svg,image/svg+xml">
+      {{if .HasBanner}}<p class="hint">Custom banner is set. Upload a new file to replace.</p>{{end}}
+    </div>
+    <div class="field">
+      <label>Favicon <span class="hint-inline">(SVG only)</span></label>
+      <input type="file" name="favicon" accept=".svg,image/svg+xml">
+      {{if .HasFavicon}}<p class="hint">Custom favicon is set. Upload a new file to replace.</p>{{end}}
+    </div>
+  </section>
+
+  <section class="cfg-section">
+    <h2>Contact &amp; Footer</h2>
+    <div class="field">
+      <label>Contact information</label>
+      <textarea name="contact" rows="3" placeholder="Shown in the page footer">{{.Contact}}</textarea>
+      <p class="hint">Overrides any contact text from the pages config file.</p>
+    </div>
+  </section>
+
+  <section class="cfg-section">
+    <h2>Telegram Bot</h2>
+    <div class="field">
+      <label>Bot token</label>
+      <input type="text" name="telegram_bot_token" value="{{.TelegramBotToken}}" autocomplete="off" spellcheck="false">
+    </div>
+    <div class="field">
+      <label>Bot name</label>
+      <input type="text" name="telegram_bot_name" value="{{.TelegramBotName}}" autocomplete="off">
+      <p class="hint">The @username of the Telegram bot (without @).</p>
+    </div>
+  </section>
+
+  <section class="cfg-section">
+    <h2>Matrix</h2>
+    <div class="field">
+      <label>Homeserver URL</label>
+      <input type="url" name="matrix_homeserver" value="{{.MatrixHomeserver}}" placeholder="https://matrix.example.org">
+    </div>
+    <div class="field">
+      <label>Access token</label>
+      <input type="text" name="matrix_access_token" value="{{.MatrixAccessToken}}" autocomplete="off" spellcheck="false">
+    </div>
+  </section>
+
+  <div class="cfg-actions">
+    <button type="submit" class="btn-primary">Save</button>
+  </div>
+</form>
+{{end}}
+
+<style>
+.page-header{margin-bottom:1rem}
+.flash-ok{background:var(--badge-ok-bg);color:var(--badge-ok-fg);border-radius:4px;padding:.6rem 1rem;margin-bottom:1rem;font-size:.95rem}
+.flash-err{background:var(--badge-danger-bg);color:var(--badge-danger-fg);border-radius:4px;padding:.6rem 1rem;margin-bottom:1rem;font-size:.95rem}
+.cfg-form{max-width:640px}
+.cfg-section{background:var(--bg-card);border:1px solid var(--border);border-radius:6px;padding:1.25rem;margin-bottom:1.25rem}
+.cfg-section h2{font-size:1rem;font-weight:600;color:var(--fg-2);margin-bottom:1rem;padding-bottom:.5rem;border-bottom:1px solid var(--border-lite)}
+.field{margin-bottom:.9rem}
+.field label{display:block;font-weight:600;font-size:.9rem;color:var(--fg-dim);margin-bottom:.3rem}
+.field input[type=text],.field input[type=url],.field textarea{width:100%;padding:.4rem .6rem;border:1px solid var(--border-mid);border-radius:4px;font-size:.95rem;background:var(--bg);color:var(--fg)}
+.field textarea{resize:vertical;font-family:inherit}
+.hint{font-size:.8rem;color:var(--fg-hint);margin-top:.2rem}
+.hint-inline{font-size:.8rem;color:var(--fg-hint)}
+.cfg-actions{margin-top:.5rem}
+.btn-primary{padding:.45rem 1.2rem;background:#1a6eb5;color:#fff;border:none;border-radius:4px;font-size:.95rem;cursor:pointer}
+.btn-primary:hover{background:#0d4a80}
+</style>
+{{end}}
