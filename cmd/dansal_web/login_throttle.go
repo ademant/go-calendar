@@ -48,7 +48,9 @@ func (lt *loginThrottle) recordFailure(ip string) time.Duration {
 		e.failures = 0
 		e.windowStart = time.Now()
 	}
-	e.failures++
+	if e.failures < loginMaxFailures {
+		e.failures++
+	}
 	delay := time.Duration(1<<uint(e.failures-1)) * time.Second
 	if delay > loginMaxDelay {
 		delay = loginMaxDelay
