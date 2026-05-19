@@ -223,6 +223,43 @@ impressum:
 
 If `pages_file` is not set in the config, both features are silently disabled — no footer line, no `/impressum` route content.
 
+## dansal_web layout
+
+The web frontend supports several layout options in its `config.yaml`.
+
+### Banner and logo
+
+```yaml
+# Height of the banner image in pixels.
+# 0 = banner is not rendered on that page type.
+banner_height_main: 200   # shown on the main page  (default: 200)
+banner_height_sub:  0     # hidden on all sub-pages (default: 0)
+
+# Height of the logo in the navigation bar in pixels.
+logo_height_main: 48      # main page  (default: 48)
+logo_height_sub:  32      # sub-pages  (default: 32)
+```
+
+### Custom image files
+
+By default the logo, banner and favicon are the SVGs compiled into the binary. Set `images_dir` to serve your own files from disk instead:
+
+```yaml
+images_dir: /etc/dansal/images
+```
+
+Place `logo.svg`, `banner.svg`, and/or `favicon.svg` in that directory. Missing files fall back to the built-in defaults. Changes take effect after a service restart.
+
+### Colour scheme (dark / light mode)
+
+```yaml
+dark_mode: auto    # follow the visitor's system preference (default)
+# dark_mode: dark  # always start in dark mode
+# dark_mode: light # always start in light mode
+```
+
+`auto` uses the `prefers-color-scheme` media query so the page matches the visitor's OS setting. Visitors can override the setting at any time with the **◑** toggle in the navigation bar; their choice is stored in `localStorage`.
+
 ## Telegram integration
 
 Dansal supports Telegram in two ways:
