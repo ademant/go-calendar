@@ -29,6 +29,7 @@ type OrganizationMember struct {
 	OrganizationID int    `json:"organization_id"`
 	UserID         int    `json:"user_id"`
 	Username       string `json:"username,omitempty"`
+	Role           string `json:"role,omitempty"`
 	CreatedAt      string `json:"created_at"`
 }
 
@@ -315,7 +316,7 @@ func getOrganizationMembers(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	id := mux.Vars(r)["id"]
 	rows, err := db.Query(`
-		SELECT om.organization_id, om.user_id, u.username, om.created_at
+		SELECT om.organization_id, om.user_id, u.username, u.role, om.created_at
 		FROM organization_members om
 		JOIN users u ON om.user_id = u.id
 		WHERE om.organization_id = ?
@@ -328,7 +329,7 @@ func getOrganizationMembers(w http.ResponseWriter, r *http.Request) {
 	members := []OrganizationMember{}
 	for rows.Next() {
 		var m OrganizationMember
-		if err := rows.Scan(&m.OrganizationID, &m.UserID, &m.Username, &m.CreatedAt); err != nil {
+		if err := rows.Scan(&m.OrganizationID, &m.UserID, &m.Username, &m.Role, &m.CreatedAt); err != nil {
 			writeError(w, err.Error(), http.StatusInternalServerError)
 			return
 		}

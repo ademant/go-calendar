@@ -124,6 +124,7 @@ func main() {
 	r.HandleFunc("/admin/organizations/{id}/edit", adminOrgSaveHandler(cfg, tmpls, client, i18n)).Methods("POST")
 	r.HandleFunc("/admin/organizations/{id}/delete", adminOrgDeleteHandler(cfg, client)).Methods("POST")
 	r.HandleFunc("/admin/organizations/{id}/run-feeds", adminOrgRunFeedsHandler(cfg, client)).Methods("POST")
+	r.HandleFunc("/admin/organizations/{id}/members", adminOrgMemberHandler(cfg, client)).Methods("POST")
 	r.HandleFunc("/admin/organizations/{id}/follow", adminOrgFollowHandler(cfg, db, client)).Methods("POST")
 	r.HandleFunc("/admin/organizations/{id}/unfollow", adminOrgUnfollowHandler(cfg, db, client)).Methods("POST")
 

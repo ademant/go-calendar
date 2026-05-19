@@ -1058,6 +1058,7 @@ type OrgMember struct {
 	OrganizationID int    `json:"organization_id"`
 	UserID         int    `json:"user_id"`
 	Username       string `json:"username,omitempty"`
+	Role           string `json:"role,omitempty"`
 }
 
 func (c *DansalClient) GetOrganizationMembers(ctx context.Context, orgID int, token string) ([]OrgMember, error) {

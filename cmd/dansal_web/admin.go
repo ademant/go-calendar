@@ -60,6 +60,8 @@ type AdminOrgEditData struct {
 	ErrorKey  string
 	Follows   []FollowRecord
 	FollowErr string
+	Members   []OrgMember
+	AllUsers  []UserInfo
 }
 
 func adminOrgsHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {
@@ -189,15 +191,20 @@ func adminOrgEditPageHandler(cfg *Config, tmpls *Templates, client *DansalClient
 			http.NotFound(w, r)
 			return
 		}
+		token := getSessionToken(r)
 		var follows []FollowRecord
 		if actor, err := getActorByOrgID(db, id); err == nil {
 			follows, _ = listFollows(db, actor.ID)
 		}
+		members, _ := client.GetOrganizationMembers(r.Context(), id, token)
+		allUsers, _ := client.GetAllUsers(r.Context(), token)
 		title := i18n.T(r, "admin_edit")
 		renderTemplate(w, tmpls.adminOrgEdit, tmplData(r, cfg, i18n, title, AdminOrgEditData{
 			Org:       org,
 			Follows:   follows,
 			FollowErr: r.URL.Query().Get("follow_err"),
+			Members:   members,
+			AllUsers:  allUsers,
 		}))
 	}
 }
@@ -288,6 +295,41 @@ func adminOrgUnfollowHandler(cfg *Config, db *sql.DB, client *DansalClient) http
 			log.Printf("removeFollow: %v", err)
 		}
 		http.Redirect(w, r, fmt.Sprintf("/admin/organizations/%d/edit", id), http.StatusSeeOther)
+	}
+}
+
+func adminOrgMemberHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		user, ok := requireLogin(w, r)
+		if !ok {
+			return
+		}
+		if user.Role != "admin" {
+			http.Error(w, "Forbidden", http.StatusForbidden)
+			return
+		}
+		orgID, err := strconv.Atoi(mux.Vars(r)["id"])
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		if err := r.ParseForm(); err != nil {
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+		token := getSessionToken(r)
+		action := r.FormValue("action")
+		userID, err := strconv.Atoi(r.FormValue("user_id"))
+		if err != nil {
+			http.Redirect(w, r, fmt.Sprintf("/admin/organizations/%d/edit", orgID), http.StatusSeeOther)
+			return
+		}
+		if action == "remove" {
+			_ = client.RemoveOrgMember(r.Context(), orgID, userID, token)
+		} else {
+			_ = client.AddOrgMember(r.Context(), orgID, userID, token)
+		}
+		http.Redirect(w, r, fmt.Sprintf("/admin/organizations/%d/edit", orgID), http.StatusSeeOther)
 	}
 }
 
