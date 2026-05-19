@@ -71,7 +71,7 @@
   <h3><a href="/events/{{.ID}}">{{.Title}}</a></h3>
   <div class="event-meta">
     {{if .StartTime}}<span>{{formatTime $.LangCode .StartTime}}</span>{{end}}
-    {{if .Location}} &mdash; {{.Location}}{{else if .LocationTown}} &mdash; {{.LocationTown}}{{end}}
+    {{if .LocationShortName}} &mdash; {{.LocationShortName}}{{else if .Location}} &mdash; {{.Location}}{{else if .LocationTown}} &mdash; {{.LocationTown}}{{end}}
     {{if .IsCancelled}}<span class="badge cancelled">{{$.Strings.T "badge_cancelled"}}</span>{{end}}
     {{if .HasBall}}<span class="badge">{{$.Strings.T "filter_type_ball"}}</span>{{end}}
     {{if .HasWorkshop}}<span class="badge">{{$.Strings.T "filter_type_workshop"}}</span>{{end}}
@@ -96,7 +96,7 @@
     <h3><a href="/events/{{.ID}}">{{.Title}}</a></h3>
     <div class="event-meta">
       {{if .StartTime}}<span>{{formatTime $.LangCode .StartTime}}</span>{{end}}
-      {{if .Location}} &mdash; {{.Location}}{{else if .LocationTown}} &mdash; {{.LocationTown}}{{end}}
+      {{if .LocationShortName}} &mdash; {{.LocationShortName}}{{else if .Location}} &mdash; {{.Location}}{{else if .LocationTown}} &mdash; {{.LocationTown}}{{end}}
       {{if .IsCancelled}}<span class="badge cancelled">{{$.Strings.T "badge_cancelled"}}</span>{{end}}
     </div>
   </li>
