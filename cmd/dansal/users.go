@@ -9,7 +9,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/gorilla/mux"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -234,8 +233,7 @@ func createUser(w http.ResponseWriter, r *http.Request) {
 func getUser(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
-	vars := mux.Vars(r)
-	id := vars["id"]
+	id := r.PathValue("id")
 
 	var user User
 	var emailVer, telegramVer, matrixVer, disabled int
@@ -264,8 +262,7 @@ func getUser(w http.ResponseWriter, r *http.Request) {
 func updateUser(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
-	vars := mux.Vars(r)
-	id := vars["id"]
+	id := r.PathValue("id")
 	targetID, err := strconv.Atoi(id)
 	if err != nil {
 		writeError(w, "Invalid user ID", http.StatusBadRequest)
@@ -398,8 +395,7 @@ func deleteUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	vars := mux.Vars(r)
-	id := vars["id"]
+	id := r.PathValue("id")
 
 	// Check if user exists and prevent deletion of admin accounts
 	var userID int

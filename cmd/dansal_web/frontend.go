@@ -16,7 +16,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gorilla/mux"
 	"github.com/yuin/goldmark"
 )
 
@@ -506,7 +505,7 @@ func loadTemplates() *Templates {
 
 func federatedEventHandler(db *sql.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		id, err := strconv.Atoi(mux.Vars(r)["id"])
+		id, err := strconv.Atoi(r.PathValue("id"))
 		if err != nil {
 			http.NotFound(w, r)
 			return
@@ -565,7 +564,7 @@ func indexHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *DansalClien
 
 func eventHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		idStr := mux.Vars(r)["id"]
+		idStr := r.PathValue("id")
 		id, err := strconv.Atoi(idStr)
 		if err != nil {
 			http.NotFound(w, r)
@@ -630,7 +629,7 @@ func eventHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18
 
 func orgFrontendHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *DansalClient, i18n *I18n) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		slug := mux.Vars(r)["name"]
+		slug := r.PathValue("name")
 
 		actor, err := getActorBySlug(db, slug)
 		if err == sql.ErrNoRows {
@@ -749,7 +748,7 @@ func actorOrFrontendHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *D
 
 func apActorHandler(cfg *Config, db *sql.DB, client *DansalClient) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		slug := mux.Vars(r)["name"]
+		slug := r.PathValue("name")
 		actor, err := getActorBySlug(db, slug)
 		if err == sql.ErrNoRows {
 			if slug == "relay" {

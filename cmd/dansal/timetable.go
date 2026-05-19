@@ -10,7 +10,6 @@ import (
 	"regexp"
 	"strconv"
 
-	"github.com/gorilla/mux"
 )
 
 type TimetableEntry struct {
@@ -153,7 +152,7 @@ func addTimetableEntries(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	callerID, _ := strconv.Atoi(r.Header.Get("X-User-ID"))
-	eventID, err := strconv.Atoi(mux.Vars(r)["id"])
+	eventID, err := strconv.Atoi(r.PathValue("id"))
 	if err != nil {
 		writeError(w, "Invalid event ID", http.StatusBadRequest)
 		return
@@ -200,7 +199,7 @@ func replaceTimetable(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	callerID, _ := strconv.Atoi(r.Header.Get("X-User-ID"))
-	eventID, err := strconv.Atoi(mux.Vars(r)["id"])
+	eventID, err := strconv.Atoi(r.PathValue("id"))
 	if err != nil {
 		writeError(w, "Invalid event ID", http.StatusBadRequest)
 		return

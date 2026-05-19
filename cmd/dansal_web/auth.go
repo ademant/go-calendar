@@ -7,7 +7,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gorilla/mux"
 )
 
 func getClientIP(r *http.Request) string {
@@ -143,7 +142,7 @@ func magicRequestHandler(cfg *Config, tmpls *Templates, client *DansalClient, i1
 
 func magicLoginHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		token := mux.Vars(r)["token"]
+		token := r.PathValue("token")
 		lr, err := client.UseMagicLogin(r.Context(), token)
 		if err != nil {
 			title := i18n.T(r, "login_title")

@@ -7,7 +7,6 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/gorilla/mux"
 )
 
 var boardThrottle = newSubmissionThrottle(10, 10*time.Minute)
@@ -15,7 +14,7 @@ var boardThrottle = newSubmissionThrottle(10, 10*time.Minute)
 // POST /events/{id}/board
 func contactBoardPostHandler(cfg *Config, client *DansalClient, i18n *I18n) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		eventID, err := strconv.Atoi(mux.Vars(r)["id"])
+		eventID, err := strconv.Atoi(r.PathValue("id"))
 		if err != nil {
 			http.NotFound(w, r)
 			return
@@ -57,12 +56,12 @@ func contactBoardPostHandler(cfg *Config, client *DansalClient, i18n *I18n) http
 // POST /events/{id}/board/{post_id}/delete
 func contactBoardDeleteHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		eventID, err := strconv.Atoi(mux.Vars(r)["id"])
+		eventID, err := strconv.Atoi(r.PathValue("id"))
 		if err != nil {
 			http.NotFound(w, r)
 			return
 		}
-		postID, err := strconv.Atoi(mux.Vars(r)["post_id"])
+		postID, err := strconv.Atoi(r.PathValue("post_id"))
 		if err != nil {
 			http.NotFound(w, r)
 			return
@@ -85,12 +84,12 @@ func contactBoardDeleteHandler(cfg *Config, client *DansalClient) http.HandlerFu
 // POST /events/{id}/board/{post_id}/contact
 func contactBoardContactHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		eventID, err := strconv.Atoi(mux.Vars(r)["id"])
+		eventID, err := strconv.Atoi(r.PathValue("id"))
 		if err != nil {
 			http.NotFound(w, r)
 			return
 		}
-		postID, err := strconv.Atoi(mux.Vars(r)["post_id"])
+		postID, err := strconv.Atoi(r.PathValue("post_id"))
 		if err != nil {
 			http.NotFound(w, r)
 			return
@@ -121,7 +120,7 @@ func contactBoardContactHandler(cfg *Config, client *DansalClient) http.HandlerF
 // GET /contact-posts/verify/{token}
 func contactBoardVerifyHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		token := mux.Vars(r)["token"]
+		token := r.PathValue("token")
 		if err := client.VerifyContactPost(r.Context(), token); err != nil {
 			title := i18n.T(r, "verify_title")
 			renderTemplate(w, tmpls.verify, tmplData(r, cfg, i18n, title, VerifyData{ErrorKey: "verify_error_invalid"}))

@@ -12,7 +12,6 @@ import (
 	"time"
 
 	ics "github.com/arran4/golang-ical"
-	"github.com/gorilla/mux"
 )
 
 type FetchURLRequest struct {
@@ -253,7 +252,7 @@ func getFetchSources(w http.ResponseWriter, r *http.Request) {
 
 // GET /api/v1/fetchurl/{id}
 func getFetchSource(w http.ResponseWriter, r *http.Request) {
-	id := mux.Vars(r)["id"]
+	id := r.PathValue("id")
 	src, err := scanFetchSource(db.QueryRow(
 		"SELECT id, url, type, tags, COALESCE((SELECT GROUP_CONCAT(dance_id) FROM fetch_source_dances WHERE fetch_source_id = id),''), organization_id, last_fetched_at, created_at FROM fetch_sources WHERE id = ?", id,
 	))
@@ -271,7 +270,7 @@ func getFetchSource(w http.ResponseWriter, r *http.Request) {
 
 // PATCH /api/v1/fetchurl/{id}
 func patchFetchSource(w http.ResponseWriter, r *http.Request) {
-	id := mux.Vars(r)["id"]
+	id := r.PathValue("id")
 	src, err := scanFetchSource(db.QueryRow(
 		"SELECT id, url, type, tags, COALESCE((SELECT GROUP_CONCAT(dance_id) FROM fetch_source_dances WHERE fetch_source_id = id),''), organization_id, last_fetched_at, created_at FROM fetch_sources WHERE id = ?", id,
 	))
@@ -544,7 +543,7 @@ func deleteFetchSource(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "Forbidden", http.StatusForbidden)
 		return
 	}
-	id := mux.Vars(r)["id"]
+	id := r.PathValue("id")
 	result, err := db.Exec("DELETE FROM fetch_sources WHERE id = ?", id)
 	if err != nil {
 		writeError(w, err.Error(), http.StatusInternalServerError)
@@ -663,7 +662,7 @@ func fetchURLByID(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	id := mux.Vars(r)["id"]
+	id := r.PathValue("id")
 	src, err := scanFetchSource(db.QueryRow(
 		"SELECT id, url, type, tags, COALESCE((SELECT GROUP_CONCAT(dance_id) FROM fetch_source_dances WHERE fetch_source_id = id),''), organization_id, last_fetched_at, created_at FROM fetch_sources WHERE id = ?", id,
 	))

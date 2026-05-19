@@ -14,7 +14,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gorilla/mux"
 )
 
 // buildVerifyURL constructs the verification link. If base_url is configured
@@ -45,7 +44,7 @@ func sendVerification(w http.ResponseWriter, r *http.Request) {
 	callerID, _ := strconv.Atoi(r.Header.Get("X-User-ID"))
 	callerRole := r.Header.Get("X-User-Role")
 
-	targetID, err := strconv.Atoi(mux.Vars(r)["id"])
+	targetID, err := strconv.Atoi(r.PathValue("id"))
 	if err != nil {
 		writeError(w, "Invalid user ID", http.StatusBadRequest)
 		return
@@ -164,7 +163,7 @@ func sendVerification(w http.ResponseWriter, r *http.Request) {
 // GET /api/v1/verify/{token} — public; marks the account verified and consumes the token.
 func consumeVerification(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	token := mux.Vars(r)["token"]
+	token := r.PathValue("token")
 
 	var id, userID int
 	var channel, expiresAt string

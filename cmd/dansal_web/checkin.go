@@ -5,7 +5,6 @@ import (
 	"net/url"
 	"strconv"
 
-	"github.com/gorilla/mux"
 )
 
 type CheckinData struct {
@@ -23,7 +22,7 @@ type CheckinData struct {
 // GET /checkin/{qr_token}
 func checkinGetHandler(cfg *Config, tmpls *Templates, i18n *I18n) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		qrToken := mux.Vars(r)["qr_token"]
+		qrToken := r.PathValue("qr_token")
 		q := r.URL.Query()
 		data := CheckinData{
 			QRToken:    qrToken,
@@ -46,7 +45,7 @@ func checkinPostHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 		if !ok {
 			return
 		}
-		qrToken := mux.Vars(r)["qr_token"]
+		qrToken := r.PathValue("qr_token")
 		token := getSessionToken(r)
 
 		booking, err := client.CheckinBooking(r.Context(), qrToken, token)

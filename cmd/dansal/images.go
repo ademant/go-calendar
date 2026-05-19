@@ -23,7 +23,6 @@ import (
 
 	ics "github.com/arran4/golang-ical"
 	"github.com/gen2brain/avif"
-	"github.com/gorilla/mux"
 	xdraw "golang.org/x/image/draw"
 )
 
@@ -183,7 +182,7 @@ func tryAttachImage(eventID int, prop *ics.IANAProperty) bool {
 
 // GET /api/v1/images/{event_id}
 func getEventImage(w http.ResponseWriter, r *http.Request) {
-	eventID := mux.Vars(r)["event_id"]
+	eventID := r.PathValue("event_id")
 
 	// Validate event_id is a plain integer to prevent path traversal
 	for _, c := range eventID {
@@ -233,7 +232,7 @@ func deleteEventImage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	eventID := mux.Vars(r)["event_id"]
+	eventID := r.PathValue("event_id")
 	for _, c := range eventID {
 		if c < '0' || c > '9' {
 			writeError(w, "Invalid event ID", http.StatusBadRequest)
@@ -279,7 +278,7 @@ func uploadEventImage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	eventID := mux.Vars(r)["event_id"]
+	eventID := r.PathValue("event_id")
 
 	var id int
 	var orgID sql.NullInt64

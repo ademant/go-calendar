@@ -13,7 +13,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gorilla/mux"
 )
 
 // requireLogin redirects to /login if no session user, returning false when redirect was sent.
@@ -181,7 +180,7 @@ func adminOrgEditPageHandler(cfg *Config, tmpls *Templates, client *DansalClient
 			http.Error(w, "Forbidden", http.StatusForbidden)
 			return
 		}
-		id, err := strconv.Atoi(mux.Vars(r)["id"])
+		id, err := strconv.Atoi(r.PathValue("id"))
 		if err != nil {
 			http.NotFound(w, r)
 			return
@@ -219,7 +218,7 @@ func adminOrgFollowHandler(cfg *Config, db *sql.DB, client *DansalClient) http.H
 			http.Error(w, "Forbidden", http.StatusForbidden)
 			return
 		}
-		id, err := strconv.Atoi(mux.Vars(r)["id"])
+		id, err := strconv.Atoi(r.PathValue("id"))
 		if err != nil {
 			http.NotFound(w, r)
 			return
@@ -267,7 +266,7 @@ func adminOrgUnfollowHandler(cfg *Config, db *sql.DB, client *DansalClient) http
 			http.Error(w, "Forbidden", http.StatusForbidden)
 			return
 		}
-		id, err := strconv.Atoi(mux.Vars(r)["id"])
+		id, err := strconv.Atoi(r.PathValue("id"))
 		if err != nil {
 			http.NotFound(w, r)
 			return
@@ -308,7 +307,7 @@ func adminOrgMemberHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 			http.Error(w, "Forbidden", http.StatusForbidden)
 			return
 		}
-		orgID, err := strconv.Atoi(mux.Vars(r)["id"])
+		orgID, err := strconv.Atoi(r.PathValue("id"))
 		if err != nil {
 			http.NotFound(w, r)
 			return
@@ -343,7 +342,7 @@ func adminOrgSaveHandler(cfg *Config, tmpls *Templates, client *DansalClient, i1
 			http.Error(w, "Forbidden", http.StatusForbidden)
 			return
 		}
-		id, err := strconv.Atoi(mux.Vars(r)["id"])
+		id, err := strconv.Atoi(r.PathValue("id"))
 		if err != nil {
 			http.NotFound(w, r)
 			return
@@ -385,7 +384,7 @@ func adminOrgDeleteHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 			http.Error(w, "Forbidden", http.StatusForbidden)
 			return
 		}
-		id, err := strconv.Atoi(mux.Vars(r)["id"])
+		id, err := strconv.Atoi(r.PathValue("id"))
 		if err != nil {
 			http.NotFound(w, r)
 			return
@@ -401,7 +400,7 @@ func adminOrgRunFeedsHandler(cfg *Config, client *DansalClient) http.HandlerFunc
 		if !ok {
 			return
 		}
-		id, err := strconv.Atoi(mux.Vars(r)["id"])
+		id, err := strconv.Atoi(r.PathValue("id"))
 		if err != nil {
 			http.NotFound(w, r)
 			return
@@ -580,7 +579,7 @@ func adminMusicianEditPageHandler(cfg *Config, tmpls *Templates, client *DansalC
 		if !ok {
 			return
 		}
-		id, err := strconv.Atoi(mux.Vars(r)["id"])
+		id, err := strconv.Atoi(r.PathValue("id"))
 		if err != nil {
 			http.NotFound(w, r)
 			return
@@ -605,7 +604,7 @@ func adminMusicianSaveHandler(cfg *Config, tmpls *Templates, client *DansalClien
 		if !ok {
 			return
 		}
-		id, err := strconv.Atoi(mux.Vars(r)["id"])
+		id, err := strconv.Atoi(r.PathValue("id"))
 		if err != nil {
 			http.NotFound(w, r)
 			return
@@ -641,7 +640,7 @@ func adminMusicianDeleteHandler(cfg *Config, client *DansalClient) http.HandlerF
 		if !ok {
 			return
 		}
-		id, err := strconv.Atoi(mux.Vars(r)["id"])
+		id, err := strconv.Atoi(r.PathValue("id"))
 		if err != nil {
 			http.NotFound(w, r)
 			return
@@ -758,7 +757,7 @@ func adminFetchurlEditPageHandler(cfg *Config, tmpls *Templates, client *DansalC
 		if !ok {
 			return
 		}
-		id, err := strconv.Atoi(mux.Vars(r)["id"])
+		id, err := strconv.Atoi(r.PathValue("id"))
 		if err != nil {
 			http.NotFound(w, r)
 			return
@@ -793,7 +792,7 @@ func adminFetchurlSaveHandler(cfg *Config, tmpls *Templates, client *DansalClien
 		if !ok {
 			return
 		}
-		id, err := strconv.Atoi(mux.Vars(r)["id"])
+		id, err := strconv.Atoi(r.PathValue("id"))
 		if err != nil {
 			http.NotFound(w, r)
 			return
@@ -860,7 +859,7 @@ func adminFetchurlDeleteHandler(cfg *Config, client *DansalClient) http.HandlerF
 			http.Error(w, "Forbidden", http.StatusForbidden)
 			return
 		}
-		id, err := strconv.Atoi(mux.Vars(r)["id"])
+		id, err := strconv.Atoi(r.PathValue("id"))
 		if err != nil {
 			http.NotFound(w, r)
 			return
@@ -876,7 +875,7 @@ func adminFetchurlRunHandler(cfg *Config, client *DansalClient) http.HandlerFunc
 		if !ok {
 			return
 		}
-		id, err := strconv.Atoi(mux.Vars(r)["id"])
+		id, err := strconv.Atoi(r.PathValue("id"))
 		if err != nil {
 			http.NotFound(w, r)
 			return
@@ -1089,7 +1088,7 @@ func adminLocationEditPageHandler(cfg *Config, tmpls *Templates, client *DansalC
 		if !ok {
 			return
 		}
-		id, err := strconv.Atoi(mux.Vars(r)["id"])
+		id, err := strconv.Atoi(r.PathValue("id"))
 		if err != nil {
 			http.NotFound(w, r)
 			return
@@ -1114,7 +1113,7 @@ func adminLocationSaveHandler(cfg *Config, tmpls *Templates, client *DansalClien
 		if !ok {
 			return
 		}
-		id, err := strconv.Atoi(mux.Vars(r)["id"])
+		id, err := strconv.Atoi(r.PathValue("id"))
 		if err != nil {
 			http.NotFound(w, r)
 			return
@@ -1163,7 +1162,7 @@ func adminLocationDeleteHandler(cfg *Config, client *DansalClient) http.HandlerF
 		if !ok {
 			return
 		}
-		id, err := strconv.Atoi(mux.Vars(r)["id"])
+		id, err := strconv.Atoi(r.PathValue("id"))
 		if err != nil {
 			http.NotFound(w, r)
 			return
@@ -1282,7 +1281,7 @@ func adminUserDeleteHandler(cfg *Config, client *DansalClient) http.HandlerFunc 
 			http.Error(w, "Forbidden", http.StatusForbidden)
 			return
 		}
-		id, err := strconv.Atoi(mux.Vars(r)["id"])
+		id, err := strconv.Atoi(r.PathValue("id"))
 		if err != nil {
 			http.NotFound(w, r)
 			return
@@ -1302,7 +1301,7 @@ func adminUserRoleHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 			http.Error(w, "Forbidden", http.StatusForbidden)
 			return
 		}
-		id, err := strconv.Atoi(mux.Vars(r)["id"])
+		id, err := strconv.Atoi(r.PathValue("id"))
 		if err != nil {
 			http.NotFound(w, r)
 			return
@@ -1330,7 +1329,7 @@ func adminUserOrgHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 			http.Error(w, "bad request", http.StatusBadRequest)
 			return
 		}
-		userID, err := strconv.Atoi(mux.Vars(r)["id"])
+		userID, err := strconv.Atoi(r.PathValue("id"))
 		if err != nil {
 			http.NotFound(w, r)
 			return
@@ -1422,7 +1421,7 @@ func adminInviteRevokeHandler(cfg *Config, client *DansalClient) http.HandlerFun
 		if !ok {
 			return
 		}
-		invToken := mux.Vars(r)["token"]
+		invToken := r.PathValue("token")
 		_ = client.RevokeInvite(r.Context(), invToken, getSessionToken(r))
 		http.Redirect(w, r, "/admin/users", http.StatusSeeOther)
 	}
@@ -1434,7 +1433,7 @@ func adminEventDeleteHandler(cfg *Config, db *sql.DB, client *DansalClient) http
 		if !ok {
 			return
 		}
-		id, err := strconv.Atoi(mux.Vars(r)["id"])
+		id, err := strconv.Atoi(r.PathValue("id"))
 		if err != nil {
 			http.NotFound(w, r)
 			return
@@ -1454,7 +1453,7 @@ func adminEventImageDeleteHandler(cfg *Config, client *DansalClient) http.Handle
 		if !ok {
 			return
 		}
-		id, err := strconv.Atoi(mux.Vars(r)["id"])
+		id, err := strconv.Atoi(r.PathValue("id"))
 		if err != nil {
 			http.NotFound(w, r)
 			return
@@ -1470,7 +1469,7 @@ func adminMusicianImageDeleteHandler(cfg *Config, client *DansalClient) http.Han
 		if !ok {
 			return
 		}
-		id, err := strconv.Atoi(mux.Vars(r)["id"])
+		id, err := strconv.Atoi(r.PathValue("id"))
 		if err != nil {
 			http.NotFound(w, r)
 			return
@@ -1486,7 +1485,7 @@ func adminOrgImageDeleteHandler(cfg *Config, client *DansalClient) http.HandlerF
 		if !ok {
 			return
 		}
-		id, err := strconv.Atoi(mux.Vars(r)["id"])
+		id, err := strconv.Atoi(r.PathValue("id"))
 		if err != nil {
 			http.NotFound(w, r)
 			return
@@ -1849,7 +1848,7 @@ func adminEventEditPageHandler(cfg *Config, tmpls *Templates, client *DansalClie
 		if !ok {
 			return
 		}
-		id, err := strconv.Atoi(mux.Vars(r)["id"])
+		id, err := strconv.Atoi(r.PathValue("id"))
 		if err != nil {
 			http.NotFound(w, r)
 			return
@@ -1881,7 +1880,7 @@ func adminEventSaveHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *Da
 		if !ok {
 			return
 		}
-		id, err := strconv.Atoi(mux.Vars(r)["id"])
+		id, err := strconv.Atoi(r.PathValue("id"))
 		if err != nil {
 			http.NotFound(w, r)
 			return
@@ -2168,7 +2167,7 @@ func adminDanceDeleteHandler(cfg *Config, client *DansalClient) http.HandlerFunc
 			http.Error(w, "Forbidden", http.StatusForbidden)
 			return
 		}
-		id, err := strconv.Atoi(mux.Vars(r)["id"])
+		id, err := strconv.Atoi(r.PathValue("id"))
 		if err != nil {
 			http.NotFound(w, r)
 			return

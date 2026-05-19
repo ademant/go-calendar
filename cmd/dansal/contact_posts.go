@@ -10,7 +10,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gorilla/mux"
 )
 
 type ContactPost struct {
@@ -58,7 +57,7 @@ func isOrgMemberOfEvent(userID, eventID int) bool {
 // Public. Returns only email-verified posts; email field is never returned.
 func listContactPosts(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	eventID, err := strconv.Atoi(mux.Vars(r)["id"])
+	eventID, err := strconv.Atoi(r.PathValue("id"))
 	if err != nil {
 		writeError(w, "invalid event id", http.StatusBadRequest)
 		return
@@ -95,7 +94,7 @@ func listContactPosts(w http.ResponseWriter, r *http.Request) {
 // Public. Creates an unverified post and sends a verification email.
 func createContactPost(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	eventID, err := strconv.Atoi(mux.Vars(r)["id"])
+	eventID, err := strconv.Atoi(r.PathValue("id"))
 	if err != nil {
 		writeError(w, "invalid event id", http.StatusBadRequest)
 		return
@@ -191,7 +190,7 @@ func createContactPost(w http.ResponseWriter, r *http.Request) {
 // Public. Marks the post as verified.
 func verifyContactPost(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	token := mux.Vars(r)["token"]
+	token := r.PathValue("token")
 
 	var id int
 	var expiresAt string
@@ -222,7 +221,7 @@ func verifyContactPost(w http.ResponseWriter, r *http.Request) {
 // GET /api/v1/contact-posts/delete/{token}
 // Public. Lets the original poster delete their own post via the link in the email.
 func deleteContactPostByToken(w http.ResponseWriter, r *http.Request) {
-	token := mux.Vars(r)["token"]
+	token := r.PathValue("token")
 
 	var id int
 	err := db.QueryRow("SELECT id FROM contact_posts WHERE delete_token=?", token).Scan(&id)
@@ -246,7 +245,7 @@ func deleteContactPost(w http.ResponseWriter, r *http.Request) {
 	callerID, _ := strconv.Atoi(r.Header.Get("X-User-ID"))
 	callerRole := r.Header.Get("X-User-Role")
 
-	postID, err := strconv.Atoi(mux.Vars(r)["id"])
+	postID, err := strconv.Atoi(r.PathValue("id"))
 	if err != nil {
 		writeError(w, "invalid post id", http.StatusBadRequest)
 		return
@@ -276,7 +275,7 @@ func deleteContactPost(w http.ResponseWriter, r *http.Request) {
 // POST /api/v1/contact-posts/{id}/contact
 // Public. Forwards a message to the poster without revealing their email.
 func contactPoster(w http.ResponseWriter, r *http.Request) {
-	postID, err := strconv.Atoi(mux.Vars(r)["id"])
+	postID, err := strconv.Atoi(r.PathValue("id"))
 	if err != nil {
 		writeError(w, "invalid post id", http.StatusBadRequest)
 		return

@@ -10,7 +10,6 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/gorilla/mux"
 )
 
 // roleRank returns a numeric rank for role comparison (higher = more privileged).
@@ -189,7 +188,7 @@ func revokeInvite(w http.ResponseWriter, r *http.Request) {
 	callerRole := r.Header.Get("X-User-Role")
 	callerID, _ := strconv.Atoi(callerIDStr)
 
-	token := mux.Vars(r)["token"]
+	token := r.PathValue("token")
 
 	var ownerID int
 	var usedAt string
@@ -219,7 +218,7 @@ func revokeInvite(w http.ResponseWriter, r *http.Request) {
 func useInvite(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
-	token := mux.Vars(r)["token"]
+	token := r.PathValue("token")
 
 	var invite struct {
 		ID        int

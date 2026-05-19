@@ -15,7 +15,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gorilla/mux"
 )
 
 var (
@@ -245,7 +244,7 @@ func nodeinfo21Handler(cfg *Config) http.HandlerFunc {
 
 func outboxHandler(cfg *Config, db *sql.DB, client *DansalClient) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		slug := mux.Vars(r)["name"]
+		slug := r.PathValue("name")
 		actor, err := getActorBySlug(db, slug)
 		if err == sql.ErrNoRows {
 			writeJSONError(w, http.StatusNotFound, "actor not found")
@@ -303,7 +302,7 @@ func outboxHandler(cfg *Config, db *sql.DB, client *DansalClient) http.HandlerFu
 
 func followersHandler(cfg *Config, db *sql.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		slug := mux.Vars(r)["name"]
+		slug := r.PathValue("name")
 		actor, err := getActorBySlug(db, slug)
 		if err == sql.ErrNoRows {
 			writeJSONError(w, http.StatusNotFound, "actor not found")
@@ -338,7 +337,7 @@ func followersHandler(cfg *Config, db *sql.DB) http.HandlerFunc {
 
 func inboxHandler(cfg *Config, db *sql.DB, client *DansalClient) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		slug := mux.Vars(r)["name"]
+		slug := r.PathValue("name")
 		actor, err := getActorBySlug(db, slug)
 		if err == sql.ErrNoRows {
 			writeJSONError(w, http.StatusNotFound, "actor not found")

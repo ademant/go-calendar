@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/gorilla/mux"
 )
 
 type Session struct {
@@ -74,7 +73,7 @@ func deleteSession(w http.ResponseWriter, r *http.Request) {
 	}
 	callerRole := r.Header.Get("X-User-Role")
 
-	sessionID, err := strconv.Atoi(mux.Vars(r)["id"])
+	sessionID, err := strconv.Atoi(r.PathValue("id"))
 	if err != nil {
 		writeError(w, "Invalid session ID", http.StatusBadRequest)
 		return

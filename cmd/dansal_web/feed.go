@@ -11,13 +11,12 @@ import (
 	"time"
 
 	ics "github.com/arran4/golang-ical"
-	"github.com/gorilla/mux"
 )
 
 // feedEventICSHandler serves a single event as an iCal download.
 func feedEventICSHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		id, err := strconv.Atoi(mux.Vars(r)["id"])
+		id, err := strconv.Atoi(r.PathValue("id"))
 		if err != nil {
 			http.NotFound(w, r)
 			return
@@ -71,7 +70,7 @@ func federatedEventAsEvent(fe FederatedEvent) Event {
 // feedOrgHandler serves events for one organisation, identified by its AP slug.
 func feedOrgHandler(cfg *Config, db *sql.DB, client *DansalClient) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		slug := mux.Vars(r)["slug"]
+		slug := r.PathValue("slug")
 		actor, err := getActorBySlug(db, slug)
 		if err == sql.ErrNoRows {
 			http.NotFound(w, r)
@@ -93,7 +92,7 @@ func feedOrgHandler(cfg *Config, db *sql.DB, client *DansalClient) http.HandlerF
 // feedMusicianHandler serves events for one musician, identified by slug.
 func feedMusicianHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		slug := mux.Vars(r)["slug"]
+		slug := r.PathValue("slug")
 		musicians, err := client.GetMusicians(r.Context())
 		if err != nil {
 			http.Error(w, "could not load musicians", http.StatusBadGateway)
@@ -118,7 +117,7 @@ func feedMusicianHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 // feedLocationHandler serves events at one location, identified by slug.
 func feedLocationHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		slug := mux.Vars(r)["slug"]
+		slug := r.PathValue("slug")
 		locs, err := client.GetLocations(r.Context())
 		if err != nil {
 			http.Error(w, "could not load locations", http.StatusBadGateway)
@@ -181,7 +180,7 @@ func serveEventFeed(w http.ResponseWriter, r *http.Request, cfg *Config, title s
 		events = []Event{}
 	}
 	selfURL := "https://" + cfg.Domain + r.URL.Path
-	switch mux.Vars(r)["format"] {
+	switch r.PathValue("format") {
 	case "ical", "ics":
 		serveICalFeed(w, cfg, events)
 	case "json":

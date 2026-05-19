@@ -10,7 +10,6 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/gorilla/mux"
 )
 
 type APIKey struct {
@@ -189,8 +188,7 @@ func deleteAPIKey(w http.ResponseWriter, r *http.Request) {
 	callerIDStr := r.Header.Get("X-User-ID")
 	callerID, _ := strconv.Atoi(callerIDStr)
 
-	vars := mux.Vars(r)
-	keyID, err := strconv.Atoi(vars["id"])
+	keyID, err := strconv.Atoi(r.PathValue("id"))
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(map[string]string{"error": "Invalid API key ID"})

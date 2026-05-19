@@ -4,9 +4,9 @@ import (
 	"log"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
-	"github.com/gorilla/mux"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/collectors"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -86,30 +86,36 @@ func (sc *statusCapture) Write(b []byte) (int, error) {
 	return sc.ResponseWriter.Write(b)
 }
 
-// MetricsMiddleware records per-request HTTP metrics. Register it first so it
-// wraps all other middleware and captures status codes from early-exit paths
-// (rate limiting, connection limits, etc.).
-func MetricsMiddleware(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		start := time.Now()
-		sc := &statusCapture{ResponseWriter: w}
-		next.ServeHTTP(sc, r)
+// MetricsMiddleware records per-request HTTP metrics. It accepts the ServeMux
+// so it can resolve the matched route pattern for accurate label cardinality.
+// Register it as the outermost wrapper so it captures status codes from all
+// early-exit paths (rate limiting, connection limits, etc.).
+func MetricsMiddleware(smux *http.ServeMux) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			start := time.Now()
+			sc := &statusCapture{ResponseWriter: w}
+			next.ServeHTTP(sc, r)
 
-		status := sc.status
-		if status == 0 {
-			status = http.StatusOK
-		}
-
-		route := "unknown"
-		if matched := mux.CurrentRoute(r); matched != nil {
-			if tmpl, err := matched.GetPathTemplate(); err == nil {
-				route = tmpl
+			status := sc.status
+			if status == 0 {
+				status = http.StatusOK
 			}
-		}
 
-		httpRequestsTotal.WithLabelValues(r.Method, route, strconv.Itoa(status)).Inc()
-		httpRequestDuration.WithLabelValues(r.Method, route).Observe(time.Since(start).Seconds())
-	})
+			route := "unknown"
+			if _, pattern := smux.Handler(r); pattern != "" {
+				// Strip leading method prefix added by Go 1.22+ patterns ("GET /path").
+				if i := strings.Index(pattern, " "); i >= 0 {
+					route = pattern[i+1:]
+				} else {
+					route = pattern
+				}
+			}
+
+			httpRequestsTotal.WithLabelValues(r.Method, route, strconv.Itoa(status)).Inc()
+			httpRequestDuration.WithLabelValues(r.Method, route).Observe(time.Since(start).Seconds())
+		})
+	}
 }
 
 func startMetricsServer() {

@@ -9,7 +9,6 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/gorilla/mux"
 )
 
 // POST /api/v1/login/magic — request a magic login link.
@@ -126,7 +125,7 @@ func buildMagicBase(r *http.Request) string {
 // GET /api/v1/login/magic/{token} — consume a magic login token and issue a session.
 func useMagicLogin(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	token := mux.Vars(r)["token"]
+	token := r.PathValue("token")
 
 	var id, userID int
 	var expiresAt string

@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"github.com/gorilla/mux"
 )
 
 type Dance struct {
@@ -62,7 +61,7 @@ func deleteDance(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "Forbidden: only admins may delete dances", http.StatusForbidden)
 		return
 	}
-	id := mux.Vars(r)["id"]
+	id := r.PathValue("id")
 	result, err := db.Exec("DELETE FROM dances WHERE id = ?", id)
 	if err != nil {
 		writeError(w, err.Error(), http.StatusInternalServerError)

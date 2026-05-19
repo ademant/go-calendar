@@ -14,7 +14,6 @@ import (
 	"time"
 
 	ics "github.com/arran4/golang-ical"
-	"github.com/gorilla/mux"
 )
 
 // querier is satisfied by both *sql.DB and *sql.Tx, allowing helpers to
@@ -984,7 +983,7 @@ func getEvent(w http.ResponseWriter, r *http.Request) {
 	accept := r.Header.Get("Accept")
 	userRole := r.Header.Get("X-User-Role")
 	callerID, _ := strconv.Atoi(r.Header.Get("X-User-ID"))
-	id := mux.Vars(r)["id"]
+	id := r.PathValue("id")
 
 	event, err := scanEventRow(db.QueryRow(eventListSelect+" WHERE e.id = ?", id))
 	if err == sql.ErrNoRows {
@@ -1034,7 +1033,7 @@ func updateEvent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	callerID, _ := strconv.Atoi(r.Header.Get("X-User-ID"))
-	id, err := strconv.Atoi(mux.Vars(r)["id"])
+	id, err := strconv.Atoi(r.PathValue("id"))
 	if err != nil {
 		writeError(w, "invalid id", http.StatusBadRequest)
 		return
@@ -1152,7 +1151,7 @@ func deleteEvent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	id := mux.Vars(r)["id"]
+	id := r.PathValue("id")
 
 	if userRole != RoleAdmin {
 		callerID, _ := strconv.Atoi(r.Header.Get("X-User-ID"))
@@ -1236,7 +1235,7 @@ func getEventsICS(w http.ResponseWriter, r *http.Request) {
 
 // GET /api/v1/events/{id}.ics — single-event iCal download
 func getEventICS(w http.ResponseWriter, r *http.Request) {
-	id, err := strconv.Atoi(mux.Vars(r)["id"])
+	id, err := strconv.Atoi(r.PathValue("id"))
 	if err != nil {
 		http.NotFound(w, r)
 		return
@@ -1256,7 +1255,7 @@ func getEventICS(w http.ResponseWriter, r *http.Request) {
 
 // GET /api/v1/events/tag/{tag}.ics — public iCal feed of future published events for a specific tag
 func getEventsByTagICS(w http.ResponseWriter, r *http.Request) {
-	tag := mux.Vars(r)["tag"]
+	tag := r.PathValue("tag")
 	now := time.Now().Unix()
 	if checkPublicCacheHeaders(w, r,
 		"SELECT COUNT(*), MAX(created_at) FROM events WHERE is_published = 1 AND start_time >= ? AND EXISTS (SELECT 1 FROM json_each(tags) WHERE value = ?)",
@@ -1289,7 +1288,7 @@ func getEventsByTagICS(w http.ResponseWriter, r *http.Request) {
 
 // GET /api/v1/events/town/{town}.ics — public iCal feed of future published events for a specific town
 func getEventsByTownICS(w http.ResponseWriter, r *http.Request) {
-	town := mux.Vars(r)["town"]
+	town := r.PathValue("town")
 	now := time.Now().Unix()
 	if checkPublicCacheHeaders(w, r,
 		"SELECT COUNT(*), MAX(e.created_at) FROM events e LEFT JOIN locations l ON e.location_id = l.id WHERE e.is_published = 1 AND e.start_time >= ? AND l.town LIKE ?",

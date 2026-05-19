@@ -9,7 +9,6 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/gorilla/mux"
 )
 
 var musicianImagesDir string
@@ -71,7 +70,7 @@ func (c *musicianImageCache) remove(id int) {
 
 // GET /api/v1/musician-images/{id}
 func getMusicianImage(w http.ResponseWriter, r *http.Request) {
-	idStr := mux.Vars(r)["id"]
+	idStr := r.PathValue("id")
 	for _, c := range idStr {
 		if c < '0' || c > '9' {
 			writeError(w, "Invalid musician ID", http.StatusBadRequest)
@@ -94,7 +93,7 @@ func uploadMusicianImage(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "Forbidden", http.StatusForbidden)
 		return
 	}
-	idStr := mux.Vars(r)["id"]
+	idStr := r.PathValue("id")
 	id, err := strconv.Atoi(idStr)
 	if err != nil {
 		writeError(w, "Invalid musician ID", http.StatusBadRequest)
@@ -134,7 +133,7 @@ func deleteMusicianImage(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "Forbidden", http.StatusForbidden)
 		return
 	}
-	idStr := mux.Vars(r)["id"]
+	idStr := r.PathValue("id")
 	for _, c := range idStr {
 		if c < '0' || c > '9' {
 			writeError(w, "Invalid musician ID", http.StatusBadRequest)

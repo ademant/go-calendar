@@ -10,7 +10,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gorilla/mux"
 )
 
 type Booking struct {
@@ -95,7 +94,7 @@ func listBookings(w http.ResponseWriter, r *http.Request) {
 	callerID, _ := strconv.Atoi(r.Header.Get("X-User-ID"))
 	callerRole := r.Header.Get("X-User-Role")
 
-	eventID, err := strconv.Atoi(mux.Vars(r)["id"])
+	eventID, err := strconv.Atoi(r.PathValue("id"))
 	if err != nil {
 		writeError(w, "invalid event id", http.StatusBadRequest)
 		return
@@ -131,7 +130,7 @@ func listBookings(w http.ResponseWriter, r *http.Request) {
 // POST /api/v1/events/{id}/bookings
 // Public. Creates a pending booking and sends an email verification link.
 func createBooking(w http.ResponseWriter, r *http.Request) {
-	eventID, err := strconv.Atoi(mux.Vars(r)["id"])
+	eventID, err := strconv.Atoi(r.PathValue("id"))
 	if err != nil {
 		writeError(w, "invalid event id", http.StatusBadRequest)
 		return
@@ -218,7 +217,7 @@ func createBooking(w http.ResponseWriter, r *http.Request) {
 // GET /api/v1/bookings/verify/{token}
 // Public. Marks the booking as confirmed and generates a QR token.
 func verifyBooking(w http.ResponseWriter, r *http.Request) {
-	token := mux.Vars(r)["token"]
+	token := r.PathValue("token")
 
 	var id, eventID int
 	var expiresAt, name, email, lang string
@@ -272,7 +271,7 @@ func updateBookingStatus(w http.ResponseWriter, r *http.Request) {
 	callerID, _ := strconv.Atoi(r.Header.Get("X-User-ID"))
 	callerRole := r.Header.Get("X-User-Role")
 
-	bookingID, err := strconv.Atoi(mux.Vars(r)["id"])
+	bookingID, err := strconv.Atoi(r.PathValue("id"))
 	if err != nil {
 		writeError(w, "invalid booking id", http.StatusBadRequest)
 		return
@@ -323,7 +322,7 @@ func checkinBooking(w http.ResponseWriter, r *http.Request) {
 	callerID, _ := strconv.Atoi(r.Header.Get("X-User-ID"))
 	callerRole := r.Header.Get("X-User-Role")
 
-	qrToken := mux.Vars(r)["qr_token"]
+	qrToken := r.PathValue("qr_token")
 
 	var b Booking
 	err := db.QueryRow(
@@ -361,7 +360,7 @@ func deleteBooking(w http.ResponseWriter, r *http.Request) {
 	callerID, _ := strconv.Atoi(r.Header.Get("X-User-ID"))
 	callerRole := r.Header.Get("X-User-Role")
 
-	bookingID, err := strconv.Atoi(mux.Vars(r)["id"])
+	bookingID, err := strconv.Atoi(r.PathValue("id"))
 	if err != nil {
 		writeError(w, "invalid booking id", http.StatusBadRequest)
 		return

@@ -7,7 +7,6 @@ import (
 	"io"
 	"net/http"
 
-	"github.com/gorilla/mux"
 )
 
 type Musician struct {
@@ -118,7 +117,7 @@ func getMusicians(w http.ResponseWriter, r *http.Request) {
 func getMusician(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
-	id := mux.Vars(r)["id"]
+	id := r.PathValue("id")
 	musician, err := scanMusician(db.QueryRow("SELECT "+musicianCols+" FROM musicians WHERE id = ?", id))
 	if err == sql.ErrNoRows {
 		writeError(w, "Musician not found", http.StatusNotFound)
@@ -192,7 +191,7 @@ func updateMusician(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	id := mux.Vars(r)["id"]
+	id := r.PathValue("id")
 
 	var req MusicianCreateRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -237,7 +236,7 @@ func deleteMusician(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	id := mux.Vars(r)["id"]
+	id := r.PathValue("id")
 
 	result, err := db.Exec("DELETE FROM musicians WHERE id = ?", id)
 	if err != nil {

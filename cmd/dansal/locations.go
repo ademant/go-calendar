@@ -10,7 +10,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/gorilla/mux"
 )
 
 type Location struct {
@@ -279,8 +278,7 @@ func createLocation(w http.ResponseWriter, r *http.Request) {
 func getLocation(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
-	vars := mux.Vars(r)
-	id := vars["id"]
+	id := r.PathValue("id")
 
 	var location Location
 	var orgID sql.NullInt64
@@ -310,7 +308,7 @@ func patchLocation(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
 	requesterRole := r.Header.Get("X-User-Role")
-	id := mux.Vars(r)["id"]
+	id := r.PathValue("id")
 
 	if requesterRole != RoleAdmin {
 		if requesterRole != RoleUser && requesterRole != RolePublisher {
@@ -424,8 +422,7 @@ func deleteLocation(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
 	requesterRole := r.Header.Get("X-User-Role")
-	vars := mux.Vars(r)
-	id := vars["id"]
+	id := r.PathValue("id")
 
 	if requesterRole != RoleAdmin {
 		if requesterRole != RoleUser {

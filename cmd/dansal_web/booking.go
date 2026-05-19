@@ -5,13 +5,12 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/gorilla/mux"
 )
 
 // POST /events/{id}/book
 func bookingPostHandler(cfg *Config, client *DansalClient, i18n *I18n) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		eventID, err := strconv.Atoi(mux.Vars(r)["id"])
+		eventID, err := strconv.Atoi(r.PathValue("id"))
 		if err != nil {
 			http.NotFound(w, r)
 			return
@@ -44,7 +43,7 @@ func bookingPostHandler(cfg *Config, client *DansalClient, i18n *I18n) http.Hand
 // GET /bookings/verify/{token}
 func bookingVerifyHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		token := mux.Vars(r)["token"]
+		token := r.PathValue("token")
 		result, err := client.VerifyBooking(r.Context(), token)
 
 		title := i18n.T(r, "book_verify_title")

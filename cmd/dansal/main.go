@@ -17,7 +17,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/gorilla/mux"
 	_ "github.com/mattn/go-sqlite3"
 )
 
@@ -252,6 +251,14 @@ func SecurityHeadersMiddleware(next http.Handler) http.Handler {
 	})
 }
 
+
+// middlewareChain applies middlewares in order so the first listed is outermost.
+func middlewareChain(h http.Handler, mws ...func(http.Handler) http.Handler) http.Handler {
+	for i := len(mws) - 1; i >= 0; i-- {
+		h = mws[i](h)
+	}
+	return h
+}
 
 func startTokenCleanup() {
 	go func() {
@@ -936,192 +943,159 @@ func main() {
 	loginRateLimiter = NewRateLimiter(config.Server.LoginRateLimit, time.Minute)
 	connLimiter = NewConnLimiter(config.Server.MaxConnsPerIP)
 
-	router := mux.NewRouter()
-	router.Use(MetricsMiddleware)
-	router.Use(CORSMiddleware)
-	router.Use(SecurityHeadersMiddleware)
-	router.Use(GzipMiddleware)
-	router.Use(MaxBodyMiddleware)
-	router.Use(ConnLimitMiddleware)
-	router.Use(RateLimitMiddleware)
+	smux := http.NewServeMux()
+
+	// auth wraps a handler with TokenMiddleware (requires valid session token).
+	auth := func(h http.HandlerFunc) http.Handler { return TokenMiddleware(http.HandlerFunc(h)) }
+	// optAuth enriches the response when a token is present but does not require one.
+	optAuth := OptionalTokenMiddleware
 
 	// Info endpoint (public)
-	router.HandleFunc("/api/v1/info", getInfo).Methods("GET")
+	smux.HandleFunc("GET /api/v1/info", getInfo)
 
 	// Authentication endpoints (no token required)
-	router.HandleFunc("/api/v1/login", login).Methods("GET", "POST")
-	router.HandleFunc("/api/v1/login", logout).Methods("DELETE")
-	router.HandleFunc("/api/v1/login/magic", requestMagicLogin).Methods("POST")
-	router.HandleFunc("/api/v1/login/magic/{token}", useMagicLogin).Methods("GET")
+	smux.HandleFunc("GET /api/v1/login", login)
+	smux.HandleFunc("POST /api/v1/login", login)
+	smux.HandleFunc("DELETE /api/v1/login", logout)
+	smux.HandleFunc("POST /api/v1/login/magic", requestMagicLogin)
+	smux.HandleFunc("GET /api/v1/login/magic/{token}", useMagicLogin)
 
 	// Verification endpoints (public)
-	router.HandleFunc("/api/v1/verify/{token}", consumeVerification).Methods("GET")
-	router.HandleFunc("/api/v1/invites/{token}", useInvite).Methods("POST")
+	smux.HandleFunc("GET /api/v1/verify/{token}", consumeVerification)
+	smux.HandleFunc("POST /api/v1/invites/{token}", useInvite)
 
 	// Telegram bot webhook (public, called by Telegram servers)
-	router.HandleFunc("/telegram/webhook", telegramWebhookHandler).Methods("POST")
+	smux.HandleFunc("POST /telegram/webhook", telegramWebhookHandler)
 
 	// Contact board — public reads and post actions
-	router.HandleFunc("/api/v1/events/{id}/contact-posts", listContactPosts).Methods("GET")
-	router.HandleFunc("/api/v1/events/{id}/contact-posts", createContactPost).Methods("POST")
-	router.HandleFunc("/api/v1/contact-posts/verify/{token}", verifyContactPost).Methods("GET")
-	router.HandleFunc("/api/v1/contact-posts/delete/{token}", deleteContactPostByToken).Methods("GET")
-	router.HandleFunc("/api/v1/contact-posts/{id}/contact", contactPoster).Methods("POST")
+	smux.HandleFunc("GET /api/v1/events/{id}/contact-posts", listContactPosts)
+	smux.HandleFunc("POST /api/v1/events/{id}/contact-posts", createContactPost)
+	smux.HandleFunc("GET /api/v1/contact-posts/verify/{token}", verifyContactPost)
+	smux.HandleFunc("GET /api/v1/contact-posts/delete/{token}", deleteContactPostByToken)
+	smux.HandleFunc("POST /api/v1/contact-posts/{id}/contact", contactPoster)
 
 	// Bookings — public create + verify
-	router.HandleFunc("/api/v1/events/{id}/bookings", createBooking).Methods("POST")
-	router.HandleFunc("/api/v1/bookings/verify/{token}", verifyBooking).Methods("GET")
+	smux.HandleFunc("POST /api/v1/events/{id}/bookings", createBooking)
+	smux.HandleFunc("GET /api/v1/bookings/verify/{token}", verifyBooking)
 
-	// iCal feeds (public, no auth)
-	router.HandleFunc("/api/v1/events.ics", getEventsICS).Methods("GET")
-	router.HandleFunc("/api/v1/events/{id:[0-9]+}.ics", getEventICS).Methods("GET")
-	router.HandleFunc("/api/v1/events/tag/{tag}.ics", getEventsByTagICS).Methods("GET")
-	router.HandleFunc("/api/v1/events/town/{town}.ics", getEventsByTownICS).Methods("GET")
+	// iCal feeds (public, no auth); {id}.ics uses plain wildcard — non-numeric
+	// IDs are rejected by the handler's strconv.Atoi call.
+	smux.HandleFunc("GET /api/v1/events.ics", getEventsICS)
+	smux.HandleFunc("GET /api/v1/events/{id}.ics", getEventICS)
+	smux.HandleFunc("GET /api/v1/events/tag/{tag}.ics", getEventsByTagICS)
+	smux.HandleFunc("GET /api/v1/events/town/{town}.ics", getEventsByTownICS)
 
-	// Public reads — no auth required; OptionalTokenMiddleware enriches the
-	// response when a valid token is present (e.g. editable flag, unpublished events).
-	optAuth := OptionalTokenMiddleware
-	router.Handle("/api/v1/events", optAuth(http.HandlerFunc(getEvents))).Methods("GET")
-	router.Handle("/api/v1/events/{id}", optAuth(http.HandlerFunc(getEvent))).Methods("GET")
-	router.Handle("/api/v1/locations", optAuth(http.HandlerFunc(getLocations))).Methods("GET")
-	router.Handle("/api/v1/locations/{id}", optAuth(http.HandlerFunc(getLocation))).Methods("GET")
-	router.Handle("/api/v1/organizations", optAuth(http.HandlerFunc(getOrganizations))).Methods("GET")
-	router.Handle("/api/v1/organizations/{id}", optAuth(http.HandlerFunc(getOrganization))).Methods("GET")
-	router.Handle("/api/v1/musicians", optAuth(http.HandlerFunc(getMusicians))).Methods("GET")
-	router.Handle("/api/v1/musicians/{id}", optAuth(http.HandlerFunc(getMusician))).Methods("GET")
-	router.Handle("/api/v1/tags", optAuth(http.HandlerFunc(getTags))).Methods("GET")
-	router.Handle("/api/v1/dances", optAuth(http.HandlerFunc(getDances))).Methods("GET")
-	router.Handle("/api/v1/images/{event_id}", optAuth(http.HandlerFunc(getEventImage))).Methods("GET")
-	router.HandleFunc("/api/v1/musician-images/{id}", getMusicianImage).Methods("GET")
-	router.HandleFunc("/api/v1/org-images/{id}", getOrgImage).Methods("GET")
+	// Public reads — OptionalTokenMiddleware enriches the response when a valid
+	// token is present (e.g. editable flag, unpublished events).
+	smux.Handle("GET /api/v1/events", optAuth(http.HandlerFunc(getEvents)))
+	smux.Handle("GET /api/v1/events/{id}", optAuth(http.HandlerFunc(getEvent)))
+	smux.Handle("GET /api/v1/locations", optAuth(http.HandlerFunc(getLocations)))
+	smux.Handle("GET /api/v1/locations/{id}", optAuth(http.HandlerFunc(getLocation)))
+	smux.Handle("GET /api/v1/organizations", optAuth(http.HandlerFunc(getOrganizations)))
+	smux.Handle("GET /api/v1/organizations/{id}", optAuth(http.HandlerFunc(getOrganization)))
+	smux.Handle("GET /api/v1/musicians", optAuth(http.HandlerFunc(getMusicians)))
+	smux.Handle("GET /api/v1/musicians/{id}", optAuth(http.HandlerFunc(getMusician)))
+	smux.Handle("GET /api/v1/tags", optAuth(http.HandlerFunc(getTags)))
+	smux.Handle("GET /api/v1/dances", optAuth(http.HandlerFunc(getDances)))
+	smux.Handle("GET /api/v1/images/{event_id}", optAuth(http.HandlerFunc(getEventImage)))
+	smux.HandleFunc("GET /api/v1/musician-images/{id}", getMusicianImage)
+	smux.HandleFunc("GET /api/v1/org-images/{id}", getOrgImage)
 
 	// Protected event writes
-	eventRoutes := router.PathPrefix("/api/v1/events").Subrouter()
-	eventRoutes.Use(TokenMiddleware)
-	eventRoutes.HandleFunc("", createEvent).Methods("POST")
-	eventRoutes.HandleFunc("/{id}", updateEvent).Methods("PUT")
-	eventRoutes.HandleFunc("/{id}", deleteEvent).Methods("DELETE")
-	eventRoutes.HandleFunc("/{id}/timetable", addTimetableEntries).Methods("POST")
-	eventRoutes.HandleFunc("/{id}/timetable", replaceTimetable).Methods("PUT")
+	smux.Handle("POST /api/v1/events", auth(createEvent))
+	smux.Handle("PUT /api/v1/events/{id}", auth(updateEvent))
+	smux.Handle("DELETE /api/v1/events/{id}", auth(deleteEvent))
+	smux.Handle("POST /api/v1/events/{id}/timetable", auth(addTimetableEntries))
+	smux.Handle("PUT /api/v1/events/{id}/timetable", auth(replaceTimetable))
+	smux.Handle("GET /api/v1/events/{id}/bookings", auth(listBookings))
 
 	// Protected location writes
-	locationRoutes := router.PathPrefix("/api/v1/locations").Subrouter()
-	locationRoutes.Use(TokenMiddleware)
-	locationRoutes.HandleFunc("", createLocation).Methods("POST")
-	locationRoutes.HandleFunc("/bulk-assign-org", bulkAssignLocationOrg).Methods("POST")
-	locationRoutes.HandleFunc("/{id}", patchLocation).Methods("PATCH")
-	locationRoutes.HandleFunc("/{id}", deleteLocation).Methods("DELETE")
+	smux.Handle("POST /api/v1/locations", auth(createLocation))
+	smux.Handle("POST /api/v1/locations/bulk-assign-org", auth(bulkAssignLocationOrg))
+	smux.Handle("PATCH /api/v1/locations/{id}", auth(patchLocation))
+	smux.Handle("DELETE /api/v1/locations/{id}", auth(deleteLocation))
 
 	// Dance endpoints (protected writes)
-	danceRoutes := router.PathPrefix("/api/v1/dances").Subrouter()
-	danceRoutes.Use(TokenMiddleware)
-	danceRoutes.HandleFunc("", createDance).Methods("POST")
-	danceRoutes.HandleFunc("/{id}", deleteDance).Methods("DELETE")
+	smux.Handle("POST /api/v1/dances", auth(createDance))
+	smux.Handle("DELETE /api/v1/dances/{id}", auth(deleteDance))
 
 	// Protected musician writes
-	musicianRoutes := router.PathPrefix("/api/v1/musicians").Subrouter()
-	musicianRoutes.Use(TokenMiddleware)
-	musicianRoutes.HandleFunc("", createMusician).Methods("POST")
-	musicianRoutes.HandleFunc("/{id}", updateMusician).Methods("PUT")
-	musicianRoutes.HandleFunc("/{id}", deleteMusician).Methods("DELETE")
+	smux.Handle("POST /api/v1/musicians", auth(createMusician))
+	smux.Handle("PUT /api/v1/musicians/{id}", auth(updateMusician))
+	smux.Handle("DELETE /api/v1/musicians/{id}", auth(deleteMusician))
 
 	// Protected image writes
-	imageRoutes := router.PathPrefix("/api/v1/images").Subrouter()
-	imageRoutes.Use(TokenMiddleware)
-	imageRoutes.HandleFunc("/{event_id}", uploadEventImage).Methods("POST")
-	imageRoutes.HandleFunc("/{event_id}", deleteEventImage).Methods("DELETE")
-
-	// Protected musician image writes
-	musicianImgRoutes := router.PathPrefix("/api/v1/musician-images").Subrouter()
-	musicianImgRoutes.Use(TokenMiddleware)
-	musicianImgRoutes.HandleFunc("/{id}", uploadMusicianImage).Methods("POST")
-	musicianImgRoutes.HandleFunc("/{id}", deleteMusicianImage).Methods("DELETE")
-
-	// Protected org image writes
-	orgImgRoutes := router.PathPrefix("/api/v1/org-images").Subrouter()
-	orgImgRoutes.Use(TokenMiddleware)
-	orgImgRoutes.HandleFunc("/{id}", uploadOrgImage).Methods("POST")
-	orgImgRoutes.HandleFunc("/{id}", deleteOrgImage).Methods("DELETE")
+	smux.Handle("POST /api/v1/images/{event_id}", auth(uploadEventImage))
+	smux.Handle("DELETE /api/v1/images/{event_id}", auth(deleteEventImage))
+	smux.Handle("POST /api/v1/musician-images/{id}", auth(uploadMusicianImage))
+	smux.Handle("DELETE /api/v1/musician-images/{id}", auth(deleteMusicianImage))
+	smux.Handle("POST /api/v1/org-images/{id}", auth(uploadOrgImage))
+	smux.Handle("DELETE /api/v1/org-images/{id}", auth(deleteOrgImage))
 
 	// User endpoints (protected)
-	userRoutes := router.PathPrefix("/api/v1/users").Subrouter()
-	userRoutes.Use(TokenMiddleware)
-	userRoutes.HandleFunc("", getUsers).Methods("GET")
-	userRoutes.HandleFunc("", createUser).Methods("POST")
-	userRoutes.HandleFunc("/{id}", getUser).Methods("GET")
-	userRoutes.HandleFunc("/{id}", updateUser).Methods("PUT")
-	userRoutes.HandleFunc("/{id}", deleteUser).Methods("DELETE")
-	userRoutes.HandleFunc("/{id}/verify", sendVerification).Methods("POST")
-	userRoutes.HandleFunc("/{id}/telegram/message", sendTelegramMessageToUser).Methods("POST")
+	smux.Handle("GET /api/v1/users", auth(getUsers))
+	smux.Handle("POST /api/v1/users", auth(createUser))
+	smux.Handle("GET /api/v1/users/{id}", auth(getUser))
+	smux.Handle("PUT /api/v1/users/{id}", auth(updateUser))
+	smux.Handle("DELETE /api/v1/users/{id}", auth(deleteUser))
+	smux.Handle("POST /api/v1/users/{id}/verify", auth(sendVerification))
+	smux.Handle("POST /api/v1/users/{id}/telegram/message", auth(sendTelegramMessageToUser))
 
-	// Contact board — protected delete (admin or org member)
-	contactRoutes := router.PathPrefix("/api/v1/contact-posts").Subrouter()
-	contactRoutes.Use(TokenMiddleware)
-	contactRoutes.HandleFunc("/{id}", deleteContactPost).Methods("DELETE")
+	// Contact board — protected delete
+	smux.Handle("DELETE /api/v1/contact-posts/{id}", auth(deleteContactPost))
 
-	// Bookings — protected management (admin or org member)
-	bookingRoutes := router.PathPrefix("/api/v1/bookings").Subrouter()
-	bookingRoutes.Use(TokenMiddleware)
-	bookingRoutes.HandleFunc("/checkin/{qr_token}", checkinBooking).Methods("GET")
-	bookingRoutes.HandleFunc("/{id}/status", updateBookingStatus).Methods("PATCH")
-	bookingRoutes.HandleFunc("/{id}", deleteBooking).Methods("DELETE")
+	// Bookings — protected management
+	smux.Handle("GET /api/v1/bookings/checkin/{qr_token}", auth(checkinBooking))
+	smux.Handle("PATCH /api/v1/bookings/{id}/status", auth(updateBookingStatus))
+	smux.Handle("DELETE /api/v1/bookings/{id}", auth(deleteBooking))
 
-	// Bookings list on event (protected)
-	eventBookingRoutes := router.PathPrefix("/api/v1/events").Subrouter()
-	eventBookingRoutes.Use(TokenMiddleware)
-	eventBookingRoutes.HandleFunc("/{id}/bookings", listBookings).Methods("GET")
-
-	// Organization endpoints (protected)
-	orgRoutes := router.PathPrefix("/api/v1/organizations").Subrouter()
-	orgRoutes.Use(TokenMiddleware)
-	orgRoutes.HandleFunc("", getOrganizations).Methods("GET")
-	orgRoutes.HandleFunc("", createOrganization).Methods("POST")
-	orgRoutes.HandleFunc("/check-actor-name", checkActorName).Methods("GET")
-	orgRoutes.HandleFunc("/{id}", getOrganization).Methods("GET")
-	orgRoutes.HandleFunc("/{id}", updateOrganization).Methods("PUT")
-	orgRoutes.HandleFunc("/{id}", deleteOrganization).Methods("DELETE")
-	orgRoutes.HandleFunc("/{id}/members", getOrganizationMembers).Methods("GET")
-	orgRoutes.HandleFunc("/{id}/members", addOrganizationMember).Methods("POST")
-	orgRoutes.HandleFunc("/{id}/members/{user_id}", removeOrganizationMember).Methods("DELETE")
+	// Organization writes (protected)
+	smux.Handle("POST /api/v1/organizations", auth(createOrganization))
+	smux.Handle("GET /api/v1/organizations/check-actor-name", auth(checkActorName))
+	smux.Handle("PUT /api/v1/organizations/{id}", auth(updateOrganization))
+	smux.Handle("DELETE /api/v1/organizations/{id}", auth(deleteOrganization))
+	smux.Handle("GET /api/v1/organizations/{id}/members", auth(getOrganizationMembers))
+	smux.Handle("POST /api/v1/organizations/{id}/members", auth(addOrganizationMember))
+	smux.Handle("DELETE /api/v1/organizations/{id}/members/{user_id}", auth(removeOrganizationMember))
 
 	// Fetch URL endpoints (protected)
-	fetchRoutes := router.PathPrefix("/api/v1/fetchurl").Subrouter()
-	fetchRoutes.Use(TokenMiddleware)
-	fetchRoutes.HandleFunc("", getFetchSources).Methods("GET")
-	fetchRoutes.HandleFunc("", fetchURL).Methods("POST")
-	fetchRoutes.HandleFunc("/bulk-delete", bulkDeleteFetchSources).Methods("POST")
-	fetchRoutes.HandleFunc("/bulk-fetch", bulkFetchURLsByIDs).Methods("POST")
-	fetchRoutes.HandleFunc("/bulk-assign-org", bulkAssignFetchSourceOrg).Methods("POST")
-	fetchRoutes.HandleFunc("/{id}", getFetchSource).Methods("GET")
-	fetchRoutes.HandleFunc("/{id}", patchFetchSource).Methods("PATCH")
-	fetchRoutes.HandleFunc("/{id}", deleteFetchSource).Methods("DELETE")
-	fetchRoutes.HandleFunc("/{id}/fetch", fetchURLByID).Methods("POST")
+	smux.Handle("GET /api/v1/fetchurl", auth(getFetchSources))
+	smux.Handle("POST /api/v1/fetchurl", auth(fetchURL))
+	smux.Handle("POST /api/v1/fetchurl/bulk-delete", auth(bulkDeleteFetchSources))
+	smux.Handle("POST /api/v1/fetchurl/bulk-fetch", auth(bulkFetchURLsByIDs))
+	smux.Handle("POST /api/v1/fetchurl/bulk-assign-org", auth(bulkAssignFetchSourceOrg))
+	smux.Handle("GET /api/v1/fetchurl/{id}", auth(getFetchSource))
+	smux.Handle("PATCH /api/v1/fetchurl/{id}", auth(patchFetchSource))
+	smux.Handle("DELETE /api/v1/fetchurl/{id}", auth(deleteFetchSource))
+	smux.Handle("POST /api/v1/fetchurl/{id}/fetch", auth(fetchURLByID))
 
 	// API key endpoints (protected)
-	apiKeyRoutes := router.PathPrefix("/api/v1/apikeys").Subrouter()
-	apiKeyRoutes.Use(TokenMiddleware)
-	apiKeyRoutes.HandleFunc("", listAPIKeys).Methods("GET")
-	apiKeyRoutes.HandleFunc("", createAPIKey).Methods("POST")
-	apiKeyRoutes.HandleFunc("/{id}", deleteAPIKey).Methods("DELETE")
+	smux.Handle("GET /api/v1/apikeys", auth(listAPIKeys))
+	smux.Handle("POST /api/v1/apikeys", auth(createAPIKey))
+	smux.Handle("DELETE /api/v1/apikeys/{id}", auth(deleteAPIKey))
 
 	// Invite management (protected)
-	inviteRoutes := router.PathPrefix("/api/v1/invites").Subrouter()
-	inviteRoutes.Use(TokenMiddleware)
-	inviteRoutes.HandleFunc("", listInvites).Methods("GET")
-	inviteRoutes.HandleFunc("", createInvite).Methods("POST")
-	inviteRoutes.HandleFunc("/{token}", revokeInvite).Methods("DELETE")
+	smux.Handle("GET /api/v1/invites", auth(listInvites))
+	smux.Handle("POST /api/v1/invites", auth(createInvite))
+	smux.Handle("DELETE /api/v1/invites/{token}", auth(revokeInvite))
 
 	// Session endpoints (protected)
-	sessionRoutes := router.PathPrefix("/api/v1/sessions").Subrouter()
-	sessionRoutes.Use(TokenMiddleware)
-	sessionRoutes.HandleFunc("", getSessions).Methods("GET")
-	sessionRoutes.HandleFunc("/{id}", deleteSession).Methods("DELETE")
+	smux.Handle("GET /api/v1/sessions", auth(getSessions))
+	smux.Handle("DELETE /api/v1/sessions/{id}", auth(deleteSession))
 
 	// Admin site config (protected, admin-only)
-	adminCfgRoutes := router.PathPrefix("/api/v1/admin/config").Subrouter()
-	adminCfgRoutes.Use(TokenMiddleware)
-	adminCfgRoutes.HandleFunc("", getAdminConfig).Methods("GET")
-	adminCfgRoutes.HandleFunc("", patchAdminConfig).Methods("PATCH")
+	smux.Handle("GET /api/v1/admin/config", auth(getAdminConfig))
+	smux.Handle("PATCH /api/v1/admin/config", auth(patchAdminConfig))
+
+	// Middleware chain: MetricsMiddleware is outermost to capture all status codes.
+	handler := MetricsMiddleware(smux)(middlewareChain(smux,
+		CORSMiddleware,
+		SecurityHeadersMiddleware,
+		GzipMiddleware,
+		MaxBodyMiddleware,
+		ConnLimitMiddleware,
+		RateLimitMiddleware,
+	))
 
 	adminLn := startAdminSocket(config.Server.AdminSocket)
 	startMetricsServer()
@@ -1130,7 +1104,7 @@ func main() {
 	log.Printf("Server starting on %s\n", port)
 	srv := &http.Server{
 		Addr:         port,
-		Handler:      router,
+		Handler:      handler,
 		ReadTimeout:  time.Duration(config.Server.ReadTimeoutSecs) * time.Second,
 		WriteTimeout: time.Duration(config.Server.WriteTimeoutSecs) * time.Second,
 		IdleTimeout:  time.Duration(config.Server.IdleTimeoutSecs) * time.Second,

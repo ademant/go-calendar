@@ -9,7 +9,6 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/gorilla/mux"
 )
 
 var orgImagesDir string
@@ -71,7 +70,7 @@ func (c *orgImageCache) remove(id int) {
 
 // GET /api/v1/org-images/{id}
 func getOrgImage(w http.ResponseWriter, r *http.Request) {
-	idStr := mux.Vars(r)["id"]
+	idStr := r.PathValue("id")
 	for _, c := range idStr {
 		if c < '0' || c > '9' {
 			writeError(w, "Invalid organization ID", http.StatusBadRequest)
@@ -94,7 +93,7 @@ func uploadOrgImage(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "Forbidden", http.StatusForbidden)
 		return
 	}
-	idStr := mux.Vars(r)["id"]
+	idStr := r.PathValue("id")
 	id, err := strconv.Atoi(idStr)
 	if err != nil {
 		writeError(w, "Invalid organization ID", http.StatusBadRequest)
@@ -141,7 +140,7 @@ func deleteOrgImage(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "Forbidden", http.StatusForbidden)
 		return
 	}
-	idStr := mux.Vars(r)["id"]
+	idStr := r.PathValue("id")
 	for _, c := range idStr {
 		if c < '0' || c > '9' {
 			writeError(w, "Invalid organization ID", http.StatusBadRequest)

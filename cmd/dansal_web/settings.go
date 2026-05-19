@@ -3,7 +3,6 @@ package main
 import (
 	"net/http"
 
-	"github.com/gorilla/mux"
 )
 
 type SettingsData struct {
@@ -125,7 +124,7 @@ type VerifyData struct {
 
 func verifyEmailHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		token := mux.Vars(r)["token"]
+		token := r.PathValue("token")
 		err := client.ConsumeVerification(r.Context(), token)
 		if err == nil && getSessionUser(r) != nil {
 			http.Redirect(w, r, "/settings?verified=1", http.StatusSeeOther)

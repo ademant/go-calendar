@@ -8,7 +8,6 @@ import (
 	"strings"
 
 	ics "github.com/arran4/golang-ical"
-	"github.com/gorilla/mux"
 )
 
 type Organization struct {
@@ -210,7 +209,7 @@ func createOrganization(w http.ResponseWriter, r *http.Request) {
 // GET /api/v1/organizations/{id}
 func getOrganization(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	id := mux.Vars(r)["id"]
+	id := r.PathValue("id")
 	o, err := scanOrg(db.QueryRow("SELECT "+orgSelectCols+" FROM organizations WHERE id = ?", id))
 	if err == sql.ErrNoRows {
 		writeError(w, "Organization not found", http.StatusNotFound)
@@ -234,7 +233,7 @@ func updateOrganization(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "Forbidden", http.StatusForbidden)
 		return
 	}
-	id := mux.Vars(r)["id"]
+	id := r.PathValue("id")
 	orgID, err := strconv.Atoi(id)
 	if err != nil {
 		writeError(w, "Invalid organization ID", http.StatusBadRequest)
@@ -298,7 +297,7 @@ func deleteOrganization(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "Forbidden: only admins may delete organizations", http.StatusForbidden)
 		return
 	}
-	id := mux.Vars(r)["id"]
+	id := r.PathValue("id")
 	result, err := db.Exec("DELETE FROM organizations WHERE id = ?", id)
 	if err != nil {
 		writeError(w, err.Error(), http.StatusInternalServerError)
@@ -314,7 +313,7 @@ func deleteOrganization(w http.ResponseWriter, r *http.Request) {
 // GET /api/v1/organizations/{id}/members
 func getOrganizationMembers(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	id := mux.Vars(r)["id"]
+	id := r.PathValue("id")
 	rows, err := db.Query(`
 		SELECT om.organization_id, om.user_id, u.username, u.role, om.created_at
 		FROM organization_members om
@@ -345,7 +344,7 @@ func addOrganizationMember(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "Forbidden: only admins may manage organization members", http.StatusForbidden)
 		return
 	}
-	orgID, err := strconv.Atoi(mux.Vars(r)["id"])
+	orgID, err := strconv.Atoi(r.PathValue("id"))
 	if err != nil {
 		writeError(w, "Invalid organization ID", http.StatusBadRequest)
 		return
@@ -392,10 +391,9 @@ func removeOrganizationMember(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "Forbidden: only admins may manage organization members", http.StatusForbidden)
 		return
 	}
-	vars := mux.Vars(r)
 	result, err := db.Exec(
 		"DELETE FROM organization_members WHERE organization_id = ? AND user_id = ?",
-		vars["id"], vars["user_id"],
+		r.PathValue("id"), r.PathValue("user_id"),
 	)
 	if err != nil {
 		writeError(w, err.Error(), http.StatusInternalServerError)

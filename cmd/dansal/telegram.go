@@ -11,7 +11,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gorilla/mux"
 )
 
 // sendTelegramMessage sends a plain-text message to a Telegram chat.
@@ -133,7 +132,7 @@ func sendTelegramMessageToUser(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "Forbidden", http.StatusForbidden)
 		return
 	}
-	id, err := strconv.Atoi(mux.Vars(r)["id"])
+	id, err := strconv.Atoi(r.PathValue("id"))
 	if err != nil {
 		writeError(w, "invalid user ID", http.StatusBadRequest)
 		return

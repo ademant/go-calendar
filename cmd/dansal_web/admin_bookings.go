@@ -4,7 +4,6 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/gorilla/mux"
 )
 
 // userCanManageEvent returns true if su is admin or an org member of the event's organisation.
@@ -40,7 +39,7 @@ func adminBookingsHandler(cfg *Config, tmpls *Templates, client *DansalClient, i
 		if !ok {
 			return
 		}
-		eventID, err := strconv.Atoi(mux.Vars(r)["id"])
+		eventID, err := strconv.Atoi(r.PathValue("id"))
 		if err != nil {
 			http.NotFound(w, r)
 			return
@@ -82,7 +81,7 @@ func adminBookingApproveHandler(cfg *Config, client *DansalClient) http.HandlerF
 		if !ok {
 			return
 		}
-		bookingID, err := strconv.Atoi(mux.Vars(r)["id"])
+		bookingID, err := strconv.Atoi(r.PathValue("id"))
 		if err != nil {
 			http.NotFound(w, r)
 			return
@@ -101,7 +100,7 @@ func adminBookingCancelHandler(cfg *Config, client *DansalClient) http.HandlerFu
 		if !ok {
 			return
 		}
-		bookingID, err := strconv.Atoi(mux.Vars(r)["id"])
+		bookingID, err := strconv.Atoi(r.PathValue("id"))
 		if err != nil {
 			http.NotFound(w, r)
 			return
@@ -120,7 +119,7 @@ func adminBookingDeleteHandler(cfg *Config, client *DansalClient) http.HandlerFu
 		if !ok {
 			return
 		}
-		bookingID, err := strconv.Atoi(mux.Vars(r)["id"])
+		bookingID, err := strconv.Atoi(r.PathValue("id"))
 		if err != nil {
 			http.NotFound(w, r)
 			return
