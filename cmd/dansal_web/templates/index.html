@@ -173,6 +173,7 @@ th.sorted-desc::after{content:" ↓";color:var(--link)}
 .btn-sm{display:inline-block;padding:.2rem .5rem;border:1px solid var(--border-mid);border-radius:3px;font-size:.8rem;text-decoration:none;color:var(--fg-2);margin-right:.2rem;background:var(--bg-card)}
 .btn-sm:hover{background:var(--bg-subtle);color:var(--fg)}
 .badge.workshop{background:var(--badge-warn-bg);color:var(--badge-warn-fg)}
+.badge.badge-difficulty{background:var(--badge-warn-bg);color:var(--badge-warn-fg)}
 .badge.festival{background:var(--badge-ok-bg);color:var(--badge-ok-fg)}
 .badge.avail-limited{background:var(--badge-warn-bg);color:var(--badge-warn-fg)}
 .badge.avail-sold-out{background:var(--badge-danger-bg);color:var(--badge-danger-fg)}
@@ -298,13 +299,22 @@ th.sorted-desc::after{content:" ↓";color:var(--link)}
   var map = null, clusterGroup = null, allMarkers = {};
   var mapFitted = false;
 
+  var diffLabels = {
+    "beginner": "{{$.Strings.T "workshop_difficulty_beginner"}}",
+    "advanced": "{{$.Strings.T "workshop_difficulty_advanced"}}",
+    "profi":    "{{$.Strings.T "workshop_difficulty_profi"}}"
+  };
+
   function buildPopup(e){
     var start=e.s||'';
     var time=start.length>=16?start.slice(0,10)+' '+start.slice(11,16):start.slice(0,10);
     var place=[e.loc,e.town,e.c].filter(Boolean).join(', ');
     var badges='';
     if(e.ball) badges+='<span class="badge" style="margin-right:.2rem">Ball</span>';
-    if(e.ws)   badges+='<span class="badge workshop" style="margin-right:.2rem">Workshop</span>';
+    if(e.ws){
+      badges+='<span class="badge workshop" style="margin-right:.2rem">{{$.Strings.T "filter_type_workshop"}}</span>';
+      if(e.wd) badges+='<span class="badge badge-difficulty" style="margin-right:.2rem">'+escHtml(diffLabels[e.wd]||e.wd)+'</span>';
+    }
     if(e.fest) badges+='<span class="badge festival" style="margin-right:.2rem">Festival</span>';
     if(e.x)    badges+='<span class="badge cancelled">Abgesagt</span>';
     if(e.av==='limited')  badges+='<span class="badge avail-limited" style="margin-left:.2rem">&#x26A0;</span>';
