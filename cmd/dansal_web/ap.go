@@ -3,6 +3,20 @@ package main
 var APContext = []interface{}{
 	"https://www.w3.org/ns/activitystreams",
 	"https://w3id.org/security/v1",
+	map[string]interface{}{
+		"toot":                      "http://joinmastodon.org/ns#",
+		"sc":                        "http://schema.org#",
+		"discoverable":              "toot:discoverable",
+		"indexable":                 "toot:indexable",
+		"manuallyApprovesFollowers": "as:manuallyApprovesFollowers",
+		"PostalAddress":             "sc:PostalAddress",
+		"streetAddress":             "sc:streetAddress",
+		"postalCode":                "sc:postalCode",
+		"addressLocality":           "sc:addressLocality",
+		"addressRegion":             "sc:addressRegion",
+		"addressCountry":            "sc:addressCountry",
+		"Hashtag":                   "as:Hashtag",
+	},
 }
 
 type PublicKey struct {
