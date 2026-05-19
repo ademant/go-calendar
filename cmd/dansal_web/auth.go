@@ -1,12 +1,29 @@
 package main
 
 import (
+	"log"
+	"net"
 	"net/http"
 	"strings"
 	"time"
 
 	"github.com/gorilla/mux"
 )
+
+func getClientIP(r *http.Request) string {
+	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
+		if parts := strings.Split(xff, ","); len(parts) > 0 {
+			return strings.TrimSpace(parts[0])
+		}
+	}
+	if xr := r.Header.Get("X-Real-IP"); xr != "" {
+		return strings.TrimSpace(xr)
+	}
+	if host, _, err := net.SplitHostPort(r.RemoteAddr); err == nil {
+		return host
+	}
+	return r.RemoteAddr
+}
 
 type LoginPageData struct {
 	ErrorKey  string
@@ -49,6 +66,7 @@ func loginHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18
 
 		lr, err := client.Login(r.Context(), username, password)
 		if err != nil {
+			log.Printf("login failed from %s: invalid credentials for %q", getClientIP(r), username)
 			title := i18n.T(r, "login_title")
 			renderTemplate(w, tmpls.login, tmplData(r, cfg, i18n, title, LoginPageData{
 				ErrorKey: "login_error_invalid",
