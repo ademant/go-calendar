@@ -85,8 +85,9 @@ func passwordBytes(password string) []byte {
 func hashPassword(password string) string {
 	h, err := bcrypt.GenerateFromPassword(passwordBytes(password), bcrypt.DefaultCost)
 	if err != nil {
-		sum := sha256.Sum256([]byte(password))
-		return fmt.Sprintf("%x", sum)
+		// Never fall back to a fast hash (like SHA-256) for passwords.
+		// Returning empty signals failure to create a secure password hash.
+		return ""
 	}
 	return string(h)
 }
