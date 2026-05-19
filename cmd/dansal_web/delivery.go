@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strconv"
 	"time"
 )
 
@@ -53,9 +54,9 @@ func pollAndDeliver(cfg *Config, db *sql.DB, client *DansalClient, relayActor *A
 			}
 		}
 
-		// Additionally deliver to relay followers (org_id=0 as sentinel)
+		// Additionally deliver to relay followers wrapped in Announce{Create{Event}}
 		if relayActor != nil && !isDelivered(db, e.ID, 0) {
-			activity := buildCreateActivity(cfg, relayActor.OrgSlug, e)
+			activity := buildAnnounceActivity(cfg, relayActor.OrgSlug, e)
 			if err := deliverToFollowers(cfg, db, relayActor, activity); err != nil {
 				log.Printf("relay delivery event %d: %v", e.ID, err)
 			} else {
@@ -101,6 +102,47 @@ func deliverEventToFollowers(cfg *Config, db *sql.DB, orgID int, event Event) {
 	}
 	activity := buildCreateActivity(cfg, actor.OrgSlug, event)
 	deliverToFollowers(cfg, db, actor, activity)
+}
+
+func buildAnnounceActivity(cfg *Config, slug string, e Event) Activity {
+	base := actorURL(cfg, slug)
+	innerCreate := buildCreateActivity(cfg, slug, e)
+	return Activity{
+		Type:   "Announce",
+		ID:     base + "/activities/announce-" + strconv.FormatInt(time.Now().UnixNano(), 36),
+		Actor:  base,
+		Object: innerCreate,
+		To:     []string{"https://www.w3.org/ns/activitystreams#Public"},
+		CC:     []string{base + "/followers"},
+	}
+}
+
+func deliverUpdateToFollowers(cfg *Config, db *sql.DB, client *DansalClient, eventID int) {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	event, err := client.GetEvent(ctx, eventID)
+	if err != nil || event.OrganizationID == nil {
+		return
+	}
+	actor, err := getActorByOrgID(db, *event.OrganizationID)
+	if err != nil {
+		return
+	}
+	activity := buildUpdateActivity(cfg, actor.OrgSlug, event)
+	if err := deliverToFollowers(cfg, db, actor, activity); err != nil {
+		log.Printf("deliver update event %d: %v", eventID, err)
+	}
+}
+
+func deliverDeleteToFollowers(cfg *Config, db *sql.DB, eventID, orgID int) {
+	actor, err := getActorByOrgID(db, orgID)
+	if err != nil {
+		return
+	}
+	activity := buildDeleteActivity(cfg, actor.OrgSlug, eventID)
+	if err := deliverToFollowers(cfg, db, actor, activity); err != nil {
+		log.Printf("deliver delete event %d: %v", eventID, err)
+	}
 }
 
 func postToInbox(inboxURL, keyID, privateKeyPEM string, body []byte) error {

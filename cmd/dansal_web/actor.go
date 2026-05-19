@@ -658,7 +658,7 @@ func sendAccept(cfg *Config, actor *ActorRecord, followActivity map[string]inter
 	}
 }
 
-func buildCreateActivity(cfg *Config, slug string, e Event) Activity {
+func buildAPEvent(cfg *Config, slug string, e Event) APEvent {
 	base := actorURL(cfg, slug)
 	eventID := fmt.Sprintf("https://%s/events/%d", cfg.Domain, e.ID)
 
@@ -686,10 +686,7 @@ func buildCreateActivity(cfg *Config, slug string, e Event) Activity {
 		locationName = e.LocationTown
 	}
 	if locationName != "" {
-		place := &APPlace{
-			Type: "Place",
-			Name: locationName,
-		}
+		place := &APPlace{Type: "Place", Name: locationName}
 		if lat, err := strconv.ParseFloat(e.LocationLat, 64); err == nil {
 			place.Latitude = &lat
 		}
@@ -722,12 +719,45 @@ func buildCreateActivity(cfg *Config, slug string, e Event) Activity {
 			Name:      e.Title,
 		}}
 	}
+	return apEvent
+}
 
+func buildCreateActivity(cfg *Config, slug string, e Event) Activity {
+	base := actorURL(cfg, slug)
+	eventID := fmt.Sprintf("https://%s/events/%d", cfg.Domain, e.ID)
 	return Activity{
 		Type:   "Create",
 		ID:     eventID + "/activity",
 		Actor:  base,
+		Object: buildAPEvent(cfg, slug, e),
+		To:     []string{"https://www.w3.org/ns/activitystreams#Public"},
+		CC:     []string{base + "/followers"},
+	}
+}
+
+func buildUpdateActivity(cfg *Config, slug string, e Event) Activity {
+	base := actorURL(cfg, slug)
+	eventID := fmt.Sprintf("https://%s/events/%d", cfg.Domain, e.ID)
+	apEvent := buildAPEvent(cfg, slug, e)
+	apEvent.Updated = time.Now().UTC().Format(time.RFC3339)
+	return Activity{
+		Type:   "Update",
+		ID:     fmt.Sprintf("%s/activities/update-%d", eventID, time.Now().UnixNano()),
+		Actor:  base,
 		Object: apEvent,
+		To:     []string{"https://www.w3.org/ns/activitystreams#Public"},
+		CC:     []string{base + "/followers"},
+	}
+}
+
+func buildDeleteActivity(cfg *Config, slug string, eventID int) Activity {
+	base := actorURL(cfg, slug)
+	apEventID := fmt.Sprintf("https://%s/events/%d", cfg.Domain, eventID)
+	return Activity{
+		Type:   "Delete",
+		ID:     apEventID + "/activities/delete",
+		Actor:  base,
+		Object: apEventID,
 		To:     []string{"https://www.w3.org/ns/activitystreams#Public"},
 		CC:     []string{base + "/followers"},
 	}

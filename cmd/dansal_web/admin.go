@@ -1364,7 +1364,7 @@ func adminInviteRevokeHandler(cfg *Config, client *DansalClient) http.HandlerFun
 	}
 }
 
-func adminEventDeleteHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
+func adminEventDeleteHandler(cfg *Config, db *sql.DB, client *DansalClient) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		_, ok := requireLogin(w, r)
 		if !ok {
@@ -1375,7 +1375,11 @@ func adminEventDeleteHandler(cfg *Config, client *DansalClient) http.HandlerFunc
 			http.NotFound(w, r)
 			return
 		}
+		event, fetchErr := client.GetEvent(r.Context(), id)
 		_ = client.DeleteEvent(r.Context(), id, getSessionToken(r))
+		if fetchErr == nil && event.OrganizationID != nil {
+			go deliverDeleteToFollowers(cfg, db, id, *event.OrganizationID)
+		}
 		http.Redirect(w, r, "/admin/events", http.StatusSeeOther)
 	}
 }
@@ -1755,7 +1759,7 @@ func adminEventEditPageHandler(cfg *Config, tmpls *Templates, client *DansalClie
 	}
 }
 
-func adminEventSaveHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {
+func adminEventSaveHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *DansalClient, i18n *I18n) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		_, ok := requireLogin(w, r)
 		if !ok {
@@ -1976,6 +1980,9 @@ func adminEventSaveHandler(cfg *Config, tmpls *Templates, client *DansalClient, 
 			log.Printf("replace timetable error: %v", err)
 		}
 
+		if req.IsPublished {
+			go deliverUpdateToFollowers(cfg, db, client, id)
+		}
 		http.Redirect(w, r, "/admin/events", http.StatusSeeOther)
 	}
 }
