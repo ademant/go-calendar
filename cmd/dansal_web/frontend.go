@@ -559,7 +559,7 @@ func orgFrontendHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *Dansa
 				return
 			}
 			for _, o := range orgs {
-				if orgSlug(o.Name) == slug {
+				if effectiveSlug(o) == slug {
 					actor, err = ensureActor(db, o.ID, slug)
 					break
 				}
@@ -583,10 +583,10 @@ func orgFrontendHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *Dansa
 		musicians, _ := client.GetMusiciansByOrg(r.Context(), actor.OrgID)
 		followerCount, _ := countFollowers(db, actor.OrgID)
 
-		now := time.Now().Unix()
+		now := time.Now()
 		var upcoming, past []Event
 		for _, e := range allEvents {
-			if ts, err2 := strconv.ParseInt(e.EndTime, 10, 64); err2 == nil && ts < now {
+			if t, err2 := time.Parse(time.RFC3339, e.EndTime); err2 == nil && t.Before(now) {
 				past = append(past, e)
 			} else {
 				upcoming = append(upcoming, e)
