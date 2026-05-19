@@ -27,8 +27,10 @@
   <label for="description">{{$.Strings.T "org_description"}}</label>
   <textarea id="description" name="description" rows="4">{{.Org.Description}}</textarea>
 
+  <input type="hidden" id="org-id" value="{{.Org.ID}}">
   <label for="actor_name">{{$.Strings.T "org_actor_name"}}</label>
   <input id="actor_name" type="text" name="actor_name" value="{{.Org.ActorName}}" placeholder="my-org">
+  <span id="actor-name-status" style="font-size:.82rem;margin-top:-.2rem"></span>
   <p class="field-hint">{{$.Strings.T "org_actor_name_hint"}}</p>
 
   <label for="website">{{$.Strings.T "org_website"}}</label>
@@ -83,6 +85,31 @@
 </style>
 <script>
 function removeImage(url){var f=document.createElement('form');f.method='post';f.action=url;document.body.appendChild(f);f.submit();}
+(function(){
+  var inp=document.getElementById('actor_name');
+  var st=document.getElementById('actor-name-status');
+  var oid=document.getElementById('org-id');
+  if(!inp||!st) return;
+  var timer;
+  inp.addEventListener('input',function(){
+    clearTimeout(timer);
+    var v=inp.value.trim();
+    if(!v){st.textContent='';return;}
+    timer=setTimeout(function(){
+      var q='/admin/organizations/check-actor-name?name='+encodeURIComponent(v);
+      if(oid&&oid.value&&oid.value!='0') q+='&id='+oid.value;
+      fetch(q).then(function(r){return r.json();}).then(function(d){
+        if(d.available){
+          st.textContent='✓ available';st.style.color='#1e7e34';
+        } else if(d.reason==='reserved'){
+          st.textContent='✗ reserved';st.style.color='#b00020';
+        } else {
+          st.textContent='✗ already taken';st.style.color='#b00020';
+        }
+      }).catch(function(){st.textContent='';});
+    },400);
+  });
+})();
 (function(){
   var dz=document.getElementById('drop-zone');
   var inp=document.getElementById('image');

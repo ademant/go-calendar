@@ -11,17 +11,17 @@ import (
 	"time"
 )
 
-func startDelivery(cfg *Config, db *sql.DB, client *DansalClient) {
+func startDelivery(cfg *Config, db *sql.DB, client *DansalClient, relayActor *ActorRecord) {
 	ticker := time.NewTicker(time.Duration(cfg.PollSecs) * time.Second)
 	lastPoll := time.Now().Add(-time.Duration(cfg.PollSecs) * time.Second)
 
 	for range ticker.C {
-		pollAndDeliver(cfg, db, client, lastPoll)
+		pollAndDeliver(cfg, db, client, relayActor, lastPoll)
 		lastPoll = time.Now()
 	}
 }
 
-func pollAndDeliver(cfg *Config, db *sql.DB, client *DansalClient, since time.Time) {
+func pollAndDeliver(cfg *Config, db *sql.DB, client *DansalClient, relayActor *ActorRecord, since time.Time) {
 	after := since.UTC().Format(time.RFC3339)
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
@@ -37,22 +37,32 @@ func pollAndDeliver(cfg *Config, db *sql.DB, client *DansalClient, since time.Ti
 			continue
 		}
 		orgID := *e.OrganizationID
-		if isDelivered(db, e.ID, orgID) {
-			continue
+
+		// Deliver to org followers
+		if !isDelivered(db, e.ID, orgID) {
+			actor, err := getActorByOrgID(db, orgID)
+			if err == nil {
+				activity := buildCreateActivity(cfg, actor.OrgSlug, e)
+				if err := deliverToFollowers(cfg, db, actor, activity); err != nil {
+					log.Printf("delivery event %d org %d: %v", e.ID, orgID, err)
+				} else {
+					if err := markDelivered(db, e.ID, orgID); err != nil {
+						log.Printf("mark delivered event %d org %d: %v", e.ID, orgID, err)
+					}
+				}
+			}
 		}
 
-		actor, err := getActorByOrgID(db, orgID)
-		if err != nil {
-			continue
-		}
-
-		activity := buildCreateActivity(cfg, actor.OrgSlug, e)
-		if err := deliverToFollowers(cfg, db, actor, activity); err != nil {
-			log.Printf("delivery event %d org %d: %v", e.ID, orgID, err)
-			continue
-		}
-		if err := markDelivered(db, e.ID, orgID); err != nil {
-			log.Printf("mark delivered event %d org %d: %v", e.ID, orgID, err)
+		// Additionally deliver to relay followers (org_id=0 as sentinel)
+		if relayActor != nil && !isDelivered(db, e.ID, 0) {
+			activity := buildCreateActivity(cfg, relayActor.OrgSlug, e)
+			if err := deliverToFollowers(cfg, db, relayActor, activity); err != nil {
+				log.Printf("relay delivery event %d: %v", e.ID, err)
+			} else {
+				if err := markDelivered(db, e.ID, 0); err != nil {
+					log.Printf("mark relay delivered event %d: %v", e.ID, err)
+				}
+			}
 		}
 	}
 }

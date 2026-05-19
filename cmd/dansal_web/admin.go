@@ -98,7 +98,7 @@ func adminOrgsHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n 
 		for i, o := range orgs {
 			stats[i] = OrgStats{
 				Org:           o,
-				Slug:          orgSlug(o.Name),
+				Slug:          effectiveSlug(o),
 				EventCount:    evtCount[o.ID],
 				LocationCount: locCount[o.ID],
 				FetchSources:  srcsByOrg[o.ID],
@@ -278,6 +278,44 @@ func adminOrgRunFeedsHandler(cfg *Config, client *DansalClient) http.HandlerFunc
 			}
 		}
 		http.Redirect(w, r, "/admin/organizations", http.StatusSeeOther)
+	}
+}
+
+// GET /admin/organizations/check-actor-name?name=foo[&id=123]
+// AJAX endpoint: checks if an actor_name is available.
+func adminOrgCheckActorNameHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		user, ok := requireLogin(w, r)
+		if !ok {
+			return
+		}
+		if user.Role != "admin" {
+			http.Error(w, "Forbidden", http.StatusForbidden)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		name := strings.TrimSpace(r.URL.Query().Get("name"))
+		if name == "" {
+			json.NewEncoder(w).Encode(map[string]interface{}{"available": false, "reason": "empty"})
+			return
+		}
+		if name == "relay" {
+			json.NewEncoder(w).Encode(map[string]interface{}{"available": false, "reason": "reserved"})
+			return
+		}
+		excludeID, _ := strconv.Atoi(r.URL.Query().Get("id"))
+		orgs, err := client.GetOrganizations(r.Context())
+		if err != nil {
+			json.NewEncoder(w).Encode(map[string]interface{}{"available": false, "reason": "error"})
+			return
+		}
+		for _, o := range orgs {
+			if o.ActorName == name && o.ID != excludeID {
+				json.NewEncoder(w).Encode(map[string]interface{}{"available": false, "reason": "taken"})
+				return
+			}
+		}
+		json.NewEncoder(w).Encode(map[string]interface{}{"available": true})
 	}
 }
 

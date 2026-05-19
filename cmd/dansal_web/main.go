@@ -114,6 +114,7 @@ func main() {
 	r.HandleFunc("/admin/events/{id}/edit", adminEventSaveHandler(cfg, tmpls, client, i18n)).Methods("POST")
 
 	r.HandleFunc("/admin/organizations", adminOrgsHandler(cfg, tmpls, client, i18n)).Methods("GET")
+	r.HandleFunc("/admin/organizations/check-actor-name", adminOrgCheckActorNameHandler(cfg, client)).Methods("GET")
 	r.HandleFunc("/admin/organizations/new", adminOrgNewPageHandler(cfg, tmpls, i18n)).Methods("GET")
 	r.HandleFunc("/admin/organizations/new", adminOrgCreateHandler(cfg, tmpls, client, i18n)).Methods("POST")
 	r.HandleFunc("/admin/organizations/{id}/edit", adminOrgEditPageHandler(cfg, tmpls, client, i18n)).Methods("GET")
@@ -145,7 +146,11 @@ func main() {
 	r.HandleFunc("/admin/locations/{id}/edit", adminLocationSaveHandler(cfg, tmpls, client, i18n)).Methods("POST")
 	r.HandleFunc("/admin/locations/{id}/delete", adminLocationDeleteHandler(cfg, client)).Methods("POST")
 
-	go startDelivery(cfg, db, client)
+	relayActor, err := ensureRelayActor(db)
+	if err != nil {
+		log.Printf("relay actor init: %v", err)
+	}
+	go startDelivery(cfg, db, client, relayActor)
 
 	log.Printf("web server listening on %s (domain: %s)", cfg.Listen, cfg.Domain)
 	if err := http.ListenAndServe(cfg.Listen, r); err != nil {

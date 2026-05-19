@@ -140,6 +140,32 @@ func getOrganizations(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(orgs)
 }
 
+// GET /api/v1/organizations/check-actor-name?name=foo[&exclude_id=123]
+func checkActorName(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	name := strings.TrimSpace(r.URL.Query().Get("name"))
+	if name == "" {
+		json.NewEncoder(w).Encode(map[string]interface{}{"available": false, "reason": "empty"})
+		return
+	}
+	if name == "relay" {
+		json.NewEncoder(w).Encode(map[string]interface{}{"available": false, "reason": "reserved"})
+		return
+	}
+	excludeID, _ := strconv.Atoi(r.URL.Query().Get("exclude_id"))
+	var n int
+	if excludeID > 0 {
+		db.QueryRow("SELECT COUNT(*) FROM organizations WHERE actor_name=? AND id!=?", name, excludeID).Scan(&n)
+	} else {
+		db.QueryRow("SELECT COUNT(*) FROM organizations WHERE actor_name=?", name).Scan(&n)
+	}
+	if n > 0 {
+		json.NewEncoder(w).Encode(map[string]interface{}{"available": false, "reason": "taken"})
+	} else {
+		json.NewEncoder(w).Encode(map[string]interface{}{"available": true})
+	}
+}
+
 // POST /api/v1/organizations
 func createOrganization(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
@@ -155,6 +181,18 @@ func createOrganization(w http.ResponseWriter, r *http.Request) {
 	if req.Name == "" {
 		writeError(w, "name is required", http.StatusBadRequest)
 		return
+	}
+	if req.ActorName != "" {
+		if req.ActorName == "relay" {
+			writeError(w, "actor_name 'relay' is reserved", http.StatusConflict)
+			return
+		}
+		var n int
+		db.QueryRow("SELECT COUNT(*) FROM organizations WHERE actor_name=?", req.ActorName).Scan(&n)
+		if n > 0 {
+			writeError(w, "actor_name already in use", http.StatusConflict)
+			return
+		}
 	}
 	o, err := scanOrg(db.QueryRow(
 		"INSERT INTO organizations (name, description, actor_name, website, instagram, mastodon, facebook, contact_email) VALUES (?,?,?,?,?,?,?,?) RETURNING "+orgSelectCols,
@@ -205,6 +243,18 @@ func updateOrganization(w http.ResponseWriter, r *http.Request) {
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, "Invalid request body", http.StatusBadRequest)
 		return
+	}
+	if req.ActorName != "" {
+		if req.ActorName == "relay" {
+			writeError(w, "actor_name 'relay' is reserved", http.StatusConflict)
+			return
+		}
+		var n int
+		db.QueryRow("SELECT COUNT(*) FROM organizations WHERE actor_name=? AND id!=?", req.ActorName, id).Scan(&n)
+		if n > 0 {
+			writeError(w, "actor_name already in use", http.StatusConflict)
+			return
+		}
 	}
 	if req.Name != "" {
 		o.Name = req.Name

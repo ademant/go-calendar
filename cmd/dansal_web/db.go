@@ -74,6 +74,11 @@ func getActorByOrgID(db *sql.DB, orgID int) (*ActorRecord, error) {
 	return &a, nil
 }
 
+// ensureRelayActor creates (or fetches) the special relay actor with org_id=0.
+func ensureRelayActor(db *sql.DB) (*ActorRecord, error) {
+	return ensureActor(db, 0, "relay")
+}
+
 func ensureActor(db *sql.DB, orgID int, orgSlug string) (*ActorRecord, error) {
 	a, err := getActorByOrgID(db, orgID)
 	if err == nil {

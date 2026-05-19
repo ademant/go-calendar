@@ -46,6 +46,14 @@ var (
 	slugDashRe  = regexp.MustCompile(`-{2,}`)
 )
 
+// effectiveSlug returns the AP actor slug for an org: actor_name if set, else name-derived.
+func effectiveSlug(org Organization) string {
+	if org.ActorName != "" {
+		return org.ActorName
+	}
+	return orgSlug(org.Name)
+}
+
 func orgSlug(name string) string {
 	s := slugTranslit.Replace(name)
 	s = strings.ToLower(s)
@@ -119,13 +127,17 @@ func webfingerHandler(cfg *Config, db *sql.DB, client *DansalClient) http.Handle
 		slug := parts[0]
 		actor, err := getActorBySlug(db, slug)
 		if err == sql.ErrNoRows {
+			if slug == "relay" {
+				writeJSONError(w, http.StatusNotFound, "user not found")
+				return
+			}
 			orgs, err := client.GetOrganizations(r.Context())
 			if err != nil {
 				writeJSONError(w, http.StatusInternalServerError, "upstream error")
 				return
 			}
 			for _, org := range orgs {
-				if orgSlug(org.Name) == slug {
+				if effectiveSlug(org) == slug {
 					actor, err = ensureActor(db, org.ID, slug)
 					if err != nil {
 						writeJSONError(w, http.StatusInternalServerError, "actor init error")
@@ -206,11 +218,21 @@ func outboxHandler(cfg *Config, db *sql.DB, client *DansalClient) http.HandlerFu
 		base := actorURL(cfg, slug)
 		outboxURL := base + "/outbox"
 
-		if r.URL.Query().Get("page") != "true" {
-			events, err := client.GetEventsByOrg(r.Context(), actor.OrgID)
-			if err != nil {
-				events = nil
+		var events []Event
+		if actor.OrgID == 0 {
+			events, _ = client.GetEvents(r.Context(), "")
+			published := events[:0]
+			for _, e := range events {
+				if e.IsPublished {
+					published = append(published, e)
+				}
 			}
+			events = published
+		} else {
+			events, _ = client.GetEventsByOrg(r.Context(), actor.OrgID)
+		}
+
+		if r.URL.Query().Get("page") != "true" {
 			col := OrderedCollection{
 				Context:    APContext,
 				Type:       "OrderedCollection",
@@ -220,11 +242,6 @@ func outboxHandler(cfg *Config, db *sql.DB, client *DansalClient) http.HandlerFu
 			}
 			writeJSON(w, http.StatusOK, col)
 			return
-		}
-
-		events, err := client.GetEventsByOrg(r.Context(), actor.OrgID)
-		if err != nil {
-			events = nil
 		}
 
 		items := make([]interface{}, 0, len(events))

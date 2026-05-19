@@ -915,6 +915,7 @@ func main() {
 	orgRoutes.Use(TokenMiddleware)
 	orgRoutes.HandleFunc("", getOrganizations).Methods("GET")
 	orgRoutes.HandleFunc("", createOrganization).Methods("POST")
+	orgRoutes.HandleFunc("/check-actor-name", checkActorName).Methods("GET")
 	orgRoutes.HandleFunc("/{id}", getOrganization).Methods("GET")
 	orgRoutes.HandleFunc("/{id}", updateOrganization).Methods("PUT")
 	orgRoutes.HandleFunc("/{id}", deleteOrganization).Methods("DELETE")

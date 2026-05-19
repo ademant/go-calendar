@@ -671,13 +671,17 @@ func apActorHandler(cfg *Config, db *sql.DB, client *DansalClient) http.HandlerF
 		slug := mux.Vars(r)["name"]
 		actor, err := getActorBySlug(db, slug)
 		if err == sql.ErrNoRows {
+			if slug == "relay" {
+				writeJSONError(w, http.StatusNotFound, "actor not found")
+				return
+			}
 			orgs, err := client.GetOrganizations(r.Context())
 			if err != nil {
 				writeJSONError(w, http.StatusInternalServerError, "upstream error")
 				return
 			}
 			for _, org := range orgs {
-				if orgSlug(org.Name) == slug {
+				if effectiveSlug(org) == slug {
 					actor, err = ensureActor(db, org.ID, slug)
 					if err != nil {
 						writeJSONError(w, http.StatusInternalServerError, "actor init error")
@@ -692,6 +696,29 @@ func apActorHandler(cfg *Config, db *sql.DB, client *DansalClient) http.HandlerF
 			}
 		} else if err != nil {
 			writeJSONError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+
+		// Relay actor: synthetic profile with no backing org
+		if actor.OrgID == 0 {
+			base := actorURL(cfg, "relay")
+			a := Actor{
+				Context:           APContext,
+				Type:              "Application",
+				ID:                base,
+				Name:              "relay@" + cfg.Domain,
+				URL:               "https://" + cfg.Domain,
+				PreferredUsername: "relay",
+				Inbox:             base + "/inbox",
+				Outbox:            base + "/outbox",
+				Followers:         base + "/followers",
+				PublicKey: PublicKey{
+					ID:           base + "#main-key",
+					Owner:        base,
+					PublicKeyPem: actor.PublicKeyPEM,
+				},
+			}
+			writeJSON(w, http.StatusOK, a)
 			return
 		}
 
