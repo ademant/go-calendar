@@ -1,18 +1,70 @@
 package main
 
 import (
+	"context"
 	"crypto"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/sha256"
 	"crypto/x509"
 	"encoding/base64"
+	"encoding/json"
 	"encoding/pem"
 	"fmt"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 )
+
+type pubKeyEntry struct {
+	pem       string
+	fetchedAt time.Time
+}
+
+var (
+	pubKeyCache    = map[string]pubKeyEntry{}
+	pubKeyCacheMu  sync.Mutex
+	pubKeyCacheTTL = 10 * time.Minute
+)
+
+func fetchActorPublicKey(ctx context.Context, httpClient *http.Client, actorURL string) (string, error) {
+	pubKeyCacheMu.Lock()
+	if e, ok := pubKeyCache[actorURL]; ok && time.Since(e.fetchedAt) < pubKeyCacheTTL {
+		pubKeyCacheMu.Unlock()
+		return e.pem, nil
+	}
+	pubKeyCacheMu.Unlock()
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, actorURL, nil)
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("Accept", "application/activity+json")
+	resp, err := httpClient.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	var actor struct {
+		PublicKey struct {
+			PublicKeyPem string `json:"publicKeyPem"`
+		} `json:"publicKey"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&actor); err != nil {
+		return "", fmt.Errorf("decode actor: %w", err)
+	}
+	if actor.PublicKey.PublicKeyPem == "" {
+		return "", fmt.Errorf("no publicKeyPem in actor response")
+	}
+
+	pubKeyCacheMu.Lock()
+	pubKeyCache[actorURL] = pubKeyEntry{pem: actor.PublicKey.PublicKeyPem, fetchedAt: time.Now()}
+	pubKeyCacheMu.Unlock()
+
+	return actor.PublicKey.PublicKeyPem, nil
+}
 
 func generateRSAKeyPair() (publicPEM, privatePEM string, err error) {
 	key, err := rsa.GenerateKey(rand.Reader, 2048)

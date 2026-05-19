@@ -424,6 +424,20 @@ func processInboxActivity(w http.ResponseWriter, r *http.Request, cfg *Config, d
 	activityType, _ := raw["type"].(string)
 	actorField, _ := raw["actor"].(string)
 
+	if actorField != "" {
+		pubKeyPEM, err := fetchActorPublicKey(r.Context(), client.HTTP, actorField)
+		if err != nil {
+			log.Printf("inbox: fetch public key for %s: %v", actorField, err)
+			writeJSONError(w, http.StatusUnauthorized, "could not fetch sender key")
+			return
+		}
+		if err := VerifyRequest(r, pubKeyPEM); err != nil {
+			log.Printf("inbox: signature verification failed for %s: %v", actorField, err)
+			writeJSONError(w, http.StatusUnauthorized, "signature verification failed")
+			return
+		}
+	}
+
 	switch activityType {
 	case "Follow":
 		if actorField == "" {
