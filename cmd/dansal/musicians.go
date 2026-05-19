@@ -28,6 +28,9 @@ type Musician struct {
 	Instagram    string `json:"instagram,omitempty"`
 	Facebook     string `json:"facebook,omitempty"`
 	Soundcloud   string `json:"soundcloud,omitempty"`
+	Spotify      string `json:"spotify,omitempty"`
+	Deezer       string `json:"deezer,omitempty"`
+	Genre        string `json:"genre,omitempty"`
 	ImageURL     string `json:"image_url,omitempty"`
 	CreatedAt    string `json:"created_at"`
 }
@@ -49,6 +52,9 @@ type MusicianCreateRequest struct {
 	Instagram    string `json:"instagram"`
 	Facebook     string `json:"facebook"`
 	Soundcloud   string `json:"soundcloud"`
+	Spotify      string `json:"spotify"`
+	Deezer       string `json:"deezer"`
+	Genre        string `json:"genre"`
 }
 
 type MusicianUpdateRequest struct {
@@ -68,6 +74,9 @@ type MusicianUpdateRequest struct {
 	Instagram    string `json:"instagram"`
 	Facebook     string `json:"facebook"`
 	Soundcloud   string `json:"soundcloud"`
+	Spotify      string `json:"spotify"`
+	Deezer       string `json:"deezer"`
+	Genre        string `json:"genre"`
 }
 
 const musicianCols = `id, bandname,
@@ -75,13 +84,15 @@ const musicianCols = `id, bandname,
 	COALESCE(mbid,''), COALESCE(wikidata_id,''), COALESCE(discogs_id,''), COALESCE(country,''), COALESCE(begin_year,0),
 	COALESCE(biography,''), COALESCE(members_json,''), COALESCE(albums_json,''),
 	COALESCE(mastodon,''), COALESCE(instagram,''),
-	COALESCE(facebook,''), COALESCE(soundcloud,''), created_at`
+	COALESCE(facebook,''), COALESCE(soundcloud,''),
+	COALESCE(spotify,''), COALESCE(deezer,''), COALESCE(genre,''), created_at`
 
 func scanMusician(row interface{ Scan(...any) error }) (Musician, error) {
 	var m Musician
 	err := row.Scan(&m.ID, &m.Bandname, &m.ShortName, &m.Internetsite, &m.Description,
 		&m.MBID, &m.WikidataID, &m.DiscogsID, &m.Country, &m.BeginYear, &m.Biography, &m.MembersJSON, &m.AlbumsJSON,
-		&m.Mastodon, &m.Instagram, &m.Facebook, &m.Soundcloud, &m.CreatedAt)
+		&m.Mastodon, &m.Instagram, &m.Facebook, &m.Soundcloud,
+		&m.Spotify, &m.Deezer, &m.Genre, &m.CreatedAt)
 	if err == nil {
 		m.ImageURL = musicianImageURL(m.ID)
 	}
@@ -174,11 +185,12 @@ func createMusician(w http.ResponseWriter, r *http.Request) {
 	musicians := make([]Musician, 0, len(reqs))
 	for _, req := range reqs {
 		m, err := scanMusician(db.QueryRow(
-			`INSERT INTO musicians (bandname, short_name, internetsite, description, mbid, wikidata_id, discogs_id, country, begin_year, biography, members_json, albums_json, mastodon, instagram, facebook, soundcloud)
-			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING `+musicianCols,
+			`INSERT INTO musicians (bandname, short_name, internetsite, description, mbid, wikidata_id, discogs_id, country, begin_year, biography, members_json, albums_json, mastodon, instagram, facebook, soundcloud, spotify, deezer, genre)
+			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING `+musicianCols,
 			req.Bandname, req.ShortName, req.Internetsite, req.Description, req.MBID,
 			req.WikidataID, req.DiscogsID, req.Country, req.BeginYear, req.Biography, req.MembersJSON, req.AlbumsJSON,
 			req.Mastodon, req.Instagram, req.Facebook, req.Soundcloud,
+			req.Spotify, req.Deezer, req.Genre,
 		))
 		if err != nil {
 			writeError(w, err.Error(), http.StatusInternalServerError)
@@ -212,10 +224,11 @@ func updateMusician(w http.ResponseWriter, r *http.Request) {
 	result, err := db.Exec(
 		`UPDATE musicians SET bandname=?, short_name=?, internetsite=?, description=?, mbid=?,
 		 wikidata_id=?, discogs_id=?, country=?, begin_year=?, biography=?, members_json=?, albums_json=?,
-		 mastodon=?, instagram=?, facebook=?, soundcloud=? WHERE id=?`,
+		 mastodon=?, instagram=?, facebook=?, soundcloud=?, spotify=?, deezer=?, genre=? WHERE id=?`,
 		req.Bandname, req.ShortName, req.Internetsite, req.Description, req.MBID,
 		req.WikidataID, req.DiscogsID, req.Country, req.BeginYear, req.Biography, req.MembersJSON, req.AlbumsJSON,
-		req.Mastodon, req.Instagram, req.Facebook, req.Soundcloud, id,
+		req.Mastodon, req.Instagram, req.Facebook, req.Soundcloud,
+		req.Spotify, req.Deezer, req.Genre, id,
 	)
 	if err != nil {
 		writeError(w, err.Error(), http.StatusInternalServerError)

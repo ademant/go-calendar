@@ -416,6 +416,16 @@ var tmplFuncMap = template.FuncMap{
 		}
 		return u.Host
 	},
+	"splitComma": func(s string) []string {
+		var out []string
+		for _, p := range strings.Split(s, ",") {
+			p = strings.TrimSpace(p)
+			if p != "" {
+				out = append(out, p)
+			}
+		}
+		return out
+	},
 }
 
 type Templates struct {

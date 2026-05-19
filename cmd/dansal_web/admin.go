@@ -493,6 +493,9 @@ func musicianFromForm(r *http.Request) Musician {
 		Instagram:    strings.TrimSpace(r.FormValue("instagram")),
 		Facebook:     strings.TrimSpace(r.FormValue("facebook")),
 		Soundcloud:   strings.TrimSpace(r.FormValue("soundcloud")),
+		Spotify:      strings.TrimSpace(r.FormValue("spotify")),
+		Deezer:       strings.TrimSpace(r.FormValue("deezer")),
+		Genre:        strings.TrimSpace(r.FormValue("genre")),
 	}
 }
 

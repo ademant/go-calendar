@@ -496,6 +496,9 @@ func migrateDB() {
 	db.Exec("ALTER TABLE musicians ADD COLUMN members_json TEXT")
 	db.Exec("ALTER TABLE musicians ADD COLUMN albums_json TEXT")
 	db.Exec("ALTER TABLE musicians ADD COLUMN discogs_id TEXT")
+	db.Exec("ALTER TABLE musicians ADD COLUMN spotify TEXT")
+	db.Exec("ALTER TABLE musicians ADD COLUMN deezer TEXT")
+	db.Exec("ALTER TABLE musicians ADD COLUMN genre TEXT")
 	db.Exec(`CREATE TABLE IF NOT EXISTS dances (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		name TEXT UNIQUE NOT NULL

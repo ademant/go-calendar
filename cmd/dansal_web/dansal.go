@@ -127,6 +127,9 @@ type Musician struct {
 	Instagram    string `json:"instagram,omitempty"`
 	Facebook     string `json:"facebook,omitempty"`
 	Soundcloud   string `json:"soundcloud,omitempty"`
+	Spotify      string `json:"spotify,omitempty"`
+	Deezer       string `json:"deezer,omitempty"`
+	Genre        string `json:"genre,omitempty"`
 	ImageURL     string `json:"image_url,omitempty"`
 	CreatedAt    string `json:"created_at,omitempty"`
 }

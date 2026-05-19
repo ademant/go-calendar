@@ -42,7 +42,15 @@
 </div>
 {{end}}
 
-{{if or .Musician.Internetsite .Musician.Mastodon .Musician.Instagram .Musician.Facebook .Musician.Soundcloud .Musician.MBID}}
+{{if .Musician.Genre}}
+<div class="page-section">
+  <div class="musician-meta">
+    {{range (splitComma .Musician.Genre)}}<span class="chip">{{.}}</span>{{end}}
+  </div>
+</div>
+{{end}}
+
+{{if or .Musician.Internetsite .Musician.Mastodon .Musician.Instagram .Musician.Facebook .Musician.Soundcloud .Musician.Spotify .Musician.Deezer .Musician.MBID}}
 <div class="page-section">
   <div class="musician-links">
     {{with .Musician.Internetsite}}<a href="{{.}}" class="m-link m-link-web" target="_blank" rel="noopener">{{$.Strings.T "musician_website"}}</a>{{end}}
@@ -52,6 +60,8 @@
     {{with .Musician.Instagram}}<a href="https://instagram.com/{{.}}" class="m-link m-link-instagram" target="_blank" rel="noopener">Instagram</a>{{end}}
     {{with .Musician.Facebook}}<a href="https://facebook.com/{{.}}" class="m-link m-link-facebook" target="_blank" rel="noopener">Facebook</a>{{end}}
     {{with .Musician.Soundcloud}}<a href="https://soundcloud.com/{{.}}" class="m-link m-link-soundcloud" target="_blank" rel="noopener">SoundCloud</a>{{end}}
+    {{with .Musician.Spotify}}<a href="{{.}}" class="m-link m-link-spotify" target="_blank" rel="noopener">Spotify</a>{{end}}
+    {{with .Musician.Deezer}}<a href="{{.}}" class="m-link m-link-deezer" target="_blank" rel="noopener">Deezer</a>{{end}}
     {{with .Musician.MBID}}<a href="https://musicbrainz.org/artist/{{.}}" class="m-link m-link-mb" target="_blank" rel="noopener">MusicBrainz</a>{{end}}
   </div>
 </div>
@@ -101,6 +111,8 @@
 .m-link-instagram{background:#c13584}.m-link-instagram:hover{background:#8a255e}
 .m-link-facebook{background:#1877f2}.m-link-facebook:hover{background:#0d5ab5}
 .m-link-soundcloud{background:#ff5500}.m-link-soundcloud:hover{background:#cc4400}
+.m-link-spotify{background:#1db954}.m-link-spotify:hover{background:#148a3d}
+.m-link-deezer{background:#00c7f2}.m-link-deezer:hover{background:#0099bb;color:#fff}
 .m-link-mb{background:#ba2025}.m-link-mb:hover{background:#8a1519}
 .detail-list{margin:.25rem 0;padding-left:1.25rem;color:var(--fg-dim);font-size:.95rem}
 .detail-list li{margin-bottom:.2rem}

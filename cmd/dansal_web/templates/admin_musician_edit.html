@@ -52,6 +52,9 @@
   <label for="description">{{$.Strings.T "musician_description"}}</label>
   <textarea id="description" name="description" rows="3">{{.Musician.Description}}</textarea>
 
+  <label for="genre">Genre</label>
+  <input id="genre" type="text" name="genre" value="{{.Musician.Genre}}" placeholder="Folk, Balfolk, Celtic…">
+
   <label for="biography">{{$.Strings.T "musician_biography"}}</label>
   <textarea id="biography" name="biography" rows="5">{{.Musician.Biography}}</textarea>
 
@@ -98,6 +101,12 @@
 
     <label for="soundcloud">{{$.Strings.T "musician_soundcloud"}}</label>
     <input id="soundcloud" type="text" name="soundcloud" value="{{.Musician.Soundcloud}}" placeholder="bandname">
+
+    <label for="spotify">Spotify</label>
+    <input id="spotify" type="url" name="spotify" value="{{.Musician.Spotify}}" placeholder="https://open.spotify.com/artist/…">
+
+    <label for="deezer">Deezer</label>
+    <input id="deezer" type="url" name="deezer" value="{{.Musician.Deezer}}" placeholder="https://www.deezer.com/artist/…">
   </fieldset>
 
   <fieldset class="image-fieldset">
@@ -204,6 +213,12 @@ function removeImage(url){var f=document.createElement('form');f.method='post';f
   var countryInp  = document.getElementById('country');
   var yearInp     = document.getElementById('begin_year');
   var siteInp     = document.getElementById('internetsite');
+  var genreInp    = document.getElementById('genre');
+  var instagramInp= document.getElementById('instagram');
+  var facebookInp = document.getElementById('facebook');
+  var spotifyInp  = document.getElementById('spotify');
+  var deezerInp   = document.getElementById('deezer');
+  var descInp     = document.getElementById('description');
   var activeSvc   = 'mb';
 
   var tabs = document.querySelectorAll('.mb-tab');
@@ -287,8 +302,9 @@ function removeImage(url){var f=document.createElement('form');f.method='post';f
         if (a.name) nameInp.value = a.name;
         if (a.country) countryInp.value = a.country;
         if (a['life-span'] && a['life-span'].begin) yearInp.value = a['life-span'].begin.slice(0,4);
-        mbResults.innerHTML = '';
+        mbResults.textContent = '';
         mbidInp.focus();
+        fetchMBDetails(a.id);
       });
       li.appendChild(info); li.appendChild(meta); li.appendChild(btn);
       mbResults.appendChild(li);
@@ -377,6 +393,31 @@ function removeImage(url){var f=document.createElement('form');f.method='post';f
         renderBandcamp(items);
       })
       .catch(function(){ bcRes.innerHTML = '<li style="color:#999">{{$.Strings.T "musician_mb_no_results"}}</li>'; });
+  }
+
+  function fetchMBDetails(mbid){
+    fetch('https://musicbrainz.org/ws/2/artist/' + mbid + '?inc=url-rels+genres+annotation&fmt=json', {headers:{'Accept':'application/json'}})
+      .then(function(r){ return r.json(); })
+      .then(function(d){
+        if (d.genres && d.genres.length && !genreInp.value)
+          genreInp.value = d.genres.map(function(g){ return g.name; }).join(', ');
+        if (d.annotation && !descInp.value)
+          descInp.value = d.annotation;
+        (d.relations||[]).forEach(function(rel){
+          var url = rel.url && rel.url.resource || '';
+          if (!url) return;
+          if (/open\.spotify\.com/.test(url) && !spotifyInp.value) spotifyInp.value = url;
+          else if (/deezer\.com/.test(url) && !deezerInp.value) deezerInp.value = url;
+          else if (/instagram\.com/.test(url) && !instagramInp.value){
+            var m = url.match(/instagram\.com\/([^/?#]+)/);
+            if (m) instagramInp.value = m[1];
+          } else if (/facebook\.com/.test(url) && !facebookInp.value){
+            var m = url.match(/facebook\.com\/([^/?#]+)/);
+            if (m) facebookInp.value = m[1];
+          }
+        });
+      })
+      .catch(function(){});
   }
 
   searchBtn.addEventListener('click', doSearch);
