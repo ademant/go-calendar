@@ -58,6 +58,7 @@
       <a href="/admin/events/{{.ID}}/edit" class="btn-sm">{{$.Strings.T "admin_edit"}}</a>
       <a href="/events/{{.ID}}" class="btn-sm">{{$.Strings.T "btn_details"}}</a>
       {{if .BookingEnabled}}<a href="/admin/events/{{.ID}}/bookings" class="btn-sm">{{$.Strings.T "admin_bookings_title"}}</a>{{end}}
+      <button type="button" class="btn-sm btn-del" onclick="if(confirm('{{$.Strings.T "admin_event_confirm_delete"}}'))delEvent({{.ID}})">{{$.Strings.T "admin_delete"}}</button>
     </td>
   </tr>
   {{end}}
@@ -85,5 +86,14 @@
 .badge.unpub{background:#fff3cd;color:#856404}
 .btn-sm{display:inline-block;padding:.2rem .5rem;border:1px solid #ccc;border-radius:3px;font-size:.8rem;text-decoration:none;color:#333}
 .btn-sm:hover{background:#f0f0f0}
+.btn-del{background:#b00020;color:#fff;border:none}
+.btn-del:hover{background:#800016}
 </style>
+<script>
+function delEvent(id){
+  var f=document.createElement('form');
+  f.method='post';f.action='/admin/events/'+id+'/delete';
+  document.body.appendChild(f);f.submit();
+}
+</script>
 {{end}}

@@ -10,7 +10,8 @@
   <!-- Image -->
   <section class="form-section">
     <h2>{{$.Strings.T "evt_image"}}</h2>
-    {{with .Event.ImageURL}}<img src="{{.}}" alt="" id="existing-image" style="max-height:200px;border-radius:4px;margin-bottom:.5rem;display:block">{{end}}
+    {{with .Event.ImageURL}}<img src="{{.}}" alt="" id="existing-image" style="max-height:200px;border-radius:4px;margin-bottom:.5rem;display:block">
+    <button type="button" class="btn-sm btn-del" style="margin-bottom:.5rem" onclick="if(confirm('{{$.Strings.T "admin_image_confirm_remove"}}'))removeImage('/admin/events/{{$.Event.ID}}/image/delete')">{{$.Strings.T "admin_remove_image"}}</button>{{end}}
     <div id="drop-zone" class="drop-zone">
       <input type="file" id="image" name="image" accept="image/*" style="display:none">
       <div id="drop-label" class="drop-label">
@@ -347,9 +348,13 @@
 .musician-chip{display:inline-flex;align-items:center;gap:.3rem;background:#e8eaf6;border-radius:20px;padding:.2rem .6rem .2rem .8rem;font-size:.85rem}
 .btn-chip-del{background:none;border:none;cursor:pointer;color:#777;font-size:1rem;padding:0;line-height:1}
 .btn-chip-del:hover{color:#c0392b}
+.btn-del{background:#b00020;color:#fff;border:none;cursor:pointer}
+.btn-del:hover{background:#800016}
 </style>
 
 <script>
+function removeImage(url){var f=document.createElement('form');f.method='post';f.action=url;document.body.appendChild(f);f.submit();}
+
 function toggleWorkshopDifficulty(){
   document.getElementById('workshop-difficulty').hidden=!document.getElementById('has_workshop').checked;
 }

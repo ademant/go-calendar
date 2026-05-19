@@ -88,7 +88,8 @@
 
   <fieldset class="image-fieldset">
     <legend>{{$.Strings.T "musician_image"}}</legend>
-    {{with .Musician.ImageURL}}<img src="{{.}}" alt="" id="existing-image" style="max-height:200px;border-radius:4px;margin-bottom:.5rem;display:block">{{end}}
+    {{with .Musician.ImageURL}}<img src="{{.}}" alt="" id="existing-image" style="max-height:200px;border-radius:4px;margin-bottom:.5rem;display:block">
+    <button type="button" class="btn-sm btn-del" style="margin-bottom:.5rem" onclick="if(confirm('{{$.Strings.T "admin_image_confirm_remove"}}'))removeImage('/admin/musicians/{{$.Musician.ID}}/image/delete')">{{$.Strings.T "admin_remove_image"}}</button>{{end}}
     <div id="drop-zone" class="drop-zone">
       <input type="file" id="image" name="image" accept="image/*" style="display:none">
       <div id="drop-label" class="drop-label">
@@ -151,6 +152,8 @@
 .upcoming-events{max-width:560px;margin-top:2rem}
 .upcoming-events h2{font-size:1.1rem;margin-bottom:.75rem;color:#333}
 .badge.unpublished{background:#fff3cd;color:#856404}
+.btn-del{background:#b00020;color:#fff;border:none;cursor:pointer}
+.btn-del:hover{background:#800016}
 </style>
 
 {{if and (not .Data.IsNew) .Data.Events}}
@@ -173,6 +176,7 @@
 {{end}}
 
 <script>
+function removeImage(url){var f=document.createElement('form');f.method='post';f.action=url;document.body.appendChild(f);f.submit();}
 (function(){
   var searchInput = document.getElementById('mb-search');
   var searchBtn   = document.getElementById('mb-btn');

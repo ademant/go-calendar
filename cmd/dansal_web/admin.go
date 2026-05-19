@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"log"
 	"net/http"
@@ -1221,6 +1222,70 @@ func adminInviteRevokeHandler(cfg *Config, client *DansalClient) http.HandlerFun
 		invToken := mux.Vars(r)["token"]
 		_ = client.RevokeInvite(r.Context(), invToken, getSessionToken(r))
 		http.Redirect(w, r, "/admin/users", http.StatusSeeOther)
+	}
+}
+
+func adminEventDeleteHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		_, ok := requireLogin(w, r)
+		if !ok {
+			return
+		}
+		id, err := strconv.Atoi(mux.Vars(r)["id"])
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		_ = client.DeleteEvent(r.Context(), id, getSessionToken(r))
+		http.Redirect(w, r, "/admin/events", http.StatusSeeOther)
+	}
+}
+
+func adminEventImageDeleteHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		_, ok := requireLogin(w, r)
+		if !ok {
+			return
+		}
+		id, err := strconv.Atoi(mux.Vars(r)["id"])
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		_ = client.DeleteEventImage(r.Context(), id, getSessionToken(r))
+		http.Redirect(w, r, fmt.Sprintf("/admin/events/%d/edit", id), http.StatusSeeOther)
+	}
+}
+
+func adminMusicianImageDeleteHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		_, ok := requireLogin(w, r)
+		if !ok {
+			return
+		}
+		id, err := strconv.Atoi(mux.Vars(r)["id"])
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		_ = client.DeleteMusicianImage(r.Context(), id, getSessionToken(r))
+		http.Redirect(w, r, fmt.Sprintf("/admin/musicians/%d/edit", id), http.StatusSeeOther)
+	}
+}
+
+func adminOrgImageDeleteHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		_, ok := requireLogin(w, r)
+		if !ok {
+			return
+		}
+		id, err := strconv.Atoi(mux.Vars(r)["id"])
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		_ = client.DeleteOrgImage(r.Context(), id, getSessionToken(r))
+		http.Redirect(w, r, fmt.Sprintf("/admin/organizations/%d/edit", id), http.StatusSeeOther)
 	}
 }
 

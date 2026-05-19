@@ -9,7 +9,8 @@
 
   <fieldset class="image-fieldset">
     <legend>{{$.Strings.T "org_image"}}</legend>
-    {{with .Org.ImageURL}}<img src="{{.}}" alt="" id="existing-image" style="max-height:200px;border-radius:4px;margin-bottom:.5rem;display:block">{{end}}
+    {{with .Org.ImageURL}}<img src="{{.}}" alt="" id="existing-image" style="max-height:200px;border-radius:4px;margin-bottom:.5rem;display:block">
+    <button type="button" class="btn-sm btn-del" style="margin-bottom:.5rem" onclick="if(confirm('{{$.Strings.T "admin_image_confirm_remove"}}'))removeImage('/admin/organizations/{{$.Org.ID}}/image/delete')">{{$.Strings.T "admin_remove_image"}}</button>{{end}}
     <div id="drop-zone" class="drop-zone">
       <input type="file" id="image" name="image" accept="image/*" style="display:none">
       <div id="drop-label" class="drop-label">
@@ -77,8 +78,11 @@
 .btn-primary:hover{background:#0d4a80}
 .btn-secondary{padding:.45rem 1.2rem;background:#f5f5f5;color:#333;border:1px solid #ccc;border-radius:4px;font-size:.95rem;text-decoration:none;cursor:pointer}
 .btn-secondary:hover{background:#e8e8e8}
+.btn-del{background:#b00020;color:#fff;border:none;cursor:pointer}
+.btn-del:hover{background:#800016}
 </style>
 <script>
+function removeImage(url){var f=document.createElement('form');f.method='post';f.action=url;document.body.appendChild(f);f.submit();}
 (function(){
   var dz=document.getElementById('drop-zone');
   var inp=document.getElementById('image');
