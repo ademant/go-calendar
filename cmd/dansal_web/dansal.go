@@ -1213,6 +1213,111 @@ func (c *DansalClient) ContactPoster(ctx context.Context, id int, email, message
 	return nil
 }
 
+// ── users & invites ───────────────────────────────────────────────────────────
+
+type InviteLink struct {
+	ID        int    `json:"id"`
+	Token     string `json:"token"`
+	Role      string `json:"role"`
+	OrgID     *int   `json:"org_id,omitempty"`
+	ExpiresAt string `json:"expires_at"`
+	UsedAt    string `json:"used_at,omitempty"`
+	CreatedAt string `json:"created_at"`
+}
+
+func (c *DansalClient) GetAllUsers(ctx context.Context, token string) ([]UserInfo, error) {
+	resp, err := c.authed(ctx, http.MethodGet, "/api/v1/users", token, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("dansal API: %s", resp.Status)
+	}
+	var users []UserInfo
+	return users, json.NewDecoder(resp.Body).Decode(&users)
+}
+
+func (c *DansalClient) DeleteUser(ctx context.Context, id int, token string) error {
+	resp, err := c.authed(ctx, http.MethodDelete, fmt.Sprintf("/api/v1/users/%d", id), token, nil)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusNoContent {
+		return fmt.Errorf("dansal API: %s", resp.Status)
+	}
+	return nil
+}
+
+func (c *DansalClient) AddOrgMember(ctx context.Context, orgID, userID int, token string) error {
+	body, _ := json.Marshal(map[string]int{"user_id": userID})
+	resp, err := c.authed(ctx, http.MethodPost, fmt.Sprintf("/api/v1/organizations/%d/members", orgID), token, body)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusCreated {
+		return fmt.Errorf("dansal API: %s", resp.Status)
+	}
+	return nil
+}
+
+func (c *DansalClient) RemoveOrgMember(ctx context.Context, orgID, userID int, token string) error {
+	resp, err := c.authed(ctx, http.MethodDelete, fmt.Sprintf("/api/v1/organizations/%d/members/%d", orgID, userID), token, nil)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusNoContent {
+		return fmt.Errorf("dansal API: %s", resp.Status)
+	}
+	return nil
+}
+
+func (c *DansalClient) ListInvites(ctx context.Context, token string) ([]InviteLink, error) {
+	resp, err := c.authed(ctx, http.MethodGet, "/api/v1/invites", token, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("dansal API: %s", resp.Status)
+	}
+	var links []InviteLink
+	return links, json.NewDecoder(resp.Body).Decode(&links)
+}
+
+func (c *DansalClient) CreateInvite(ctx context.Context, role string, orgID *int, token string) (InviteLink, error) {
+	payload := map[string]interface{}{"role": role}
+	if orgID != nil {
+		payload["org_id"] = *orgID
+	}
+	body, _ := json.Marshal(payload)
+	resp, err := c.authed(ctx, http.MethodPost, "/api/v1/invites", token, body)
+	if err != nil {
+		return InviteLink{}, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusCreated {
+		return InviteLink{}, fmt.Errorf("dansal API: %s", resp.Status)
+	}
+	var link InviteLink
+	return link, json.NewDecoder(resp.Body).Decode(&link)
+}
+
+func (c *DansalClient) RevokeInvite(ctx context.Context, inviteToken, authToken string) error {
+	resp, err := c.authed(ctx, http.MethodDelete, "/api/v1/invites/"+inviteToken, authToken, nil)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusNoContent {
+		return fmt.Errorf("dansal API: %s", resp.Status)
+	}
+	return nil
+}
+
 func (c *DansalClient) VerifyContactPost(ctx context.Context, token string) error {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.BaseURL+"/api/v1/contact-posts/verify/"+token, nil)
 	if err != nil {

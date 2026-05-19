@@ -991,6 +991,239 @@ type AdminEventNewData struct {
 	ErrorKey      string
 }
 
+// ── Users & Invites ───────────────────────────────────────────────────────────
+
+type AdminUsersData struct {
+	IsAdmin        bool
+	Users          []UserInfo
+	Orgs           []Organization
+	OrgMap         map[int]Organization
+	UserOrgs       map[int][]int
+	Invites        []InviteLink
+	BaseURL        string
+	NewInviteToken string
+}
+
+func adminUsersHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		su, ok := requireLogin(w, r)
+		if !ok {
+			return
+		}
+		token := getSessionToken(r)
+		isAdmin := su.Role == "admin"
+
+		orgs, _ := client.GetOrganizations(r.Context())
+		orgMap := make(map[int]Organization, len(orgs))
+		for _, o := range orgs {
+			orgMap[o.ID] = o
+		}
+
+		userOrgs := make(map[int][]int)
+		for _, o := range orgs {
+			members, err := client.GetOrganizationMembers(r.Context(), o.ID, token)
+			if err != nil {
+				continue
+			}
+			for _, m := range members {
+				userOrgs[m.UserID] = append(userOrgs[m.UserID], o.ID)
+			}
+		}
+
+		var users []UserInfo
+		if isAdmin {
+			users, _ = client.GetAllUsers(r.Context(), token)
+		} else {
+			seen := make(map[int]bool)
+			for _, orgID := range userOrgs[su.ID] {
+				members, _ := client.GetOrganizationMembers(r.Context(), orgID, token)
+				for _, m := range members {
+					if !seen[m.UserID] {
+						seen[m.UserID] = true
+						users = append(users, UserInfo{ID: m.UserID, Username: m.Username})
+					}
+				}
+			}
+		}
+
+		invites, _ := client.ListInvites(r.Context(), token)
+		active := make([]InviteLink, 0, len(invites))
+		for _, inv := range invites {
+			if inv.UsedAt == "" {
+				active = append(active, inv)
+			}
+		}
+
+		title := i18n.T(r, "admin_users_title")
+		renderTemplate(w, tmpls.adminUsers, tmplData(r, cfg, i18n, title, AdminUsersData{
+			IsAdmin:        isAdmin,
+			Users:          users,
+			Orgs:           orgs,
+			OrgMap:         orgMap,
+			UserOrgs:       userOrgs,
+			Invites:        active,
+			BaseURL:        cfg.publicBaseURL(),
+			NewInviteToken: r.URL.Query().Get("new_invite"),
+		}))
+	}
+}
+
+func adminUserDeleteHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		su, ok := requireLogin(w, r)
+		if !ok {
+			return
+		}
+		if su.Role != "admin" {
+			http.Error(w, "Forbidden", http.StatusForbidden)
+			return
+		}
+		id, err := strconv.Atoi(mux.Vars(r)["id"])
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		_ = client.DeleteUser(r.Context(), id, getSessionToken(r))
+		http.Redirect(w, r, "/admin/users", http.StatusSeeOther)
+	}
+}
+
+func adminUserRoleHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		su, ok := requireLogin(w, r)
+		if !ok {
+			return
+		}
+		if su.Role != "admin" {
+			http.Error(w, "Forbidden", http.StatusForbidden)
+			return
+		}
+		id, err := strconv.Atoi(mux.Vars(r)["id"])
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		if err := r.ParseForm(); err != nil {
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+		_ = client.UpdateUser(r.Context(), id, map[string]string{"role": r.FormValue("role")}, getSessionToken(r))
+		http.Redirect(w, r, "/admin/users", http.StatusSeeOther)
+	}
+}
+
+func adminUserOrgHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		su, ok := requireLogin(w, r)
+		if !ok {
+			return
+		}
+		if su.Role != "admin" {
+			http.Error(w, "Forbidden", http.StatusForbidden)
+			return
+		}
+		if err := r.ParseForm(); err != nil {
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+		userID, err := strconv.Atoi(mux.Vars(r)["id"])
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		token := getSessionToken(r)
+		action := r.FormValue("action")
+		orgID, err := strconv.Atoi(r.FormValue("org_id"))
+		if err != nil {
+			http.Redirect(w, r, "/admin/users", http.StatusSeeOther)
+			return
+		}
+		if action == "remove" {
+			_ = client.RemoveOrgMember(r.Context(), orgID, userID, token)
+		} else {
+			_ = client.AddOrgMember(r.Context(), orgID, userID, token)
+		}
+		http.Redirect(w, r, "/admin/users", http.StatusSeeOther)
+	}
+}
+
+func adminUsersBulkHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		su, ok := requireLogin(w, r)
+		if !ok {
+			return
+		}
+		if su.Role != "admin" {
+			http.Error(w, "Forbidden", http.StatusForbidden)
+			return
+		}
+		if err := r.ParseForm(); err != nil {
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+		token := getSessionToken(r)
+		action := r.FormValue("action")
+		for _, idStr := range r.Form["user_ids"] {
+			id, err := strconv.Atoi(idStr)
+			if err != nil {
+				continue
+			}
+			switch action {
+			case "delete":
+				_ = client.DeleteUser(r.Context(), id, token)
+			case "org":
+				orgID, err := strconv.Atoi(r.FormValue("org_id"))
+				if err == nil {
+					_ = client.AddOrgMember(r.Context(), orgID, id, token)
+				}
+			}
+		}
+		http.Redirect(w, r, "/admin/users", http.StatusSeeOther)
+	}
+}
+
+func adminInviteCreateHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		_, ok := requireLogin(w, r)
+		if !ok {
+			return
+		}
+		if err := r.ParseForm(); err != nil {
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+		token := getSessionToken(r)
+		role := r.FormValue("role")
+		if role == "" {
+			role = "user"
+		}
+		var orgID *int
+		if s := r.FormValue("org_id"); s != "" {
+			if id, err := strconv.Atoi(s); err == nil {
+				orgID = &id
+			}
+		}
+		link, err := client.CreateInvite(r.Context(), role, orgID, token)
+		if err != nil {
+			http.Redirect(w, r, "/admin/users", http.StatusSeeOther)
+			return
+		}
+		http.Redirect(w, r, "/admin/users?new_invite="+link.Token, http.StatusSeeOther)
+	}
+}
+
+func adminInviteRevokeHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		_, ok := requireLogin(w, r)
+		if !ok {
+			return
+		}
+		invToken := mux.Vars(r)["token"]
+		_ = client.RevokeInvite(r.Context(), invToken, getSessionToken(r))
+		http.Redirect(w, r, "/admin/users", http.StatusSeeOther)
+	}
+}
+
 func adminEventsHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		_, ok := requireLogin(w, r)

@@ -1,0 +1,215 @@
+{{template "base" .}}
+{{define "content"}}
+<div class="page-header">
+  <h1>{{.Strings.T "admin_users_title"}}</h1>
+</div>
+
+{{with .Data}}
+
+{{if .NewInviteToken}}
+<div class="invite-banner">
+  <strong>{{$.Strings.T "admin_invite_create"}}:</strong>
+  <code id="new-invite-url">{{.BaseURL}}/invites/{{.NewInviteToken}}</code>
+  <button type="button" class="btn-sm" onclick="copyInvite()">{{$.Strings.T "admin_invite_copy"}}</button>
+</div>
+{{end}}
+
+<form id="bulk-form" method="post" action="/admin/users/bulk">
+{{if .IsAdmin}}
+<div class="bulk-bar" id="bulk-bar" style="display:none">
+  <span id="bulk-count"></span>
+  <select name="org_id">
+    <option value="">{{$.Strings.T "loc_no_org"}}</option>
+    {{range .Orgs}}<option value="{{.ID}}">{{.Name}}</option>{{end}}
+  </select>
+  <button name="action" value="org" type="submit" class="btn-sm">{{$.Strings.T "loc_bulk_assign_btn"}}</button>
+  <button name="action" value="delete" type="submit" class="btn-sm btn-del"
+          onclick="return confirm('{{$.Strings.T "admin_users_bulk_confirm"}}')">{{$.Strings.T "admin_users_bulk_delete"}}</button>
+</div>
+{{end}}
+
+<div class="table-wrap">
+<table class="event-table" id="user-table">
+  <thead>
+    <tr>
+      {{if $.Data.IsAdmin}}<th class="col-cb"><input type="checkbox" id="cb-all"></th>{{end}}
+      <th>{{$.Strings.T "settings_username"}}</th>
+      {{if $.Data.IsAdmin}}<th>{{$.Strings.T "settings_email"}}</th>{{end}}
+      <th>{{$.Strings.T "settings_role"}}</th>
+      <th>{{$.Strings.T "fetch_org"}}</th>
+      {{if $.Data.IsAdmin}}<th></th>{{end}}
+    </tr>
+  </thead>
+  <tbody>
+  {{range .Users}}
+  {{$uid := .ID}}
+  <tr>
+    {{if $.Data.IsAdmin}}<td class="col-cb"><input type="checkbox" name="user_ids" value="{{$uid}}" class="user-cb"></td>{{end}}
+    <td>{{.Username}}</td>
+    {{if $.Data.IsAdmin}}<td class="email-cell">{{.Email}}</td>{{end}}
+    <td>
+      {{if $.Data.IsAdmin}}
+      <form method="post" action="/admin/users/{{$uid}}/role" style="display:inline">
+        <select name="role" class="inline-select" onchange="this.form.submit()">
+          <option value="admin"{{if eq .Role "admin"}} selected{{end}}>admin</option>
+          <option value="user"{{if eq .Role "user"}} selected{{end}}>user</option>
+          <option value="publisher"{{if eq .Role "publisher"}} selected{{end}}>publisher</option>
+          <option value="viewer"{{if eq .Role "viewer"}} selected{{end}}>viewer</option>
+        </select>
+      </form>
+      {{else}}{{.Role}}{{end}}
+    </td>
+    <td>
+      {{$userOrgs := index $.Data.UserOrgs $uid}}
+      {{range $userOrgs}}
+        {{$oid := .}}
+        {{$org := index $.Data.OrgMap $oid}}
+        <span class="org-tag">{{$org.Name}}
+          {{if $.Data.IsAdmin}}<button type="button" class="rm-org-btn" onclick="rmOrg({{$uid}},{{$oid}})">×</button>{{end}}
+        </span>
+      {{end}}
+      {{if $.Data.IsAdmin}}
+      <form method="post" action="/admin/users/{{$uid}}/org" style="display:inline" id="addorg-{{$uid}}">
+        <input type="hidden" name="action" value="add">
+        <select name="org_id" class="inline-select" onchange="if(this.value)document.getElementById('addorg-{{$uid}}').submit()">
+          <option value="">+</option>
+          {{range $.Data.Orgs}}<option value="{{.ID}}">{{.Name}}</option>{{end}}
+        </select>
+      </form>
+      {{end}}
+    </td>
+    {{if $.Data.IsAdmin}}
+    <td class="col-actions">
+      <button type="button" class="btn-sm btn-del"
+              onclick="if(confirm('{{$.Strings.T "admin_user_confirm_delete"}}'))delUser({{$uid}})">{{$.Strings.T "admin_delete"}}</button>
+    </td>
+    {{end}}
+  </tr>
+  {{end}}
+  </tbody>
+</table>
+</div>
+</form>
+
+<div class="invite-section">
+  <h2>{{$.Strings.T "admin_invite_active"}}</h2>
+
+  <form method="post" action="/admin/invites/new" class="invite-form">
+    <select name="role">
+      <option value="user">user</option>
+      <option value="publisher">publisher</option>
+      <option value="viewer">viewer</option>
+      {{if .IsAdmin}}<option value="admin">admin</option>{{end}}
+    </select>
+    {{if .IsAdmin}}
+    <select name="org_id">
+      <option value="">{{$.Strings.T "admin_invite_no_org"}}</option>
+      {{range .Orgs}}<option value="{{.ID}}">{{.Name}}</option>{{end}}
+    </select>
+    {{end}}
+    <button type="submit" class="btn-primary" style="text-decoration:none;padding:.4rem 1rem;background:#1a6eb5;color:#fff;border-radius:4px;font-size:.9rem;border:none;cursor:pointer">+ {{$.Strings.T "admin_invite_create"}}</button>
+  </form>
+
+  {{if .Invites}}
+  <table class="event-table">
+    <thead>
+      <tr>
+        <th>{{$.Strings.T "admin_invite_link_label"}}</th>
+        <th>{{$.Strings.T "settings_role"}}</th>
+        <th>{{$.Strings.T "fetch_org"}}</th>
+        <th>{{$.Strings.T "admin_invite_expires"}}</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+    {{range .Invites}}
+    <tr>
+      <td class="invite-link-cell">
+        <code>{{$.Data.BaseURL}}/invites/{{.Token}}</code>
+        <button type="button" class="btn-sm" onclick="copyText('{{$.Data.BaseURL}}/invites/{{.Token}}')">{{$.Strings.T "admin_invite_copy"}}</button>
+      </td>
+      <td>{{.Role}}</td>
+      <td>{{if .OrgID}}{{$o := index $.Data.OrgMap (derefInt .OrgID)}}{{$o.Name}}{{else}}{{$.Strings.T "admin_invite_no_org"}}{{end}}</td>
+      <td class="muted">{{.ExpiresAt}}</td>
+      <td>
+        <button type="button" class="btn-sm btn-del"
+                onclick="if(confirm('{{$.Strings.T "admin_invite_confirm_revoke"}}'))revokeInvite('{{.Token}}')">{{$.Strings.T "admin_invite_revoke"}}</button>
+      </td>
+    </tr>
+    {{end}}
+    </tbody>
+  </table>
+  {{end}}
+</div>
+
+{{end}}
+
+<style>
+.page-header{display:flex;align-items:center;gap:1rem;margin-bottom:.5rem}
+.page-header h1{margin:0}
+.col-cb{width:2rem;text-align:center}
+.col-actions{white-space:nowrap}
+.btn-del{background:#b00020;color:#fff;border:none}
+.btn-del:hover{background:#800016}
+.bulk-bar{display:flex;align-items:center;gap:.75rem;margin-bottom:.75rem;background:#f4f6fb;padding:.5rem .75rem;border-radius:6px;border:1px solid #ddd}
+.bulk-bar select{padding:.3rem .5rem;border:1px solid #ccc;border-radius:4px;font-size:.9rem}
+.inline-select{padding:.2rem .4rem;border:1px solid #ccc;border-radius:4px;font-size:.85rem}
+.email-cell{font-size:.85rem}
+.org-tag{display:inline-flex;align-items:center;gap:.2rem;background:#e8eef7;border-radius:4px;padding:.1rem .4rem;font-size:.82rem;margin:.1rem .2rem .1rem 0}
+.rm-org-btn{background:none;border:none;cursor:pointer;color:#888;font-size:.9rem;padding:0;line-height:1}
+.rm-org-btn:hover{color:#b00020}
+.invite-section{margin-top:2rem}
+.invite-section h2{font-size:1.1rem;margin-bottom:.75rem}
+.invite-form{display:flex;gap:.5rem;align-items:center;margin-bottom:1rem;flex-wrap:wrap}
+.invite-form select{padding:.3rem .5rem;border:1px solid #ccc;border-radius:4px;font-size:.9rem}
+.invite-link-cell{display:flex;align-items:center;gap:.4rem;font-size:.8rem}
+.invite-link-cell code{word-break:break-all}
+.invite-banner{background:#d4edda;border:1px solid #a3d9a5;border-radius:6px;padding:.75rem 1rem;margin-bottom:1rem;display:flex;align-items:center;gap:.75rem;flex-wrap:wrap}
+.invite-banner code{background:#fff;padding:.2rem .4rem;border-radius:3px;font-size:.85rem;word-break:break-all}
+.muted{color:#888;font-size:.85rem}
+</style>
+
+<script>
+function delUser(id) {
+  var f = document.createElement('form');
+  f.method = 'post'; f.action = '/admin/users/' + id + '/delete';
+  document.body.appendChild(f); f.submit();
+}
+function rmOrg(userID, orgID) {
+  var f = document.createElement('form');
+  f.method = 'post'; f.action = '/admin/users/' + userID + '/org';
+  var a = document.createElement('input'); a.name = 'action'; a.value = 'remove'; f.appendChild(a);
+  var o = document.createElement('input'); o.name = 'org_id'; o.value = orgID; f.appendChild(o);
+  document.body.appendChild(f); f.submit();
+}
+function revokeInvite(token) {
+  var f = document.createElement('form');
+  f.method = 'post'; f.action = '/admin/invites/' + token + '/revoke';
+  document.body.appendChild(f); f.submit();
+}
+function copyText(t) {
+  if (navigator.clipboard) navigator.clipboard.writeText(t);
+}
+function copyInvite() {
+  var el = document.getElementById('new-invite-url');
+  if (el) copyText(el.textContent.trim());
+}
+(function(){
+  var cbAll = document.getElementById('cb-all');
+  if (!cbAll) return;
+  var cbs = document.querySelectorAll('.user-cb');
+  var bar = document.getElementById('bulk-bar');
+  var countEl = document.getElementById('bulk-count');
+  function updateCount() {
+    var n = document.querySelectorAll('.user-cb:checked').length;
+    if (countEl) countEl.textContent = n > 0 ? n + ' ✓' : '';
+    if (bar) bar.style.display = n > 0 ? 'flex' : 'none';
+  }
+  cbAll.addEventListener('change', function() {
+    cbs.forEach(function(cb){ cb.checked = cbAll.checked; });
+    updateCount();
+  });
+  cbs.forEach(function(cb){ cb.addEventListener('change', updateCount); });
+})();
+</script>
+{{end}}

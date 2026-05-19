@@ -397,6 +397,7 @@ type Templates struct {
 	verify             *template.Template
 	bookingVerify      *template.Template
 	checkin            *template.Template
+	adminUsers         *template.Template
 	adminBookings      *template.Template
 	adminOrgs          *template.Template
 	adminOrgEdit       *template.Template
@@ -434,6 +435,7 @@ func loadTemplates() *Templates {
 		verify:            load("verify"),
 		bookingVerify:     load("booking_verify"),
 		checkin:           load("checkin"),
+		adminUsers:        load("admin_users"),
 		adminBookings:     load("admin_bookings"),
 		adminOrgs:         load("admin_orgs"),
 		adminOrgEdit:      load("admin_org_edit"),

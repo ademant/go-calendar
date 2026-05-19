@@ -85,6 +85,14 @@ func main() {
 	r.HandleFunc("/api/v1/login/magic/{token}", magicLoginHandler(cfg, tmpls, client, i18n)).Methods("GET")
 	r.HandleFunc("/api/v1/verify/{token}", verifyEmailHandler(cfg, tmpls, client, i18n)).Methods("GET")
 
+	r.HandleFunc("/admin/users", adminUsersHandler(cfg, tmpls, client, i18n)).Methods("GET")
+	r.HandleFunc("/admin/users/bulk", adminUsersBulkHandler(cfg, client)).Methods("POST")
+	r.HandleFunc("/admin/users/{id}/delete", adminUserDeleteHandler(cfg, client)).Methods("POST")
+	r.HandleFunc("/admin/users/{id}/role", adminUserRoleHandler(cfg, client)).Methods("POST")
+	r.HandleFunc("/admin/users/{id}/org", adminUserOrgHandler(cfg, client)).Methods("POST")
+	r.HandleFunc("/admin/invites/new", adminInviteCreateHandler(cfg, client)).Methods("POST")
+	r.HandleFunc("/admin/invites/{token}/revoke", adminInviteRevokeHandler(cfg, client)).Methods("POST")
+
 	r.HandleFunc("/admin/events/{id}/bookings", adminBookingsHandler(cfg, tmpls, client, i18n)).Methods("GET")
 	r.HandleFunc("/admin/bookings/{id}/approve", adminBookingApproveHandler(cfg, client)).Methods("POST")
 	r.HandleFunc("/admin/bookings/{id}/cancel", adminBookingCancelHandler(cfg, client)).Methods("POST")
