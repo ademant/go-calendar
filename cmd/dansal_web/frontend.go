@@ -30,6 +30,9 @@ type TemplateData struct {
 	Contact      string
 	ImpressumURL string
 	Data         interface{}
+	BannerHeight int
+	LogoHeight   int
+	DarkMode     string // "auto", "light", or "dark"
 }
 
 func tmplData(r *http.Request, cfg *Config, i18n *I18n, title string, data interface{}) TemplateData {
@@ -38,6 +41,13 @@ func tmplData(r *http.Request, cfg *Config, i18n *I18n, title string, data inter
 	impressumURL := ""
 	if cfg.pagesContent.ImpressumText(lang) != "" {
 		impressumURL = "/impressum"
+	}
+	isMain := r.URL.Path == "/"
+	bannerHeight := cfg.BannerHeightSub
+	logoHeight := cfg.LogoHeightSub
+	if isMain {
+		bannerHeight = cfg.BannerHeightMain
+		logoHeight = cfg.LogoHeightMain
 	}
 	return TemplateData{
 		Title:        title,
@@ -49,6 +59,9 @@ func tmplData(r *http.Request, cfg *Config, i18n *I18n, title string, data inter
 		Contact:      contact,
 		ImpressumURL: impressumURL,
 		Data:         data,
+		BannerHeight: bannerHeight,
+		LogoHeight:   logoHeight,
+		DarkMode:     cfg.DarkMode,
 	}
 }
 
@@ -78,6 +91,7 @@ type OrgData struct {
 	Musicians      []Musician
 	Slug           string
 	Handle         string
+	FollowerCount  int
 }
 
 type OrgListItem struct {
@@ -563,6 +577,7 @@ func orgFrontendHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *Dansa
 
 		allEvents, _ := client.GetAllEventsByOrg(r.Context(), actor.OrgID)
 		musicians, _ := client.GetMusiciansByOrg(r.Context(), actor.OrgID)
+		followerCount, _ := countFollowers(db, actor.OrgID)
 
 		now := time.Now().Unix()
 		var upcoming, past []Event
@@ -587,6 +602,7 @@ func orgFrontendHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *Dansa
 			Musicians:      musicians,
 			Slug:           slug,
 			Handle:         handle,
+			FollowerCount:  followerCount,
 		}))
 	}
 }

@@ -31,14 +31,14 @@
 
 <style>
 .musician-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:1rem;margin-top:.5rem}
-.musician-card{display:flex;flex-direction:column;background:#fff;border:1px solid #ddd;border-radius:8px;overflow:hidden;text-decoration:none;color:#1a1a2e;transition:box-shadow .15s,border-color .15s}
-.musician-card:hover{border-color:#9ab0e8;box-shadow:0 2px 8px rgba(26,110,181,.12)}
+.musician-card{display:flex;flex-direction:column;background:var(--bg-card);border:1px solid var(--border);border-radius:8px;overflow:hidden;text-decoration:none;color:var(--heading);transition:box-shadow .15s,border-color .15s}
+.musician-card:hover{border-color:var(--link);box-shadow:0 2px 8px rgba(26,110,181,.12)}
 .mcard-img{width:100%;aspect-ratio:1;object-fit:cover;display:block}
-.mcard-placeholder{width:100%;aspect-ratio:1;background:linear-gradient(135deg,#e8ecf5 0%,#d0d8ee 100%)}
+.mcard-placeholder{width:100%;aspect-ratio:1;background:linear-gradient(135deg,var(--bg-subtle) 0%,var(--musician-border) 100%)}
 .mcard-body{padding:.75rem .9rem;flex:1;display:flex;flex-direction:column;gap:.2rem}
 .mcard-name{font-weight:600;font-size:.95rem}
-.mcard-short{font-size:.8rem;color:#888}
+.mcard-short{font-size:.8rem;color:var(--fg-faint)}
 .mcard-meta{display:flex;flex-wrap:wrap;gap:.2rem;margin:.1rem 0}
-.mcard-desc{font-size:.82rem;color:#666;margin-top:.2rem;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;line-height:1.5}
+.mcard-desc{font-size:.82rem;color:var(--fg-muted);margin-top:.2rem;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;line-height:1.5}
 </style>
 {{end}}

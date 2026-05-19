@@ -19,6 +19,14 @@ type Config struct {
 	I18nFile  string `yaml:"i18n_file"`  // optional path to override embedded i18n.yaml
 	PagesFile string `yaml:"pages_file"` // optional path to impressum/contact YAML
 
+	// Layout
+	ImagesDir        string `yaml:"images_dir"`         // directory for logo.svg, banner.svg, favicon.svg
+	BannerHeightMain int    `yaml:"banner_height_main"` // px; 0 = hidden
+	BannerHeightSub  int    `yaml:"banner_height_sub"`  // px; 0 = hidden (default)
+	LogoHeightMain   int    `yaml:"logo_height_main"`   // px in nav on main page
+	LogoHeightSub    int    `yaml:"logo_height_sub"`    // px in nav on sub pages
+	DarkMode         string `yaml:"dark_mode"`          // "auto" (default), "light", "dark"
+
 	pagesContent *PagesContent
 }
 
@@ -32,9 +40,14 @@ func (cfg *Config) publicBaseURL() string {
 
 func loadConfig() *Config {
 	cfg := &Config{
-		Listen:   ":8080",
-		DBPath:   "web.db",
-		PollSecs: 300,
+		Listen:           ":8080",
+		DBPath:           "web.db",
+		PollSecs:         300,
+		BannerHeightMain: 200,
+		BannerHeightSub:  0,
+		LogoHeightMain:   48,
+		LogoHeightSub:    32,
+		DarkMode:         "auto",
 	}
 
 	configPath := ""

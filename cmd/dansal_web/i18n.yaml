@@ -84,6 +84,7 @@ languages:
       evt_info: "Munudoù"
       org_follow_fediverse: "Heuliañ war ar Fediverse:"
       org_fediverse_hint: "Klask %s e Mastodon pe ul arloadenn Fediverse all evit heuliañ ha resev kemennoù degouezhioù."
+      org_followers: "%d heuliañer"
       org_events_title: "Degouezhioù"
       org_no_events: "Degouezh ebet kavet evit ar gevredigezh-mañ."
       org_show_past: "Degouezhioù tremenet"
@@ -436,6 +437,7 @@ languages:
       # Organisation page
       org_follow_fediverse: "Im Fediverse folgen:"
       org_fediverse_hint: "Suche nach %s in Mastodon oder einer anderen Fediverse-App, um Veranstaltungsankündigungen zu erhalten."
+      org_followers: "%d Follower"
       org_events_title: "Veranstaltungen"
       org_no_events: "Keine Veranstaltungen für diese Organisation gefunden."
       org_show_past: "Vergangene Veranstaltungen"
@@ -786,6 +788,7 @@ languages:
       # Organisation page
       org_follow_fediverse: "Heuliañ war ar Fediverse :"
       org_fediverse_hint: "Klaskit %s e Mastodon pe ur mezeg Fediverse all evit heuliañ ha resev kemennoù darvoudoù."
+      org_followers: "%d heuliañer"
       org_events_title: "Darvoudoù"
       org_no_events: "Darvoud ebet kavet evit ar gevredigezh-mañ."
       org_show_past: "Darvoudoù tremenet"
@@ -1134,6 +1137,7 @@ languages:
       # Organisation page
       org_follow_fediverse: "Follow on the Fediverse:"
       org_fediverse_hint: "Search for %s in Mastodon or another Fediverse app to follow and receive event announcements."
+      org_followers: "%d followers"
       org_events_title: "Events"
       org_no_events: "No events found for this organisation."
       org_show_past: "Past events"
@@ -1488,6 +1492,7 @@ languages:
       evt_info: "Detalles"
       org_follow_fediverse: "Seguir en el Fediverse:"
       org_fediverse_hint: "Busca %s en Mastodon u otra aplicación del Fediverse para seguir y recibir anuncios de eventos."
+      org_followers: "%d seguidores"
       org_events_title: "Eventos"
       org_no_events: "No se encontraron eventos para esta organización."
       org_show_past: "Eventos pasados"
@@ -1840,6 +1845,7 @@ languages:
       # Organisation page
       org_follow_fediverse: "Suivre sur le Fediverse :"
       org_fediverse_hint: "Recherchez %s dans Mastodon ou une autre application Fediverse pour suivre et recevoir les annonces d'événements."
+      org_followers: "%d abonnés"
       org_events_title: "Événements"
       org_no_events: "Aucun événement trouvé pour cette organisation."
       org_show_past: "Evenements passes"
@@ -2194,6 +2200,7 @@ languages:
       evt_info: "Dettagli"
       org_follow_fediverse: "Segui sul Fediverse:"
       org_fediverse_hint: "Cerca %s su Mastodon o un'altra app del Fediverse per seguire e ricevere annunci di eventi."
+      org_followers: "%d follower"
       org_events_title: "Eventi"
       org_no_events: "Nessun evento trovato per questa organizzazione."
       org_show_past: "Eventi passati"
@@ -2541,6 +2548,7 @@ languages:
       evt_info: "Details"
       org_follow_fediverse: "Volgen op het Fediverse:"
       org_fediverse_hint: "Zoek naar %s in Mastodon of een andere Fediverse-app om evenementen te volgen en aankondigingen te ontvangen."
+      org_followers: "%d volgers"
       org_events_title: "Evenementen"
       org_no_events: "Geen evenementen gevonden voor deze organisatie."
       org_show_past: "Afgelopen evenementen"

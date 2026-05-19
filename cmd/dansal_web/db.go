@@ -114,6 +114,12 @@ func removeFollower(db *sql.DB, orgID int, actorURI string) error {
 	return err
 }
 
+func countFollowers(db *sql.DB, orgID int) (int, error) {
+	var n int
+	err := db.QueryRow("SELECT COUNT(*) FROM followers WHERE org_id = ?", orgID).Scan(&n)
+	return n, err
+}
+
 func listFollowers(db *sql.DB, orgID int) ([]struct{ ActorURI, InboxURL string }, error) {
 	rows, err := db.Query(
 		"SELECT actor_uri, inbox_url FROM followers WHERE org_id = ? ORDER BY created_at",

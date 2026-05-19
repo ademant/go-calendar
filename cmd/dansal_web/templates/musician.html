@@ -91,8 +91,8 @@
 
 <style>
 .musician-header{display:flex;align-items:flex-start;gap:1.25rem;margin-bottom:1.25rem;flex-wrap:wrap}
-.musician-photo{width:120px;height:120px;object-fit:cover;border-radius:8px;flex-shrink:0;border:1px solid #ddd}
-.short-name{font-size:1rem;font-weight:400;color:#888}
+.musician-photo{width:120px;height:120px;object-fit:cover;border-radius:8px;flex-shrink:0;border:1px solid var(--border)}
+.short-name{font-size:1rem;font-weight:400;color:var(--fg-faint)}
 .musician-meta{display:flex;gap:.4rem;flex-wrap:wrap;margin-top:.4rem}
 .musician-links{display:flex;flex-wrap:wrap;gap:.5rem}
 .m-link{display:inline-block;padding:.3rem .8rem;border-radius:20px;font-size:.85rem;font-weight:600;text-decoration:none;color:#fff}
@@ -102,11 +102,11 @@
 .m-link-facebook{background:#1877f2}.m-link-facebook:hover{background:#0d5ab5}
 .m-link-soundcloud{background:#ff5500}.m-link-soundcloud:hover{background:#cc4400}
 .m-link-mb{background:#ba2025}.m-link-mb:hover{background:#8a1519}
-.detail-list{margin:.25rem 0;padding-left:1.25rem;color:#444;font-size:.95rem}
+.detail-list{margin:.25rem 0;padding-left:1.25rem;color:var(--fg-dim);font-size:.95rem}
 .detail-list li{margin-bottom:.2rem}
-.feed-links{margin:1rem 0 1.5rem;font-size:.85rem;color:#666}
-.feed-link{display:inline-block;margin-left:.4rem;padding:.15rem .5rem;border:1px solid #ccc;border-radius:3px;font-size:.8rem;color:#555;text-decoration:none}
-.feed-link:hover{border-color:#888;color:#222}
-.empty-msg{color:#888;font-size:.9rem}
+.feed-links{margin:1rem 0 1.5rem;font-size:.85rem;color:var(--fg-muted)}
+.feed-link{display:inline-block;margin-left:.4rem;padding:.15rem .5rem;border:1px solid var(--border-mid);border-radius:3px;font-size:.8rem;color:var(--fg-dim);text-decoration:none}
+.feed-link:hover{border-color:var(--fg-faint);color:var(--fg)}
+.empty-msg{color:var(--fg-faint);font-size:.9rem}
 </style>
 {{end}}

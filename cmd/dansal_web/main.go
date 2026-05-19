@@ -3,6 +3,8 @@ package main
 import (
 	"log"
 	"net/http"
+	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/gorilla/mux"
@@ -31,9 +33,21 @@ func main() {
 	r.HandleFunc("/org/{name}/followers", followersHandler(cfg, db)).Methods("GET")
 	r.HandleFunc("/org/{name}/inbox", inboxHandler(cfg, db, client)).Methods("POST")
 
-	r.HandleFunc("/favicon.svg", svgHandler(faviconSVG)).Methods("GET")
-	r.HandleFunc("/logo.svg", svgHandler(logoSVG)).Methods("GET")
-	r.HandleFunc("/banner.svg", svgHandler(bannerSVG)).Methods("GET")
+	faviconData, logoData, bannerData := faviconSVG, logoSVG, bannerSVG
+	if cfg.ImagesDir != "" {
+		if b, err := os.ReadFile(filepath.Join(cfg.ImagesDir, "favicon.svg")); err == nil {
+			faviconData = b
+		}
+		if b, err := os.ReadFile(filepath.Join(cfg.ImagesDir, "logo.svg")); err == nil {
+			logoData = b
+		}
+		if b, err := os.ReadFile(filepath.Join(cfg.ImagesDir, "banner.svg")); err == nil {
+			bannerData = b
+		}
+	}
+	r.HandleFunc("/favicon.svg", svgHandler(faviconData)).Methods("GET")
+	r.HandleFunc("/logo.svg", svgHandler(logoData)).Methods("GET")
+	r.HandleFunc("/banner.svg", svgHandler(bannerData)).Methods("GET")
 	r.HandleFunc("/", indexHandler(cfg, tmpls, client, i18n)).Methods("GET")
 	r.HandleFunc("/events/{id}", eventHandler(cfg, tmpls, client, i18n)).Methods("GET")
 	r.HandleFunc("/events/{id}/board", contactBoardPostHandler(cfg, client, i18n)).Methods("POST")

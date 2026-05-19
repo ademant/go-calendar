@@ -22,11 +22,11 @@
 
 <style>
 .orgs-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:1rem;margin-top:.5rem}
-.org-card{display:flex;flex-direction:column;gap:.35rem;background:#fff;border:1px solid #ddd;border-radius:8px;padding:1rem 1.1rem;text-decoration:none;color:#1a1a2e;transition:box-shadow .15s,border-color .15s}
-.org-card:hover{border-color:#9ab0e8;box-shadow:0 2px 8px rgba(26,110,181,.12)}
+.org-card{display:flex;flex-direction:column;gap:.35rem;background:var(--bg-card);border:1px solid var(--border);border-radius:8px;padding:1rem 1.1rem;text-decoration:none;color:var(--heading);transition:box-shadow .15s,border-color .15s}
+.org-card:hover{border-color:var(--link);box-shadow:0 2px 8px rgba(26,110,181,.12)}
 .org-card-name{font-weight:700;font-size:1rem}
-.org-card-town{font-size:.85rem;color:#888}
-.org-card-desc{font-size:.85rem;color:#555;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;line-height:1.5;margin:0}
+.org-card-town{font-size:.85rem;color:var(--fg-faint)}
+.org-card-desc{font-size:.85rem;color:var(--fg-dim);display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;line-height:1.5;margin:0}
 .org-card-meta{display:flex;flex-wrap:wrap;gap:.3rem;margin-top:.15rem}
 </style>
 {{end}}

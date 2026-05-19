@@ -24,6 +24,7 @@
 
 <div class="fediverse">
   <strong>{{$.Strings.T "org_follow_fediverse"}}</strong> <code>{{.Handle}}</code>
+  <span class="fediverse-followers">{{$.Strings.TF "org_followers" .FollowerCount}}</span>
   <p style="margin-top:.5rem;font-size:.9rem">{{$.Strings.TF "org_fediverse_hint" .Handle}}</p>
 </div>
 
@@ -121,10 +122,10 @@
 <style>
 .org-page-header{display:flex;align-items:center;gap:.75rem;margin-bottom:.5rem}
 .org-page-header h1{margin:0}
-.org-desc{margin-bottom:1.25rem;color:#444;line-height:1.6}
+.org-desc{margin-bottom:1.25rem;color:var(--fg-dim);line-height:1.6}
 .org-desc p{margin:.5rem 0}
 .org-desc h1,.org-desc h2,.org-desc h3{font-size:1.1rem;margin:.75rem 0 .25rem}
-.org-desc a{color:#1a6eb5}
+.org-desc a{color:var(--link)}
 .org-links{display:flex;flex-wrap:wrap;gap:.5rem;margin-bottom:1.25rem}
 .org-link{display:inline-block;padding:.3rem .8rem;border-radius:20px;font-size:.85rem;font-weight:600;text-decoration:none;color:#fff}
 .org-link-web{background:#1a6eb5}.org-link-web:hover{background:#0d4a80}
@@ -132,18 +133,19 @@
 .org-link-mastodon{background:#563acc}.org-link-mastodon:hover{background:#3c278e}
 .org-link-instagram{background:#c13584}.org-link-instagram:hover{background:#8a255e}
 .org-link-facebook{background:#1877f2}.org-link-facebook:hover{background:#0d5ab5}
-.feed-links{margin:1rem 0;font-size:.85rem;color:#666}
-.feed-link{display:inline-block;margin-left:.4rem;padding:.15rem .5rem;border:1px solid #ccc;border-radius:3px;font-size:.8rem;color:#555;text-decoration:none}
-.feed-link:hover{border-color:#888;color:#222}
+.fediverse-followers{margin-left:.6rem;font-size:.82rem;color:var(--fg-muted);background:var(--musician-bg);border:1px solid var(--musician-border);border-radius:12px;padding:.1rem .55rem}
+.feed-links{margin:1rem 0;font-size:.85rem;color:var(--fg-muted)}
+.feed-link{display:inline-block;margin-left:.4rem;padding:.15rem .5rem;border:1px solid var(--border-mid);border-radius:3px;font-size:.8rem;color:var(--fg-dim);text-decoration:none}
+.feed-link:hover{border-color:var(--fg-faint);color:var(--fg)}
 .past-events-section{margin-top:1.25rem}
-.past-toggle{padding:.35rem .9rem;background:#f5f5f5;border:1px solid #ccc;border-radius:4px;cursor:pointer;font-size:.88rem;color:#555}
-.past-toggle:hover{background:#e8e8e8;color:#222}
+.past-toggle{padding:.35rem .9rem;background:var(--btn-bg);border:1px solid var(--border-mid);border-radius:4px;cursor:pointer;font-size:.88rem;color:var(--fg-dim)}
+.past-toggle:hover{background:var(--btn-bg-h);color:var(--fg)}
 .past-item h3{font-size:.95rem}
 .past-item .event-meta{font-size:.82rem}
 .org-musicians{margin-top:1.5rem}
 .org-musicians h2{font-size:1.1rem;margin-bottom:.6rem}
 .musician-chips{list-style:none;padding:0;display:flex;flex-wrap:wrap;gap:.4rem}
-.musician-chips li a{display:inline-block;padding:.25rem .7rem;background:#f0f4ff;border:1px solid #c8d6f5;border-radius:20px;font-size:.85rem;color:#1a6eb5;text-decoration:none}
-.musician-chips li a:hover{background:#dce8ff;border-color:#a0bce8}
+.musician-chips li a{display:inline-block;padding:.25rem .7rem;background:var(--musician-bg);border:1px solid var(--musician-border);border-radius:20px;font-size:.85rem;color:var(--link);text-decoration:none}
+.musician-chips li a:hover{background:var(--bg-hover);border-color:var(--link)}
 </style>
 {{end}}
