@@ -178,6 +178,10 @@ func main() {
 		cmdPasswordRestore(rest)
 	case "fill-location-fields":
 		cmdFillLocationFields(rest)
+	case "export":
+		cmdExport(rest)
+	case "import":
+		cmdImport(rest)
 	case "smtp-show":
 		cmdSMTPShow(rest)
 	case "smtp-set":
@@ -224,6 +228,11 @@ Organization management:
 Maintenance:
   fill-location-fields [--db PATH] [--apply]         Parse address/town from location names
   vacuum                                             Reclaim unused database space
+
+Data export/import:
+  export --table TABLE [--output FILE] [--db PATH]   Export table to JSON
+  import --table TABLE [--input FILE] [--db PATH]    Import JSON (dry-run by default)
+         [--apply]                                   Tables: fetchurl, locations, organisations, events
 
 SMTP:
   smtp-show                                          Show current SMTP configuration
@@ -378,6 +387,27 @@ Send a test email using the current SMTP configuration.
 
 Flags:
   --to  Recipient email address (required)`,
+
+	"export": `Usage: dansal_admin export --table TABLE [--output FILE] [--db PATH]
+
+Export a database table to JSON. Output goes to stdout by default.
+
+Flags:
+  --table   Table to export: fetchurl, locations, organisations, events (required)
+  --output  Destination file (default: stdout)
+  --db      Path to calendar.db (default: /var/lib/dansal/calendar.db)`,
+
+	"import": `Usage: dansal_admin import --table TABLE [--input FILE] [--db PATH] [--apply]
+
+Import records from a JSON file. Runs as dry-run by default; pass --apply to write.
+Deduplication: fetch sources by URL, locations by name, organisations by name,
+events by uid then url.
+
+Flags:
+  --table   Table to import: fetchurl, locations, organisations, events (required)
+  --input   Source JSON file (default: stdin)
+  --db      Path to calendar.db (default: /var/lib/dansal/calendar.db)
+  --apply   Write changes to the database (default is dry-run)`,
 
 	"fill-location-fields": `Usage: dansal_admin fill-location-fields [--db PATH] [--apply]
 
