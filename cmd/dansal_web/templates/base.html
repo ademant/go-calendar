@@ -136,15 +136,16 @@ footer{text-align:center;color:var(--fg-hint);font-size:.8rem;margin-top:2rem;pa
     </select>
   </div>
   <div class="nav-links">
+    {{if .User}}
+    <a href="/admin/events">{{.Strings.T "nav_events"}}</a>
+    <a href="/admin/musicians">{{.Strings.T "nav_musicians"}}</a>
+    <a href="/admin/organizations">{{.Strings.T "nav_orgs"}}</a>
+    <a href="/admin/locations">{{.Strings.T "nav_admin_locations"}}</a>
+    <a href="/admin/fetchurls">{{.Strings.T "nav_admin_fetchurls"}}</a>
+    {{else}}
     <a href="/">{{.Strings.T "nav_events"}}</a>
     <a href="/musicians">{{.Strings.T "nav_musicians"}}</a>
     <a href="/organizations">{{.Strings.T "nav_orgs"}}</a>
-    {{if .User}}
-    <a href="/admin/events">{{.Strings.T "nav_admin_events"}}</a>
-    <a href="/admin/organizations">{{.Strings.T "nav_admin_orgs"}}</a>
-    <a href="/admin/musicians">{{.Strings.T "nav_admin_musicians"}}</a>
-    <a href="/admin/locations">{{.Strings.T "nav_admin_locations"}}</a>
-    <a href="/admin/fetchurls">{{.Strings.T "nav_admin_fetchurls"}}</a>
     {{end}}
   </div>
   <div class="nav-user">
