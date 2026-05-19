@@ -34,6 +34,8 @@ type TemplateData struct {
 	BannerHeight int
 	LogoHeight   int
 	DarkMode     string // "auto", "light", or "dark"
+	AppVersion   string
+	AppBuildTime string
 }
 
 func tmplData(r *http.Request, cfg *Config, i18n *I18n, title string, data interface{}) TemplateData {
@@ -71,6 +73,8 @@ func tmplData(r *http.Request, cfg *Config, i18n *I18n, title string, data inter
 		BannerHeight: bannerHeight,
 		LogoHeight:   logoHeight,
 		DarkMode:     cfg.DarkMode,
+		AppVersion:   Version,
+		AppBuildTime: BuildTime,
 	}
 }
 

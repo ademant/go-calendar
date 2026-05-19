@@ -84,6 +84,14 @@ nav{background:#1a1a2e;color:#fff;padding:.4rem 1rem;margin:0 -1rem 0;display:fl
 .nav-btn:hover{background:#c0c8ff;color:#1a1a2e}
 .nav-theme{background:transparent;border:1px solid #4a4a7a;color:#9090b8;border-radius:4px;padding:.2rem .55rem;font-size:.8rem;cursor:pointer;line-height:1.6;flex-shrink:0}
 .nav-theme:hover{border-color:#c0c8ff;color:#c0c8ff}
+.nav-info-wrap{position:relative;flex-shrink:0}
+.nav-info-btn{background:transparent;border:none;color:#9090b8;font-size:1rem;cursor:pointer;padding:.1rem .3rem;line-height:1;opacity:.75}
+.nav-info-btn:hover{color:#c0c8ff;opacity:1}
+.nav-info-popup{position:absolute;right:0;top:calc(100% + .4rem);background:#1e1e38;border:1px solid #4a4a7a;border-radius:5px;padding:.5rem .75rem;white-space:nowrap;z-index:100;font-size:.82rem;color:#c0c8ff;min-width:160px;box-shadow:0 4px 12px rgba(0,0,0,.4)}
+.nav-info-popup a{color:#8abfff;text-decoration:none;font-weight:600}
+.nav-info-popup a:hover{color:#fff;text-decoration:underline}
+.info-ver{margin-left:.35rem;color:#a0a4c0}
+.info-date{display:block;color:#7070a0;font-size:.78rem;margin-top:.15rem}
 main{max-width:960px;margin:0 auto;padding-bottom:3rem}
 h1{font-size:1.6rem;margin-bottom:1rem;color:var(--heading)}
 h2{font-size:1.2rem;margin:1.5rem 0 .5rem;color:var(--fg-2)}
@@ -152,6 +160,14 @@ footer{text-align:center;color:var(--fg-hint);font-size:.8rem;margin-top:2rem;pa
     {{end}}
   </div>
   <div class="nav-user">
+    <div class="nav-info-wrap">
+      <button class="nav-info-btn" onclick="toggleInfoPopup(this)" title="About dansal">ⓘ</button>
+      <div class="nav-info-popup" hidden>
+        <a href="https://github.com/ademant/dansal" target="_blank" rel="noopener">dansal</a>
+        <span class="info-ver">{{.AppVersion}}</span>
+        {{if ne .AppBuildTime "unknown"}}<span class="info-date">{{.AppBuildTime}}</span>{{end}}
+      </div>
+    </div>
     <button class="nav-theme" id="theme-btn" onclick="cycleTheme()" title="Toggle colour scheme">◑</button>
     {{if .User}}
       <a href="/settings" class="nav-user-name">{{.User.Username}}</a>
@@ -200,6 +216,12 @@ function initSortable(tbl){
       rows.forEach(function(r){tbody.appendChild(r);});
     });
   });
+}
+function toggleInfoPopup(btn){
+  var p=btn.nextElementSibling;
+  var open=!p.hidden;
+  p.hidden=open;
+  if(!open){document.addEventListener('click',function h(e){if(!btn.parentElement.contains(e.target)){p.hidden=true;document.removeEventListener('click',h);}},{once:false,capture:false});}
 }
 function cycleTheme(){
   var h=document.documentElement;
