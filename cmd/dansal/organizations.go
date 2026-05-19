@@ -146,11 +146,11 @@ func checkActorName(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	name := strings.TrimSpace(r.URL.Query().Get("name"))
 	if name == "" {
-		json.NewEncoder(w).Encode(map[string]interface{}{"available": false, "reason": "empty"})
+		json.NewEncoder(w).Encode(map[string]any{"available": false, "reason": "empty"})
 		return
 	}
 	if name == "relay" {
-		json.NewEncoder(w).Encode(map[string]interface{}{"available": false, "reason": "reserved"})
+		json.NewEncoder(w).Encode(map[string]any{"available": false, "reason": "reserved"})
 		return
 	}
 	excludeID, _ := strconv.Atoi(r.URL.Query().Get("exclude_id"))
@@ -161,9 +161,9 @@ func checkActorName(w http.ResponseWriter, r *http.Request) {
 		db.QueryRow("SELECT COUNT(*) FROM organizations WHERE actor_name=?", name).Scan(&n)
 	}
 	if n > 0 {
-		json.NewEncoder(w).Encode(map[string]interface{}{"available": false, "reason": "taken"})
+		json.NewEncoder(w).Encode(map[string]any{"available": false, "reason": "taken"})
 	} else {
-		json.NewEncoder(w).Encode(map[string]interface{}{"available": true})
+		json.NewEncoder(w).Encode(map[string]any{"available": true})
 	}
 }
 

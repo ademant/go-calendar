@@ -36,7 +36,7 @@ func contactBoardPostHandler(cfg *Config, client *DansalClient, i18n *I18n) http
 			persons = 1
 		}
 
-		post := map[string]interface{}{
+		post := map[string]any{
 			"type":     r.FormValue("type"),
 			"city":     r.FormValue("city"),
 			"persons":  persons,

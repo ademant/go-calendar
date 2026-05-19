@@ -181,7 +181,7 @@ func createContactPost(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	json.NewEncoder(w).Encode(map[string]any{
 		"id":      id,
 		"message": "A confirmation email has been sent. Your post will appear once verified.",
 	})

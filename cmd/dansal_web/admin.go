@@ -438,26 +438,26 @@ func adminOrgCheckActorNameHandler(cfg *Config, client *DansalClient) http.Handl
 		w.Header().Set("Content-Type", "application/json")
 		name := strings.TrimSpace(r.URL.Query().Get("name"))
 		if name == "" {
-			json.NewEncoder(w).Encode(map[string]interface{}{"available": false, "reason": "empty"})
+			json.NewEncoder(w).Encode(map[string]any{"available": false, "reason": "empty"})
 			return
 		}
 		if name == "relay" {
-			json.NewEncoder(w).Encode(map[string]interface{}{"available": false, "reason": "reserved"})
+			json.NewEncoder(w).Encode(map[string]any{"available": false, "reason": "reserved"})
 			return
 		}
 		excludeID, _ := strconv.Atoi(r.URL.Query().Get("id"))
 		orgs, err := client.GetOrganizations(r.Context())
 		if err != nil {
-			json.NewEncoder(w).Encode(map[string]interface{}{"available": false, "reason": "error"})
+			json.NewEncoder(w).Encode(map[string]any{"available": false, "reason": "error"})
 			return
 		}
 		for _, o := range orgs {
 			if o.ActorName == name && o.ID != excludeID {
-				json.NewEncoder(w).Encode(map[string]interface{}{"available": false, "reason": "taken"})
+				json.NewEncoder(w).Encode(map[string]any{"available": false, "reason": "taken"})
 				return
 			}
 		}
-		json.NewEncoder(w).Encode(map[string]interface{}{"available": true})
+		json.NewEncoder(w).Encode(map[string]any{"available": true})
 	}
 }
 

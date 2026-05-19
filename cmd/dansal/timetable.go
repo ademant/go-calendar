@@ -133,7 +133,7 @@ func readTimetableBody(r *http.Request) ([]TimetableEntryRequest, error) {
 }
 
 func insertEntry(q querier, eventID int, req TimetableEntryRequest) (TimetableEntry, error) {
-	var locIDArg interface{}
+	var locIDArg any
 	if req.LocationID != nil {
 		locIDArg = *req.LocationID
 	}

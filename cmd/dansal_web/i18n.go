@@ -26,7 +26,7 @@ func (s I18nStrings) T(key string) string {
 	return key
 }
 
-func (s I18nStrings) TF(key string, args ...interface{}) string {
+func (s I18nStrings) TF(key string, args ...any) string {
 	return fmt.Sprintf(s.T(key), args...)
 }
 

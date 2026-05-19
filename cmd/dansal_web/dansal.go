@@ -186,7 +186,7 @@ type UserInfo struct {
 	CreatedAt        string `json:"created_at"`
 }
 
-func (c *DansalClient) get(ctx context.Context, path string, out interface{}) error {
+func (c *DansalClient) get(ctx context.Context, path string, out any) error {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.BaseURL+path, nil)
 	if err != nil {
 		return err
@@ -486,7 +486,7 @@ func (c *DansalClient) DeleteOrganization(ctx context.Context, id int, token str
 }
 
 func (c *DansalClient) CreateFetchSource(ctx context.Context, rawURL, typ string, tags []string, orgID *int, token string) (int, error) {
-	payload := map[string]interface{}{
+	payload := map[string]any{
 		"url":  rawURL,
 		"type": typ,
 		"tags": tags,
@@ -506,7 +506,7 @@ func (c *DansalClient) CreateFetchSource(ctx context.Context, rawURL, typ string
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
 		return 0, apiErr(resp)
 	}
-	var events []interface{}
+	var events []any
 	json.NewDecoder(resp.Body).Decode(&events)
 	return len(events), nil
 }
@@ -541,7 +541,7 @@ func (c *DansalClient) GetFetchSource(ctx context.Context, id int, token string)
 }
 
 func (c *DansalClient) UpdateFetchSource(ctx context.Context, id int, typ string, tags []string, danceIDs []int, orgID *int, token string) error {
-	payload := map[string]interface{}{
+	payload := map[string]any{
 		"type":            typ,
 		"tags":            tags,
 		"dance_ids":       danceIDs,
@@ -640,7 +640,7 @@ func (c *DansalClient) RunFetchSource(ctx context.Context, id int, token string)
 }
 
 func (c *DansalClient) BulkDeleteFetchSources(ctx context.Context, ids []int, token string) error {
-	body, _ := json.Marshal(map[string]interface{}{"ids": ids})
+	body, _ := json.Marshal(map[string]any{"ids": ids})
 	resp, err := c.authed(ctx, http.MethodPost, "/api/v1/fetchurl/bulk-delete", token, body)
 	if err != nil {
 		return err
@@ -653,7 +653,7 @@ func (c *DansalClient) BulkDeleteFetchSources(ctx context.Context, ids []int, to
 }
 
 func (c *DansalClient) BulkRunFetchSources(ctx context.Context, ids []int, token string) error {
-	body, _ := json.Marshal(map[string]interface{}{"ids": ids})
+	body, _ := json.Marshal(map[string]any{"ids": ids})
 	resp, err := c.authed(ctx, http.MethodPost, "/api/v1/fetchurl/bulk-fetch", token, body)
 	if err != nil {
 		return err
@@ -666,7 +666,7 @@ func (c *DansalClient) BulkRunFetchSources(ctx context.Context, ids []int, token
 }
 
 func (c *DansalClient) BulkAssignFetchSourceOrg(ctx context.Context, ids []int, orgID *int, token string) error {
-	body, _ := json.Marshal(map[string]interface{}{"ids": ids, "organization_id": orgID})
+	body, _ := json.Marshal(map[string]any{"ids": ids, "organization_id": orgID})
 	resp, err := c.authed(ctx, http.MethodPost, "/api/v1/fetchurl/bulk-assign-org", token, body)
 	if err != nil {
 		return err
@@ -679,7 +679,7 @@ func (c *DansalClient) BulkAssignFetchSourceOrg(ctx context.Context, ids []int, 
 }
 
 func (c *DansalClient) BulkAssignLocationOrg(ctx context.Context, ids []int, orgID *int, token string) error {
-	payload := map[string]interface{}{"ids": ids, "organization_id": orgID}
+	payload := map[string]any{"ids": ids, "organization_id": orgID}
 	body, _ := json.Marshal(payload)
 	resp, err := c.authed(ctx, http.MethodPost, "/api/v1/locations/bulk-assign-org", token, body)
 	if err != nil {
@@ -1105,7 +1105,7 @@ func (c *DansalClient) GetContactPosts(ctx context.Context, eventID int) ([]Cont
 	return posts, c.get(ctx, fmt.Sprintf("/api/v1/events/%d/contact-posts", eventID), &posts)
 }
 
-func (c *DansalClient) CreateContactPost(ctx context.Context, eventID int, post map[string]interface{}) error {
+func (c *DansalClient) CreateContactPost(ctx context.Context, eventID int, post map[string]any) error {
 	body, _ := json.Marshal(post)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost,
 		c.BaseURL+fmt.Sprintf("/api/v1/events/%d/contact-posts", eventID),
@@ -1220,7 +1220,7 @@ func (c *DansalClient) CheckinBooking(ctx context.Context, qrToken, authToken st
 	return b, json.NewDecoder(resp.Body).Decode(&b)
 }
 
-func (c *DansalClient) CreateBooking(ctx context.Context, eventID int, fields map[string]interface{}) error {
+func (c *DansalClient) CreateBooking(ctx context.Context, eventID int, fields map[string]any) error {
 	body, _ := json.Marshal(fields)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost,
 		c.BaseURL+fmt.Sprintf("/api/v1/events/%d/bookings", eventID),
@@ -1399,7 +1399,7 @@ func (c *DansalClient) ListInvites(ctx context.Context, token string) ([]InviteL
 }
 
 func (c *DansalClient) CreateInvite(ctx context.Context, role string, orgID *int, token string) (InviteLink, error) {
-	payload := map[string]interface{}{"role": role}
+	payload := map[string]any{"role": role}
 	if orgID != nil {
 		payload["org_id"] = *orgID
 	}

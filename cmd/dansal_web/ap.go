@@ -1,9 +1,9 @@
 package main
 
-var APContext = []interface{}{
+var APContext = []any{
 	"https://www.w3.org/ns/activitystreams",
 	"https://w3id.org/security/v1",
-	map[string]interface{}{
+	map[string]any{
 		"toot":                      "http://joinmastodon.org/ns#",
 		"sc":                        "http://schema.org#",
 		"discoverable":              "toot:discoverable",
@@ -30,7 +30,7 @@ type APEndpoints struct {
 }
 
 type Actor struct {
-	Context                   interface{} `json:"@context"`
+	Context                   any `json:"@context"`
 	Type                      string      `json:"type"`
 	ID                        string      `json:"id"`
 	Name                      string      `json:"name"`
@@ -49,11 +49,11 @@ type Actor struct {
 }
 
 type Activity struct {
-	Context interface{} `json:"@context,omitempty"`
+	Context any `json:"@context,omitempty"`
 	Type    string      `json:"type"`
 	ID      string      `json:"id"`
 	Actor   string      `json:"actor"`
-	Object  interface{} `json:"object"`
+	Object  any `json:"object"`
 	To      []string    `json:"to,omitempty"`
 	CC      []string    `json:"cc,omitempty"`
 }
@@ -88,7 +88,7 @@ type APDocument struct {
 }
 
 type APEvent struct {
-	Context      interface{} `json:"@context,omitempty"`
+	Context      any `json:"@context,omitempty"`
 	Type         string      `json:"type"`
 	ID           string      `json:"id"`
 	Name         string      `json:"name"`
@@ -108,7 +108,7 @@ type APEvent struct {
 }
 
 type OrderedCollection struct {
-	Context    interface{} `json:"@context"`
+	Context    any `json:"@context"`
 	Type       string      `json:"type"`
 	ID         string      `json:"id"`
 	TotalItems int         `json:"totalItems"`
@@ -117,12 +117,12 @@ type OrderedCollection struct {
 }
 
 type OrderedCollectionPage struct {
-	Context      interface{}   `json:"@context"`
+	Context      any   `json:"@context"`
 	Type         string        `json:"type"`
 	ID           string        `json:"id"`
 	PartOf       string        `json:"partOf"`
 	TotalItems   int           `json:"totalItems"`
-	OrderedItems []interface{} `json:"orderedItems"`
+	OrderedItems []any `json:"orderedItems"`
 	Next         string        `json:"next,omitempty"`
 	Prev         string        `json:"prev,omitempty"`
 }

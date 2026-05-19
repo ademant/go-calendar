@@ -242,7 +242,7 @@ func createLocation(w http.ResponseWriter, r *http.Request) {
 		}
 		similar := similarLocations(req.Location, street, town)
 
-		var orgIDArg interface{}
+		var orgIDArg any
 		if req.OrganizationID != nil {
 			orgIDArg = *req.OrganizationID
 		}
@@ -380,7 +380,7 @@ func patchLocation(w http.ResponseWriter, r *http.Request) {
 	loc.Internetsite = req.Internetsite
 	loc.OrganizationID = req.OrganizationID
 
-	var orgVal interface{}
+	var orgVal any
 	if loc.OrganizationID != nil {
 		orgVal = *loc.OrganizationID
 	}
@@ -409,7 +409,7 @@ func bulkAssignLocationOrg(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "invalid body", http.StatusBadRequest)
 		return
 	}
-	var orgVal interface{}
+	var orgVal any
 	if req.OrganizationID != nil {
 		orgVal = *req.OrganizationID
 	}

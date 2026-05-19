@@ -364,7 +364,7 @@ func importFetchSources(db *sql.DB, input string, apply bool) {
 	n := 0
 	for _, s := range records {
 		tagsJSON, _ := json.Marshal(s.Tags)
-		var orgVal interface{}
+		var orgVal any
 		if s.OrganizationID != nil {
 			orgVal = *s.OrganizationID
 		}
@@ -406,7 +406,7 @@ func importLocations(db *sql.DB, input string, apply bool) {
 	fmt.Printf("importing %d location(s)...\n", len(records))
 	n := 0
 	for _, l := range records {
-		var orgVal interface{}
+		var orgVal any
 		if l.OrganizationID != nil {
 			orgVal = *l.OrganizationID
 		}
@@ -516,7 +516,7 @@ func importEvents(db *sql.DB, input string, apply bool) {
 		}
 
 		tagsJSON, _ := json.Marshal(ev.Tags)
-		var orgVal, locVal, uidVal interface{}
+		var orgVal, locVal, uidVal any
 		if ev.OrganizationID != nil {
 			orgVal = *ev.OrganizationID
 		}
@@ -595,7 +595,7 @@ func importEvents(db *sql.DB, input string, apply bool) {
 }
 
 // nullStr returns nil when s is empty so the column stores NULL.
-func nullStr(s string) interface{} {
+func nullStr(s string) any {
 	if s == "" {
 		return nil
 	}
@@ -603,7 +603,7 @@ func nullStr(s string) interface{} {
 }
 
 // nullFloat returns nil when f is zero so the column stores NULL.
-func nullFloat(f float64) interface{} {
+func nullFloat(f float64) any {
 	if f == 0 {
 		return nil
 	}

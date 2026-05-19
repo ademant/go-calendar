@@ -192,7 +192,7 @@ func upsertFetchSource(rawURL, typ string, tags []string, orgID *int) (int64, er
 	var id int64
 	err := db.QueryRow("SELECT id FROM fetch_sources WHERE url = ?", rawURL).Scan(&id)
 	if err == sql.ErrNoRows {
-		var orgVal interface{}
+		var orgVal any
 		if orgID != nil {
 			orgVal = *orgID
 		}
@@ -208,7 +208,7 @@ func upsertFetchSource(rawURL, typ string, tags []string, orgID *int) (int64, er
 	if err != nil {
 		return 0, err
 	}
-	var orgVal interface{}
+	var orgVal any
 	if orgID != nil {
 		orgVal = *orgID
 	}
@@ -304,7 +304,7 @@ func patchFetchSource(w http.ResponseWriter, r *http.Request) {
 	src.OrganizationID = req.OrganizationID
 
 	tagsJSON, _ := json.Marshal(src.Tags)
-	var orgVal interface{}
+	var orgVal any
 	if src.OrganizationID != nil {
 		orgVal = *src.OrganizationID
 	}
@@ -593,7 +593,7 @@ func bulkFetchURLsByIDs(w http.ResponseWriter, r *http.Request) {
 	}
 
 	placeholders := make([]string, len(req.IDs))
-	args := make([]interface{}, len(req.IDs))
+	args := make([]any, len(req.IDs))
 	for i, id := range req.IDs {
 		placeholders[i] = "?"
 		args[i] = id

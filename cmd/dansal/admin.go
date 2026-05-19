@@ -34,7 +34,7 @@ type adminRequest struct {
 type adminResponse struct {
 	OK    bool        `json:"ok"`
 	Error string      `json:"error,omitempty"`
-	Data  interface{} `json:"data,omitempty"`
+	Data  any `json:"data,omitempty"`
 }
 
 func startAdminSocket(path string) net.Listener {
@@ -476,12 +476,12 @@ func adminSMTPTest(req adminRequest) adminResponse {
 	return adminResponse{OK: true}
 }
 
-func smtpPublicConfig() map[string]interface{} {
+func smtpPublicConfig() map[string]any {
 	timeout := config.SMTP.TimeoutSecs
 	if timeout == 0 {
 		timeout = 30
 	}
-	return map[string]interface{}{
+	return map[string]any{
 		"host":         config.SMTP.Host,
 		"port":         config.SMTP.Port,
 		"username":     config.SMTP.Username,

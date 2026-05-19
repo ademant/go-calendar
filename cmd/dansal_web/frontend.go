@@ -30,7 +30,7 @@ type TemplateData struct {
 	Languages    []LangOption
 	Contact      string
 	ImpressumURL string
-	Data         interface{}
+	Data         any
 	BannerHeight int
 	LogoHeight   int
 	DarkMode     string // "auto", "light", or "dark"
@@ -38,7 +38,7 @@ type TemplateData struct {
 	AppBuildTime string
 }
 
-func tmplData(r *http.Request, cfg *Config, i18n *I18n, title string, data interface{}) TemplateData {
+func tmplData(r *http.Request, cfg *Config, i18n *I18n, title string, data any) TemplateData {
 	lang := i18n.detectLang(r)
 	contact := cfg.ContactOverride
 	if contact == "" {
@@ -532,7 +532,7 @@ func federatedEventHandler(db *sql.DB) http.HandlerFunc {
 	}
 }
 
-func renderTemplate(w http.ResponseWriter, tmpl *template.Template, data interface{}) {
+func renderTemplate(w http.ResponseWriter, tmpl *template.Template, data any) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := tmpl.ExecuteTemplate(w, "base", data); err != nil {
 		log.Printf("template error: %v", err)

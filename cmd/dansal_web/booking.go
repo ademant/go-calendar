@@ -26,7 +26,7 @@ func bookingPostHandler(cfg *Config, client *DansalClient, i18n *I18n) http.Hand
 			persons = 1
 		}
 
-		fields := map[string]interface{}{
+		fields := map[string]any{
 			"name":    r.FormValue("name"),
 			"email":   r.FormValue("email"),
 			"persons": persons,

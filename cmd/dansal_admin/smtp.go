@@ -13,7 +13,7 @@ func cmdSMTPShow(_ []string) {
 	if !resp.OK {
 		die("%s", resp.Error)
 	}
-	var cfg map[string]interface{}
+	var cfg map[string]any
 	json.Unmarshal(resp.Data, &cfg)
 	tw := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
 	for _, k := range []string{"host", "port", "username", "from", "from_name", "tls", "timeout_secs", "password_set"} {
@@ -92,7 +92,7 @@ func cmdSMTPTest(args []string) {
 	if !cfgResp.OK {
 		die("could not read SMTP config: %s", cfgResp.Error)
 	}
-	var cfg map[string]interface{}
+	var cfg map[string]any
 	json.Unmarshal(cfgResp.Data, &cfg)
 
 	port := cfg["port"]

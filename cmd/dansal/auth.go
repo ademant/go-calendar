@@ -100,7 +100,7 @@ func createTokenInDB(userID int, userAgent, ip, fingerprint string) (string, tim
 	expiresAt := time.Now().UTC().Add(time.Duration(expirationHours) * time.Hour)
 	expiresAtStr := expiresAt.Format(time.RFC3339Nano)
 
-	var fpVal interface{}
+	var fpVal any
 	if fingerprint != "" {
 		fpVal = fingerprint
 	}

@@ -103,7 +103,7 @@ func isAPRequest(r *http.Request) bool {
 		strings.Contains(accept, "application/ld+json")
 }
 
-func writeJSON(w http.ResponseWriter, status int, v interface{}) {
+func writeJSON(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/activity+json")
 	w.WriteHeader(status)
 	json.NewEncoder(w).Encode(v)
@@ -184,7 +184,7 @@ func webfingerHandler(cfg *Config, db *sql.DB, client *DansalClient) http.Handle
 func nodeinfoIndexHandler(cfg *Config) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		base := "https://" + cfg.Domain
-		resp := map[string]interface{}{
+		resp := map[string]any{
 			"links": []map[string]string{
 				{
 					"rel":  "http://nodeinfo.diaspora.software/ns/schema/2.0",
@@ -284,7 +284,7 @@ func outboxHandler(cfg *Config, db *sql.DB, client *DansalClient) http.HandlerFu
 			return
 		}
 
-		items := make([]interface{}, 0, len(events))
+		items := make([]any, 0, len(events))
 		for _, e := range events {
 			items = append(items, buildCreateActivity(cfg, actor.OrgSlug, e))
 		}
@@ -353,7 +353,7 @@ func inboxHandler(cfg *Config, db *sql.DB, client *DansalClient) http.HandlerFun
 			writeJSONError(w, http.StatusBadRequest, "read error")
 			return
 		}
-		var raw map[string]interface{}
+		var raw map[string]any
 		if err := json.Unmarshal(body, &raw); err != nil {
 			writeJSONError(w, http.StatusBadRequest, "invalid JSON")
 			return
@@ -369,7 +369,7 @@ func sharedInboxHandler(cfg *Config, db *sql.DB, client *DansalClient) http.Hand
 			writeJSONError(w, http.StatusBadRequest, "read error")
 			return
 		}
-		var raw map[string]interface{}
+		var raw map[string]any
 		if err := json.Unmarshal(body, &raw); err != nil {
 			writeJSONError(w, http.StatusBadRequest, "invalid JSON")
 			return
@@ -386,7 +386,7 @@ func sharedInboxHandler(cfg *Config, db *sql.DB, client *DansalClient) http.Hand
 // resolveSharedInboxActor determines the target local actor for an activity
 // delivered to the shared inbox. Falls back to the relay actor for activities
 // (like Accept) that don't name a specific local target.
-func resolveSharedInboxActor(cfg *Config, db *sql.DB, raw map[string]interface{}) *ActorRecord {
+func resolveSharedInboxActor(cfg *Config, db *sql.DB, raw map[string]any) *ActorRecord {
 	prefix := "https://" + cfg.Domain + "/org/"
 	activityType, _ := raw["type"].(string)
 
@@ -395,11 +395,11 @@ func resolveSharedInboxActor(cfg *Config, db *sql.DB, raw map[string]interface{}
 	case "Follow":
 		targetURL, _ = raw["object"].(string)
 	case "Undo":
-		if obj, ok := raw["object"].(map[string]interface{}); ok {
+		if obj, ok := raw["object"].(map[string]any); ok {
 			switch v := obj["object"].(type) {
 			case string:
 				targetURL = v
-			case map[string]interface{}:
+			case map[string]any:
 				targetURL, _ = v["id"].(string)
 			}
 		}
@@ -420,7 +420,7 @@ func resolveSharedInboxActor(cfg *Config, db *sql.DB, raw map[string]interface{}
 	return actor
 }
 
-func processInboxActivity(w http.ResponseWriter, r *http.Request, cfg *Config, db *sql.DB, client *DansalClient, actor *ActorRecord, raw map[string]interface{}) {
+func processInboxActivity(w http.ResponseWriter, r *http.Request, cfg *Config, db *sql.DB, client *DansalClient, actor *ActorRecord, raw map[string]any) {
 	activityType, _ := raw["type"].(string)
 	actorField, _ := raw["actor"].(string)
 
@@ -461,7 +461,7 @@ func processInboxActivity(w http.ResponseWriter, r *http.Request, cfg *Config, d
 		w.WriteHeader(http.StatusAccepted)
 
 	case "Undo":
-		obj, _ := raw["object"].(map[string]interface{})
+		obj, _ := raw["object"].(map[string]any)
 		if obj == nil {
 			writeJSONError(w, http.StatusBadRequest, "missing object")
 			return
@@ -491,7 +491,7 @@ func processInboxActivity(w http.ResponseWriter, r *http.Request, cfg *Config, d
 		switch v := raw["object"].(type) {
 		case string:
 			followActivityID = v
-		case map[string]interface{}:
+		case map[string]any:
 			followActivityID, _ = v["id"].(string)
 		}
 		if followActivityID != "" {
@@ -518,7 +518,7 @@ func processInboxActivity(w http.ResponseWriter, r *http.Request, cfg *Config, d
 		w.WriteHeader(http.StatusAccepted)
 
 	case "Update":
-		obj, _ := raw["object"].(map[string]interface{})
+		obj, _ := raw["object"].(map[string]any)
 		if obj == nil {
 			w.WriteHeader(http.StatusAccepted)
 			return
@@ -542,7 +542,7 @@ func processInboxActivity(w http.ResponseWriter, r *http.Request, cfg *Config, d
 		switch v := raw["object"].(type) {
 		case string:
 			apID = v
-		case map[string]interface{}:
+		case map[string]any:
 			apID, _ = v["id"].(string)
 		}
 		if apID != "" {
@@ -559,8 +559,8 @@ func processInboxActivity(w http.ResponseWriter, r *http.Request, cfg *Config, d
 
 // extractAPEventObject unwraps a Create{Event} or Announce{Create{Event}} activity
 // and returns the inner Event AP object, or nil if the structure is not recognised.
-func extractAPEventObject(raw map[string]interface{}) map[string]interface{} {
-	obj, _ := raw["object"].(map[string]interface{})
+func extractAPEventObject(raw map[string]any) map[string]any {
+	obj, _ := raw["object"].(map[string]any)
 	if obj == nil {
 		return nil
 	}
@@ -568,7 +568,7 @@ func extractAPEventObject(raw map[string]interface{}) map[string]interface{} {
 	case "Event":
 		return obj
 	case "Create":
-		inner, _ := obj["object"].(map[string]interface{})
+		inner, _ := obj["object"].(map[string]any)
 		if inner != nil {
 			if t2, _ := inner["type"].(string); t2 == "Event" {
 				return inner
@@ -578,14 +578,14 @@ func extractAPEventObject(raw map[string]interface{}) map[string]interface{} {
 	return nil
 }
 
-func apObjectToFederatedEvent(obj map[string]interface{}, actorID string) FederatedEvent {
+func apObjectToFederatedEvent(obj map[string]any, actorID string) FederatedEvent {
 	apID, _ := obj["id"].(string)
 	name, _ := obj["name"].(string)
 	startTime, _ := obj["startTime"].(string)
 	endTime, _ := obj["endTime"].(string)
 	eventURL, _ := obj["url"].(string)
 	var locationName string
-	if loc, ok := obj["location"].(map[string]interface{}); ok {
+	if loc, ok := obj["location"].(map[string]any); ok {
 		locationName, _ = loc["name"].(string)
 	}
 	rawBytes, _ := json.Marshal(obj)
@@ -613,7 +613,7 @@ func resolveInboxURL(ctx context.Context, client *DansalClient, actorURI string)
 		return "", err
 	}
 	defer resp.Body.Close()
-	var actor map[string]interface{}
+	var actor map[string]any
 	if err := json.NewDecoder(resp.Body).Decode(&actor); err != nil {
 		return "", err
 	}
@@ -621,7 +621,7 @@ func resolveInboxURL(ctx context.Context, client *DansalClient, actorURI string)
 	return inbox, nil
 }
 
-func sendAccept(cfg *Config, actor *ActorRecord, followActivity map[string]interface{}, followerURI, inboxURL string) {
+func sendAccept(cfg *Config, actor *ActorRecord, followActivity map[string]any, followerURI, inboxURL string) {
 	base := actorURL(cfg, actor.OrgSlug)
 	accept := Activity{
 		Context: APContext,
@@ -819,7 +819,7 @@ func resolveActorFromInput(ctx context.Context, httpClient *http.Client, input s
 		return "", "", err
 	}
 	defer resp.Body.Close()
-	var actor map[string]interface{}
+	var actor map[string]any
 	if err := json.NewDecoder(resp.Body).Decode(&actor); err != nil {
 		return "", "", err
 	}

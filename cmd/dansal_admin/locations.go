@@ -139,7 +139,7 @@ func cmdFillLocationFields(args []string) {
 	updated := 0
 	for _, c := range candidates {
 		var sets []string
-		var params []interface{}
+		var params []any
 		if c.fillAddress {
 			sets = append(sets, "address = ?")
 			params = append(params, c.addr.street)

@@ -116,7 +116,7 @@ func createInvite(w http.ResponseWriter, r *http.Request) {
 	expiryHours := config.Server.InviteExpiryHours
 	expiresAt := time.Now().UTC().Add(time.Duration(expiryHours) * time.Hour)
 
-	var orgVal interface{}
+	var orgVal any
 	if orgID != nil {
 		orgVal = *orgID
 	}

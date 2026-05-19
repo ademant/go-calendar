@@ -303,7 +303,7 @@ func addEventToCalendar(cal *ics.Calendar, event Event) {
 // ── query-building helpers ─────────────────────────────────────────────────
 
 // applyEventFilters appends shared WHERE clauses from query parameters.
-func applyEventFilters(r *http.Request, query *string, args *[]interface{}) {
+func applyEventFilters(r *http.Request, query *string, args *[]any) {
 	q := r.URL.Query()
 
 	if title := q.Get("title"); title != "" {
@@ -372,7 +372,7 @@ func applyEventFilters(r *http.Request, query *string, args *[]interface{}) {
 }
 
 // applyPagination appends ORDER BY + LIMIT/OFFSET clauses.
-func applyPagination(r *http.Request, query *string, args *[]interface{}) {
+func applyPagination(r *http.Request, query *string, args *[]any) {
 	q := r.URL.Query()
 	limit, offset := 100, 0
 	if l := q.Get("limit"); l != "" {
@@ -398,7 +398,7 @@ func generateShortCode() string {
 }
 
 // urlVal returns nil when s is empty so the DB column stays NULL.
-func urlVal(s string) interface{} {
+func urlVal(s string) any {
 	if s == "" {
 		return nil
 	}
@@ -450,7 +450,7 @@ func insertEvent(q querier, title, description string, startTime, endTime int64,
 
 	tagsJSON, _ := json.Marshal(tags)
 
-	var pricingArg interface{}
+	var pricingArg any
 	if pricing != nil {
 		if b, err := json.Marshal(pricing); err == nil {
 			pricingArg = string(b)
@@ -462,7 +462,7 @@ func insertEvent(q querier, title, description string, startTime, endTime int64,
 		if sourceLastModified > 0 && sourceLastModified <= existingSourceLastModified {
 			return existingID, existingShortCode, false, nil
 		}
-		var slmArg interface{}
+		var slmArg any
 		if sourceLastModified > 0 {
 			slmArg = sourceLastModified
 		}
@@ -476,15 +476,15 @@ func insertEvent(q querier, title, description string, startTime, endTime int64,
 		return existingID, existingShortCode, false, nil
 	}
 
-	var orgIDArg interface{}
+	var orgIDArg any
 	if organizationID != nil {
 		orgIDArg = *organizationID
 	}
-	var uidArg interface{}
+	var uidArg any
 	if uid != "" {
 		uidArg = uid
 	}
-	var slmArg interface{}
+	var slmArg any
 	if sourceLastModified > 0 {
 		slmArg = sourceLastModified
 	}
@@ -495,7 +495,7 @@ func insertEvent(q querier, title, description string, startTime, endTime int64,
 	var shortCode string
 	for range 5 {
 		shortCode = generateShortCode()
-		var sourceArg interface{}
+		var sourceArg any
 		if source != "" {
 			sourceArg = source
 		}
@@ -716,7 +716,7 @@ func getEvents(w http.ResponseWriter, r *http.Request) {
 	}
 
 	query := eventListSelect + " WHERE 1=1"
-	args := []interface{}{}
+	args := []any{}
 
 	if !isAuthorizedAdmin {
 		query += " AND e.is_published = 1"
@@ -1089,13 +1089,13 @@ func updateEvent(w http.ResponseWriter, r *http.Request) {
 	}
 
 	tagsJSON, _ := json.Marshal(req.Tags)
-	var pricingArg interface{}
+	var pricingArg any
 	if req.Pricing != nil {
 		if b, err := json.Marshal(req.Pricing); err == nil {
 			pricingArg = string(b)
 		}
 	}
-	var orgIDArg interface{}
+	var orgIDArg any
 	if req.OrganizationID != nil {
 		orgIDArg = *req.OrganizationID
 	}
@@ -1184,7 +1184,7 @@ func getEventsICS(w http.ResponseWriter, r *http.Request) {
 	loc := r.URL.Query().Get("location")
 
 	cntQ := "SELECT COUNT(*), MAX(e.created_at) FROM events e LEFT JOIN locations l ON e.location_id = l.id WHERE e.is_published = 1 AND e.start_time >= ?"
-	cntArgs := []interface{}{now}
+	cntArgs := []any{now}
 	if tag != "" {
 		cntQ += " AND EXISTS (SELECT 1 FROM json_each(e.tags) WHERE value = ?)"
 		cntArgs = append(cntArgs, tag)
@@ -1198,7 +1198,7 @@ func getEventsICS(w http.ResponseWriter, r *http.Request) {
 	}
 
 	query := eventListSelect + " WHERE e.is_published = 1 AND e.start_time >= ?"
-	args := []interface{}{now}
+	args := []any{now}
 
 	if tag != "" {
 		query += " AND EXISTS (SELECT 1 FROM json_each(e.tags) WHERE value = ?)"
@@ -1323,7 +1323,7 @@ func getEventsByTownICS(w http.ResponseWriter, r *http.Request) {
 // checkPublicCacheHeaders runs cntQuery (must SELECT COUNT(*), MAX(created_at))
 // and emits ETag/Last-Modified/Cache-Control headers. Returns true and writes
 // 304 when the client's cached copy is still fresh; caller must return immediately.
-func checkPublicCacheHeaders(w http.ResponseWriter, r *http.Request, cntQuery string, args ...interface{}) bool {
+func checkPublicCacheHeaders(w http.ResponseWriter, r *http.Request, cntQuery string, args ...any) bool {
 	var n int
 	var modStr sql.NullString
 	if err := db.QueryRow(cntQuery, args...).Scan(&n, &modStr); err != nil {
@@ -1363,7 +1363,7 @@ func getTags(w http.ResponseWriter, r *http.Request) {
 	isAuthorizedAdmin := userRole == RoleUser || userRole == RoleAdmin || userRole == RolePublisher
 
 	query := "SELECT DISTINCT j.value FROM events, json_each(events.tags) AS j WHERE 1=1"
-	var args []interface{}
+	var args []any
 	if !isAuthorizedAdmin {
 		query += " AND is_published = 1"
 	}
