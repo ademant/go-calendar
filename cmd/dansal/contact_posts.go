@@ -173,7 +173,7 @@ func createContactPost(w http.ResponseWriter, r *http.Request) {
 	verifyURL := base + "/api/v1/contact-posts/verify/" + verifyToken
 	deleteURL := base + "/api/v1/contact-posts/delete/" + deleteToken
 	body := fmt.Sprintf(
-		"Hello %s,\n\nPlease confirm your contact board post by clicking this link:\n\n  %s\n\nYour post will become visible once confirmed.\n\nTo delete your post at any time use:\n\n  %s\n\nThis post expires on %s.\n",
+		"Hello %s,\n\nPlease confirm your contact board post by clicking this link:\n\n%s\n\nYour post will become visible once confirmed.\n\nTo delete your post at any time use:\n\n%s\n\nThis post expires on %s.\n",
 		req.Nickname, verifyURL, deleteURL, expiresAt.Format("2006-01-02"),
 	)
 	if err := SendEmail(req.Email, "Confirm your contact board post", body); err != nil {

@@ -206,7 +206,7 @@ func consumeVerification(w http.ResponseWriter, r *http.Request) {
 
 func sendEmailVerification(user User, verifyURL string) error {
 	body := fmt.Sprintf(
-		"Hello %s,\n\nplease verify your email address:\n\n  %s\n\nThis link expires in %d hours.\n",
+		"Hello %s,\n\nplease verify your email address:\n\n%s\n\nThis link expires in %d hours.\n",
 		user.Username, verifyURL, config.Server.VerificationExpiryHours,
 	)
 	return SendEmail(user.Email, "Verify your email address", body)

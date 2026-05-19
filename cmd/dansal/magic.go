@@ -96,7 +96,7 @@ func requestMagicLogin(w http.ResponseWriter, r *http.Request) {
 	magicURL := buildMagicBase(r) + "/api/v1/login/magic/" + token
 
 	body := fmt.Sprintf(
-		"Hello %s,\n\nclick the link below to log in without a password:\n\n  %s\n\nThis link expires in %d minutes and can only be used once.\n",
+		"Hello %s,\n\nclick the link below to log in without a password:\n\n%s\n\nThis link expires in %d minutes and can only be used once.\n",
 		user.Username, magicURL, config.Server.MagicLoginExpirySecs/60,
 	)
 	if err := SendEmail(user.Email, "Your login link", body); err != nil {

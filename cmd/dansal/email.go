@@ -111,9 +111,10 @@ func SendEmail(to, subject, body string) error {
 		fromHeader = mime.QEncoding.Encode("utf-8", cfg.FromName) + " <" + from + ">"
 	}
 
-	msg := []byte("From: " + fromHeader + "\r\n" +
+	msg := []byte("MIME-Version: 1.0\r\n" +
+		"From: " + fromHeader + "\r\n" +
 		"To: " + to + "\r\n" +
-		"Subject: " + subject + "\r\n" +
+		"Subject: " + mime.QEncoding.Encode("utf-8", subject) + "\r\n" +
 		"Content-Type: text/plain; charset=UTF-8\r\n\r\n" +
 		body)
 
