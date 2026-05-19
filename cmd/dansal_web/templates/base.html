@@ -68,8 +68,8 @@ nav{background:#1a1a2e;color:#fff;padding:.4rem 1rem;margin:0 -1rem 0;display:fl
 .nav-brand{display:flex;align-items:center;text-decoration:none}
 .nav-brand img{object-fit:contain;height:{{.LogoHeight}}px;width:{{.LogoHeight}}px}
 .nav-brand:hover{opacity:.85}
-.site-banner{margin:0 -1rem 1.5rem;overflow:hidden;background:var(--site-banner-bg)}
-.site-banner img{width:100%;max-height:100%;object-fit:cover;display:block}
+.site-banner{margin:0 -1rem 1.5rem;background:var(--site-banner-bg)}
+.site-banner img{width:100%;height:auto;display:block}
 .nav-lang{display:flex;align-items:center}
 .lang-select{background:#2a2a4a;color:#c0c8ff;border:1px solid #4a4a7a;border-radius:4px;padding:.2rem .4rem;font-size:.9rem;cursor:pointer}
 .lang-select:hover{border-color:#c0c8ff}
@@ -162,7 +162,7 @@ footer{text-align:center;color:var(--fg-hint);font-size:.8rem;margin-top:2rem;pa
   </div>
 </nav>
 {{if gt .BannerHeight 0}}
-<div class="site-banner" style="max-height:{{.BannerHeight}}px">
+<div class="site-banner">
   <img src="/banner.svg" alt="">
 </div>
 {{end}}
