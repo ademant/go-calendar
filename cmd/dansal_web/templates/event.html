@@ -421,7 +421,7 @@ document.querySelectorAll('.btn-contact-toggle').forEach(function(btn){
 });
 </script>
 
-{{if .Event.LocationLat}}
+{{with .Data}}{{if .Event.LocationLat}}
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
@@ -437,6 +437,6 @@ document.querySelectorAll('.btn-contact-toggle').forEach(function(btn){
   el.style.cursor='pointer';
 })();
 </script>
-{{end}}
+{{end}}{{end}}
 
 {{end}}
