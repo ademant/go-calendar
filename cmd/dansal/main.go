@@ -429,6 +429,7 @@ func migrateDB() {
 	db.Exec("DROP TABLE IF EXISTS bookings")
 	db.Exec("ALTER TABLE events DROP COLUMN capacity") // no-op if already absent
 	db.Exec("ALTER TABLE fetch_sources ADD COLUMN organization_id INTEGER REFERENCES organizations(id) ON DELETE SET NULL") // no-op if already present
+	db.Exec("ALTER TABLE fetch_sources ADD COLUMN dance_ids TEXT DEFAULT '[]'")                                             // no-op if already present
 	db.Exec("ALTER TABLE organizations ADD COLUMN actor_name TEXT")
 	db.Exec("ALTER TABLE organizations ADD COLUMN website TEXT")
 	db.Exec("ALTER TABLE organizations ADD COLUMN instagram TEXT")

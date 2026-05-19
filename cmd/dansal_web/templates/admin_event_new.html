@@ -208,6 +208,17 @@
     </table>
   </section>
 
+  {{if .Dances}}
+  <section class="form-section">
+    <h2>Dance styles</h2>
+    <div class="dance-checkboxes">
+      {{range .Dances}}
+      <label class="check-label"><input type="checkbox" name="dance_ids" value="{{.ID}}"{{if index $.Data.SelectedDanceNames .Name}} checked{{end}}> {{.Name}}</label>
+      {{end}}
+    </div>
+  </section>
+  {{end}}
+
   <div class="form-actions">
     <button type="submit" class="btn-primary">{{$.Strings.T "admin_save"}}</button>
     <a href="/admin/events" class="btn-secondary">{{$.Strings.T "admin_cancel"}}</a>
@@ -229,6 +240,7 @@
 .field-hint{font-weight:400;color:#888;font-size:.82rem}
 .check-row{display:flex;gap:1.5rem;margin:.5rem 0}
 .check-label{display:flex;align-items:center;gap:.4rem;font-size:.92rem;cursor:pointer}
+.dance-checkboxes{display:flex;flex-wrap:wrap;gap:.25rem .5rem}
 .check-label input{width:auto}
 .drop-zone{border:2px dashed #ccc;border-radius:6px;padding:1.5rem;text-align:center;cursor:pointer;transition:border-color .2s}
 .drop-zone.drag-over{border-color:#1a6eb5;background:#f0f4ff}

@@ -254,6 +254,7 @@ func importFromFolkdanceJSON(src FetchSource) ([]Event, bool, error) {
 				return ensureOrgByName(fe.Organisation)
 			}(),
 			Musicians:      musicianIDs,
+			Dances:         src.DanceIDs,
 			Pricing:        parseFolkdancePrice(fe.Price),
 			Location: EventLocationRequest{
 				Location: locStr,

@@ -151,6 +151,7 @@ type FetchSource struct {
 	URL            string   `json:"url"`
 	Type           string   `json:"type"`
 	Tags           []string `json:"tags"`
+	DanceIDs       []int    `json:"dance_ids,omitempty"`
 	OrganizationID *int     `json:"organization_id,omitempty"`
 	LastFetchedAt  string   `json:"last_fetched_at,omitempty"`
 	CreatedAt      string   `json:"created_at"`
@@ -536,10 +537,11 @@ func (c *DansalClient) GetFetchSource(ctx context.Context, id int, token string)
 	return src, json.NewDecoder(resp.Body).Decode(&src)
 }
 
-func (c *DansalClient) UpdateFetchSource(ctx context.Context, id int, typ string, tags []string, orgID *int, token string) error {
+func (c *DansalClient) UpdateFetchSource(ctx context.Context, id int, typ string, tags []string, danceIDs []int, orgID *int, token string) error {
 	payload := map[string]interface{}{
 		"type":            typ,
 		"tags":            tags,
+		"dance_ids":       danceIDs,
 		"organization_id": orgID,
 	}
 	body, _ := json.Marshal(payload)
@@ -838,6 +840,7 @@ type EventCreateReq struct {
 	OrganizationID *int        `json:"organization_id,omitempty"`
 	Pricing        *Pricing    `json:"pricing,omitempty"`
 	Location       EventLocReq `json:"location"`
+	Dances         []int       `json:"dances,omitempty"`
 }
 
 type EventUpdateReq struct {

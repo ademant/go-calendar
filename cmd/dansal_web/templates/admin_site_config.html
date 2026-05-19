@@ -34,6 +34,20 @@
     </div>
   </section>
 
+  {{if .Dances}}
+  <section class="cfg-section">
+    <h2>Default dance styles for new events</h2>
+    <div class="field">
+      <div class="dance-checkboxes">
+        {{range .Dances}}
+        <label class="dance-cb"><input type="checkbox" name="default_dance_ids" value="{{.ID}}"{{if index $.Data.DefaultDanceNames .Name}} checked{{end}}> {{.Name}}</label>
+        {{end}}
+      </div>
+      <p class="hint">These styles are pre-selected when creating a new event.</p>
+    </div>
+  </section>
+  {{end}}
+
   <section class="cfg-section">
     <h2>Contact &amp; Footer</h2>
     <div class="field">
@@ -87,6 +101,8 @@
 .field textarea{resize:vertical;font-family:inherit}
 .hint{font-size:.8rem;color:var(--fg-hint);margin-top:.2rem}
 .hint-inline{font-size:.8rem;color:var(--fg-hint)}
+.dance-checkboxes{display:flex;flex-wrap:wrap;gap:.25rem .75rem}
+.dance-cb{font-size:.9rem;font-weight:normal;color:var(--fg);display:flex;align-items:center;gap:.3rem}
 .cfg-actions{margin-top:.5rem}
 .btn-primary{padding:.45rem 1.2rem;background:#1a6eb5;color:#fff;border:none;border-radius:4px;font-size:.95rem;cursor:pointer}
 .btn-primary:hover{background:#0d4a80}

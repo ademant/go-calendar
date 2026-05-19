@@ -117,8 +117,8 @@ func main() {
 	r.HandleFunc("/admin/musicians/{id}/image/delete", adminMusicianImageDeleteHandler(cfg, client)).Methods("POST")
 	r.HandleFunc("/admin/organizations/{id}/image/delete", adminOrgImageDeleteHandler(cfg, client)).Methods("POST")
 	r.HandleFunc("/admin/events", adminEventsHandler(cfg, tmpls, client, i18n)).Methods("GET")
-	r.HandleFunc("/admin/events/new", adminEventNewPageHandler(cfg, tmpls, client, i18n)).Methods("GET")
-	r.HandleFunc("/admin/events/new", adminEventCreateHandler(cfg, tmpls, client, i18n)).Methods("POST")
+	r.HandleFunc("/admin/events/new", adminEventNewPageHandler(cfg, tmpls, db, client, i18n)).Methods("GET")
+	r.HandleFunc("/admin/events/new", adminEventCreateHandler(cfg, tmpls, db, client, i18n)).Methods("POST")
 	r.HandleFunc("/admin/events/{id}/edit", adminEventEditPageHandler(cfg, tmpls, client, i18n)).Methods("GET")
 	r.HandleFunc("/admin/events/{id}/edit", adminEventSaveHandler(cfg, tmpls, db, client, i18n)).Methods("POST")
 

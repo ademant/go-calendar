@@ -657,10 +657,12 @@ type AdminFetchurlsData struct {
 }
 
 type AdminFetchurlEditData struct {
-	Source   FetchSource
-	Orgs     []Organization
-	OrgMap   map[int]Organization
-	ErrorKey string
+	Source             FetchSource
+	Orgs               []Organization
+	OrgMap             map[int]Organization
+	Dances             []Dance
+	SelectedDanceNames map[string]bool
+	ErrorKey           string
 }
 
 func adminFetchurlsHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {
@@ -769,11 +771,15 @@ func adminFetchurlEditPageHandler(cfg *Config, tmpls *Templates, client *DansalC
 		for _, o := range orgs {
 			orgMap[o.ID] = o
 		}
+		dances, _ := client.GetDances(r.Context())
+		selected := buildSelectedDanceNamesFromIDs(src.DanceIDs, dances)
 		title := i18n.T(r, "admin_edit")
 		renderTemplate(w, tmpls.adminFetchurlEdit, tmplData(r, cfg, i18n, title, AdminFetchurlEditData{
-			Source: src,
-			Orgs:   orgs,
-			OrgMap: orgMap,
+			Source:             src,
+			Orgs:               orgs,
+			OrgMap:             orgMap,
+			Dances:             dances,
+			SelectedDanceNames: selected,
 		}))
 	}
 }
@@ -809,20 +815,31 @@ func adminFetchurlSaveHandler(cfg *Config, tmpls *Templates, client *DansalClien
 			}
 		}
 
+		var danceIDs []int
+		for _, v := range r.Form["dance_ids"] {
+			if n, err2 := strconv.Atoi(v); err2 == nil {
+				danceIDs = append(danceIDs, n)
+			}
+		}
+
 		token := getSessionToken(r)
-		if err := client.UpdateFetchSource(r.Context(), id, typ, tags, orgID, token); err != nil {
+		if err := client.UpdateFetchSource(r.Context(), id, typ, tags, danceIDs, orgID, token); err != nil {
 			src, _ := client.GetFetchSource(r.Context(), id, token)
 			orgs, _ := client.GetOrganizations(r.Context())
 			orgMap := make(map[int]Organization, len(orgs))
 			for _, o := range orgs {
 				orgMap[o.ID] = o
 			}
+			dances, _ := client.GetDances(r.Context())
+			selected := buildSelectedDanceNamesFromIDs(danceIDs, dances)
 			title := i18n.T(r, "admin_edit")
 			renderTemplate(w, tmpls.adminFetchurlEdit, tmplData(r, cfg, i18n, title, AdminFetchurlEditData{
-				Source:   src,
-				Orgs:     orgs,
-				OrgMap:   orgMap,
-				ErrorKey: "admin_save_error",
+				Source:             src,
+				Orgs:               orgs,
+				OrgMap:             orgMap,
+				Dances:             dances,
+				SelectedDanceNames: selected,
+				ErrorKey:           "admin_save_error",
 			}))
 			return
 		}
@@ -1167,11 +1184,12 @@ type AdminEventsData struct {
 }
 
 type AdminEventNewData struct {
-	Organizations []Organization
-	Locations     []Location
-	Musicians     []Musician
-	Dances        []Dance
-	ErrorKey      string
+	Organizations      []Organization
+	Locations          []Location
+	Musicians          []Musician
+	Dances             []Dance
+	SelectedDanceNames map[string]bool
+	ErrorKey           string
 }
 
 // ── Users & Invites ───────────────────────────────────────────────────────────
@@ -1540,7 +1558,7 @@ func adminEventsHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18
 	}
 }
 
-func adminEventNewPageHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {
+func adminEventNewPageHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *DansalClient, i18n *I18n) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		_, ok := requireLogin(w, r)
 		if !ok {
@@ -1549,16 +1567,21 @@ func adminEventNewPageHandler(cfg *Config, tmpls *Templates, client *DansalClien
 		orgs, _ := client.GetOrganizations(r.Context())
 		locs, _ := client.GetLocations(r.Context())
 		musicians, _ := client.GetMusicians(r.Context())
+		dances, _ := client.GetDances(r.Context())
+		defaultDanceIDs := loadDefaultDanceIDs(db)
+		selected := buildSelectedDanceNamesFromIDs(defaultDanceIDs, dances)
 		title := i18n.T(r, "admin_event_new_title")
 		renderTemplate(w, tmpls.adminEventNew, tmplData(r, cfg, i18n, title, AdminEventNewData{
-			Organizations: orgs,
-			Locations:     locs,
-			Musicians:     musicians,
+			Organizations:      orgs,
+			Locations:          locs,
+			Musicians:          musicians,
+			Dances:             dances,
+			SelectedDanceNames: selected,
 		}))
 	}
 }
 
-func adminEventCreateHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {
+func adminEventCreateHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *DansalClient, i18n *I18n) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		_, ok := requireLogin(w, r)
 		if !ok {
@@ -1573,11 +1596,13 @@ func adminEventCreateHandler(cfg *Config, tmpls *Templates, client *DansalClient
 			orgs, _ := client.GetOrganizations(r.Context())
 			locs, _ := client.GetLocations(r.Context())
 			musicians, _ := client.GetMusicians(r.Context())
+			dances, _ := client.GetDances(r.Context())
 			title := i18n.T(r, "admin_event_new_title")
 			renderTemplate(w, tmpls.adminEventNew, tmplData(r, cfg, i18n, title, AdminEventNewData{
 				Organizations: orgs,
 				Locations:     locs,
 				Musicians:     musicians,
+				Dances:        dances,
 				ErrorKey:      errKey,
 			}))
 		}
@@ -1689,6 +1714,13 @@ func adminEventCreateHandler(cfg *Config, tmpls *Templates, client *DansalClient
 			}
 		}
 
+		var danceIDs []int
+		for _, v := range r.MultipartForm.Value["dance_ids"] {
+			if n, err2 := strconv.Atoi(v); err2 == nil {
+				danceIDs = append(danceIDs, n)
+			}
+		}
+
 		req := EventCreateReq{
 			Title:              strings.TrimSpace(r.FormValue("title")),
 			Description:        strings.TrimSpace(r.FormValue("description")),
@@ -1704,6 +1736,7 @@ func adminEventCreateHandler(cfg *Config, tmpls *Templates, client *DansalClient
 			OrganizationID:     orgID,
 			Pricing:            pricing,
 			Location:           locReq,
+			Dances:             danceIDs,
 		}
 
 		if req.Title == "" {
@@ -1781,6 +1814,30 @@ func buildSelectedDanceNames(event Event) map[string]bool {
 		m[n] = true
 	}
 	return m
+}
+
+func buildSelectedDanceNamesFromIDs(ids []int, dances []Dance) map[string]bool {
+	idSet := make(map[int]bool, len(ids))
+	for _, id := range ids {
+		idSet[id] = true
+	}
+	m := make(map[string]bool)
+	for _, d := range dances {
+		if idSet[d.ID] {
+			m[d.Name] = true
+		}
+	}
+	return m
+}
+
+func loadDefaultDanceIDs(db *sql.DB) []int {
+	raw := getSiteSetting(db, "default_dance_ids")
+	if raw == "" {
+		return nil
+	}
+	var ids []int
+	json.Unmarshal([]byte(raw), &ids)
+	return ids
 }
 
 func adminEventEditPageHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {
@@ -2121,17 +2178,19 @@ func adminDanceDeleteHandler(cfg *Config, client *DansalClient) http.HandlerFunc
 // ── Admin Site Config ─────────────────────────────────────────────────────────
 
 type AdminSiteConfigData struct {
-	SiteName          string
-	Contact           string
-	TelegramBotToken  string
-	TelegramBotName   string
-	MatrixHomeserver  string
-	MatrixAccessToken string
-	HasLogo           bool
-	HasBanner         bool
-	HasFavicon        bool
-	ErrorMsg          string
-	Success           bool
+	SiteName           string
+	Contact            string
+	TelegramBotToken   string
+	TelegramBotName    string
+	MatrixHomeserver   string
+	MatrixAccessToken  string
+	HasLogo            bool
+	HasBanner          bool
+	HasFavicon         bool
+	Dances             []Dance
+	DefaultDanceNames  map[string]bool
+	ErrorMsg           string
+	Success            bool
 }
 
 func adminSiteConfigHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *DansalClient, i18n *I18n) http.HandlerFunc {
@@ -2146,6 +2205,9 @@ func adminSiteConfigHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *D
 		}
 		token := getSessionToken(r)
 		ac, _ := client.GetAdminConfig(r.Context(), token)
+		dances, _ := client.GetDances(r.Context())
+		defaultDanceIDs := loadDefaultDanceIDs(db)
+		defaultDanceNames := buildSelectedDanceNamesFromIDs(defaultDanceIDs, dances)
 		data := AdminSiteConfigData{
 			SiteName:          getSiteSetting(db, "site_name"),
 			Contact:           getSiteSetting(db, "contact"),
@@ -2156,6 +2218,8 @@ func adminSiteConfigHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *D
 			HasLogo:           len(getSiteAsset(db, "logo")) > 0,
 			HasBanner:         len(getSiteAsset(db, "banner")) > 0,
 			HasFavicon:        len(getSiteAsset(db, "favicon")) > 0,
+			Dances:            dances,
+			DefaultDanceNames: defaultDanceNames,
 			Success:           r.URL.Query().Get("saved") == "1",
 		}
 		renderTemplate(w, tmpls.adminSiteConfig, tmplData(r, cfg, i18n, "Site Configuration", data))
@@ -2185,6 +2249,16 @@ func adminSiteConfigSaveHandler(cfg *Config, db *sql.DB, client *DansalClient) h
 		_ = setSiteSetting(db, "contact", contact)
 		cfg.SiteName = siteName
 		cfg.ContactOverride = contact
+
+		// Default dance IDs for new events
+		var defaultDanceIDs []int
+		for _, v := range r.MultipartForm.Value["default_dance_ids"] {
+			if n, err2 := strconv.Atoi(v); err2 == nil {
+				defaultDanceIDs = append(defaultDanceIDs, n)
+			}
+		}
+		j, _ := json.Marshal(defaultDanceIDs)
+		_ = setSiteSetting(db, "default_dance_ids", string(j))
 
 		// Telegram / Matrix via dansal API
 		ac := AdminConfig{
