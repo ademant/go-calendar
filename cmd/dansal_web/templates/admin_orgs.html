@@ -2,7 +2,7 @@
 {{define "content"}}
 <div class="page-header">
   <h1>{{.Strings.T "admin_orgs_title"}}</h1>
-  {{if .Data.CanEdit}}<a href="/admin/organizations/new" class="btn-sm">{{.Strings.T "admin_new"}}</a>{{end}}
+  {{if .Data.CanEdit}}<a href="/admin/organizations/new" class="btn-primary" style="text-decoration:none;padding:.4rem 1rem;background:#1a6eb5;color:#fff;border-radius:4px;font-size:.9rem">+ {{.Strings.T "admin_new"}}</a>{{end}}
 </div>
 
 {{with .Data}}

@@ -955,6 +955,22 @@ func adminLocationSaveHandler(cfg *Config, tmpls *Templates, client *DansalClien
 	}
 }
 
+func adminLocationDeleteHandler(cfg *Config, client *DansalClient) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		_, ok := requireLogin(w, r)
+		if !ok {
+			return
+		}
+		id, err := strconv.Atoi(mux.Vars(r)["id"])
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		_ = client.DeleteLocation(r.Context(), id, getSessionToken(r))
+		http.Redirect(w, r, "/admin/locations", http.StatusSeeOther)
+	}
+}
+
 // ── Events ────────────────────────────────────────────────────────────────────
 
 type AdminEventsData struct {

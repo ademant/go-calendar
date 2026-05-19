@@ -322,6 +322,18 @@ func (c *DansalClient) DeleteMusician(ctx context.Context, id int, token string)
 	return nil
 }
 
+func (c *DansalClient) DeleteLocation(ctx context.Context, id int, token string) error {
+	resp, err := c.authed(ctx, http.MethodDelete, fmt.Sprintf("/api/v1/locations/%d", id), token, nil)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusNoContent {
+		return fmt.Errorf("dansal API: %s", resp.Status)
+	}
+	return nil
+}
+
 func (c *DansalClient) UploadMusicianImage(ctx context.Context, id int, data []byte, filename, token string) error {
 	var buf bytes.Buffer
 	mw := multipart.NewWriter(&buf)

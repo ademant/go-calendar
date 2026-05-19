@@ -125,6 +125,7 @@ func main() {
 	r.HandleFunc("/admin/locations/bulk-assign", adminLocationBulkAssignHandler(cfg, client)).Methods("POST")
 	r.HandleFunc("/admin/locations/{id}/edit", adminLocationEditPageHandler(cfg, tmpls, client, i18n)).Methods("GET")
 	r.HandleFunc("/admin/locations/{id}/edit", adminLocationSaveHandler(cfg, tmpls, client, i18n)).Methods("POST")
+	r.HandleFunc("/admin/locations/{id}/delete", adminLocationDeleteHandler(cfg, client)).Methods("POST")
 
 	go startDelivery(cfg, db, client)
 
