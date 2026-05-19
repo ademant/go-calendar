@@ -93,7 +93,7 @@
     {{if or .Location .LocationTown}}
     <div class="sidebar-block">
       <div class="sidebar-label">{{$.Strings.T "evt_venue"}}</div>
-      {{if .Location}}<div class="evt-loc-name">{{.Location}}</div>{{end}}
+      {{if or .LocationShortName .Location}}<div class="evt-loc-name">{{if .LocationShortName}}{{.LocationShortName}}{{else}}{{.Location}}{{end}}</div>{{end}}
       {{if or .LocationAddress .LocationZipcode .LocationTown}}
       <div class="evt-loc-addr">
         {{if .LocationAddress}}<span>{{.LocationAddress}}</span><br>{{end}}
