@@ -100,6 +100,13 @@ func uploadOrgImage(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "Invalid organization ID", http.StatusBadRequest)
 		return
 	}
+	if userRole != RoleAdmin {
+		callerID, _ := strconv.Atoi(r.Header.Get("X-User-ID"))
+		if !isOrgMember(callerID, id) {
+			writeError(w, "Forbidden: you must be a member of this organization", http.StatusForbidden)
+			return
+		}
+	}
 	var exists int
 	if err := db.QueryRow("SELECT id FROM organizations WHERE id=?", id).Scan(&exists); err != nil {
 		writeError(w, "Organization not found", http.StatusNotFound)
@@ -142,6 +149,13 @@ func deleteOrgImage(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	id, _ := strconv.Atoi(idStr)
+	if userRole != RoleAdmin {
+		callerID, _ := strconv.Atoi(r.Header.Get("X-User-ID"))
+		if !isOrgMember(callerID, id) {
+			writeError(w, "Forbidden: you must be a member of this organization", http.StatusForbidden)
+			return
+		}
+	}
 	imgPath := filepath.Join(orgImagesDir, idStr+".avif")
 	if err := os.Remove(imgPath); err != nil {
 		if os.IsNotExist(err) {

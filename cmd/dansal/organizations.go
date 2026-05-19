@@ -223,13 +223,26 @@ func getOrganization(w http.ResponseWriter, r *http.Request) {
 }
 
 // PUT /api/v1/organizations/{id}
+// Admins may update all fields. Org members with role user may update
+// description, contact_email, and social media fields only.
 func updateOrganization(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	if r.Header.Get("X-User-Role") != RoleAdmin {
-		writeError(w, "Forbidden: only admins may update organizations", http.StatusForbidden)
+	callerRole := r.Header.Get("X-User-Role")
+	callerID, _ := strconv.Atoi(r.Header.Get("X-User-ID"))
+	if callerRole != RoleAdmin && callerRole != RoleUser {
+		writeError(w, "Forbidden", http.StatusForbidden)
 		return
 	}
 	id := mux.Vars(r)["id"]
+	orgID, err := strconv.Atoi(id)
+	if err != nil {
+		writeError(w, "Invalid organization ID", http.StatusBadRequest)
+		return
+	}
+	if callerRole != RoleAdmin && !isOrgMember(callerID, orgID) {
+		writeError(w, "Forbidden: you must be a member of this organization", http.StatusForbidden)
+		return
+	}
 	o, err := scanOrg(db.QueryRow("SELECT "+orgSelectCols+" FROM organizations WHERE id = ?", id))
 	if err == sql.ErrNoRows {
 		writeError(w, "Organization not found", http.StatusNotFound)
@@ -244,23 +257,25 @@ func updateOrganization(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
-	if req.ActorName != "" {
-		if req.ActorName == "relay" {
-			writeError(w, "actor_name 'relay' is reserved", http.StatusConflict)
-			return
+	if callerRole == RoleAdmin {
+		if req.ActorName != "" {
+			if req.ActorName == "relay" {
+				writeError(w, "actor_name 'relay' is reserved", http.StatusConflict)
+				return
+			}
+			var n int
+			db.QueryRow("SELECT COUNT(*) FROM organizations WHERE actor_name=? AND id!=?", req.ActorName, id).Scan(&n)
+			if n > 0 {
+				writeError(w, "actor_name already in use", http.StatusConflict)
+				return
+			}
 		}
-		var n int
-		db.QueryRow("SELECT COUNT(*) FROM organizations WHERE actor_name=? AND id!=?", req.ActorName, id).Scan(&n)
-		if n > 0 {
-			writeError(w, "actor_name already in use", http.StatusConflict)
-			return
+		if req.Name != "" {
+			o.Name = req.Name
 		}
-	}
-	if req.Name != "" {
-		o.Name = req.Name
+		o.ActorName = req.ActorName
 	}
 	o.Description = req.Description
-	o.ActorName = req.ActorName
 	o.Website = req.Website
 	o.Instagram = req.Instagram
 	o.Mastodon = req.Mastodon
