@@ -55,6 +55,7 @@ func loginPageHandler(cfg *Config, tmpls *Templates, i18n *I18n) http.HandlerFun
 }
 
 func loginHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {
+	throttle := newLoginThrottle()
 	return func(w http.ResponseWriter, r *http.Request) {
 		if err := r.ParseForm(); err != nil {
 			http.Error(w, "bad request", http.StatusBadRequest)
@@ -63,19 +64,42 @@ func loginHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18
 		username := r.FormValue("username")
 		password := r.FormValue("password")
 		next := safeNext(r.FormValue("next"))
+		ip := getClientIP(r)
 
-		lr, err := client.Login(r.Context(), username, password)
-		if err != nil {
-			log.Printf("login failed from %s: invalid credentials for %q", getClientIP(r), username)
+		if throttle.isBlocked(ip) {
+			log.Printf("login blocked from %s: rate limit", ip)
 			title := i18n.T(r, "login_title")
 			renderTemplate(w, tmpls.login, tmplData(r, cfg, i18n, title, LoginPageData{
-				ErrorKey: "login_error_invalid",
+				ErrorKey: "login_error_throttled",
 				Username: username,
 				Next:     r.FormValue("next"),
 			}))
 			return
 		}
 
+		lr, err := client.Login(r.Context(), username, password)
+		if err != nil {
+			delay := throttle.recordFailure(ip)
+			log.Printf("login failed from %s: invalid credentials for %q", ip, username)
+			select {
+			case <-time.After(delay):
+			case <-r.Context().Done():
+				return
+			}
+			errorKey := "login_error_invalid"
+			if throttle.isBlocked(ip) {
+				errorKey = "login_error_throttled"
+			}
+			title := i18n.T(r, "login_title")
+			renderTemplate(w, tmpls.login, tmplData(r, cfg, i18n, title, LoginPageData{
+				ErrorKey: errorKey,
+				Username: username,
+				Next:     r.FormValue("next"),
+			}))
+			return
+		}
+
+		throttle.reset(ip)
 		expiresAt, err := time.Parse(time.RFC3339, lr.ExpiresAt)
 		if err != nil {
 			expiresAt = time.Now().Add(24 * time.Hour)

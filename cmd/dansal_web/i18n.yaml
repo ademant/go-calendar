@@ -96,6 +96,7 @@ languages:
       login_password: "Ger-tremen"
       login_submit: "Kevreañ"
       login_error_invalid: "Anv-implijer pe c'her-tremen direizh."
+      login_error_throttled: "Re a c'houlennoù fall, klaskit en-dro diwezatoc'h."
       nav_admin_orgs: "Kevredigezhioù"
       nav_admin_fetchurls: "Buredoù"
       admin_orgs_title: "Kevredigezhioù"
@@ -468,6 +469,7 @@ languages:
       login_password: "Passwort"
       login_submit: "Anmelden"
       login_error_invalid: "Ungültige Anmeldedaten."
+      login_error_throttled: "Zu viele Fehlversuche, bitte später erneut versuchen."
       # Admin pages
       nav_admin_orgs: "Organisationen"
       nav_admin_fetchurls: "Feeds"
@@ -837,6 +839,7 @@ languages:
       login_password: "Ger-tremen"
       login_submit: "Kevreañ"
       login_error_invalid: "Titouroù kevreañ fall."
+      login_error_throttled: "Re a c'houlennoù fall, klaskit en-dro diwezatoc'h."
       # Admin pages
       nav_admin_orgs: "Gevredigezhioù"
       nav_admin_fetchurls: "Fluioù"
@@ -1204,6 +1207,7 @@ languages:
       login_password: "Password"
       login_submit: "Login"
       login_error_invalid: "Invalid username or password."
+      login_error_throttled: "Too many failed attempts, please try again later."
       # Admin pages
       nav_admin_orgs: "Organizations"
       nav_admin_fetchurls: "Feeds"
@@ -1576,6 +1580,7 @@ languages:
       login_password: "Contraseña"
       login_submit: "Entrar"
       login_error_invalid: "Usuario o contraseña incorrectos."
+      login_error_throttled: "Demasiados intentos fallidos, inténtelo más tarde."
       nav_admin_orgs: "Organizaciones"
       nav_admin_fetchurls: "Fuentes"
       admin_orgs_title: "Organizaciones"
@@ -1948,6 +1953,7 @@ languages:
       login_password: "Mot de passe"
       login_submit: "Se connecter"
       login_error_invalid: "Identifiants invalides."
+      login_error_throttled: "Trop de tentatives échouées, réessayez plus tard."
       # Admin pages
       nav_admin_orgs: "Organisations"
       nav_admin_fetchurls: "Flux"
@@ -2320,6 +2326,7 @@ languages:
       login_password: "Password"
       login_submit: "Accedi"
       login_error_invalid: "Nome utente o password non validi."
+      login_error_throttled: "Troppi tentativi falliti, riprovare più tardi."
       nav_admin_orgs: "Organizzazioni"
       nav_admin_fetchurls: "Feed"
       admin_orgs_title: "Organizzazioni"
@@ -2686,6 +2693,7 @@ languages:
       login_password: "Wachtwoord"
       login_submit: "Inloggen"
       login_error_invalid: "Ongeldige gebruikersnaam of wachtwoord."
+      login_error_throttled: "Te veel mislukte pogingen, probeer het later opnieuw."
       nav_admin_orgs: "Organisaties"
       nav_admin_fetchurls: "Feeds"
       admin_orgs_title: "Organisaties"
