@@ -34,10 +34,7 @@
         <button type="submit" class="btn-sm btn-run">{{$.Strings.T "fetch_run"}}</button>
       </form>
       {{end}}
-      <form method="post" action="/admin/organizations/{{.Org.ID}}/delete" style="display:inline"
-            onsubmit="return confirm('Delete?')">
-        <button type="submit" class="btn-sm btn-del">{{$.Strings.T "admin_delete"}}</button>
-      </form>
+      <button type="button" class="btn-sm btn-del" onclick="if(confirm('{{$.Strings.T "org_confirm_delete"}}'))delOrg({{.Org.ID}})">{{$.Strings.T "admin_delete"}}</button>
       {{end}}
     </td>
   </tr>
@@ -54,7 +51,10 @@
 .col-num{text-align:right;white-space:nowrap;width:70px}
 .btn-run{background:#e8f4ff;border-color:#b3d4f5;color:#1a6eb5}
 .btn-run:hover{background:#c5e3ff;color:#0d4a80}
-.btn-del{background:#fff0f0;border-color:#f5c6cb;color:#721c24}
-.btn-del:hover{background:#f8d7da;color:#491217}
+.btn-del{background:#b00020;color:#fff;border:none}
+.btn-del:hover{background:#800016}
 </style>
+<script>
+function delOrg(id){var f=document.createElement('form');f.method='post';f.action='/admin/organizations/'+id+'/delete';document.body.appendChild(f);f.submit();}
+</script>
 {{end}}
