@@ -7,11 +7,11 @@
 
 {{with .Data}}
 <div class="table-wrap">
-<table class="event-table">
+<table class="event-table" data-sortable>
   <thead>
     <tr>
-      <th>{{$.Strings.T "musician_bandname"}}</th>
-      <th>{{$.Strings.T "musician_short_name"}}</th>
+      <th data-sort="str">{{$.Strings.T "musician_bandname"}}</th>
+      <th data-sort="str">{{$.Strings.T "musician_short_name"}}</th>
       <th>{{$.Strings.T "musician_mbid"}}</th>
       <th>{{$.Strings.T "musician_website"}}</th>
       <th></th>
@@ -41,6 +41,7 @@
 {{end}}
 
 <script>
+document.querySelectorAll('table[data-sortable]').forEach(initSortable);
 function delMusician(id) {
   var f = document.createElement('form');
   f.method = 'post'; f.action = '/admin/musicians/' + id + '/delete';

@@ -24,15 +24,15 @@
 </div>
 
 <div class="table-wrap">
-<table class="event-table">
+<table class="event-table" data-sortable>
   <thead>
     <tr>
       <th class="col-check"></th>
-      <th>{{$.Strings.T "fetch_url"}}</th>
-      <th>{{$.Strings.T "fetch_type"}}</th>
+      <th data-sort="str">{{$.Strings.T "fetch_url"}}</th>
+      <th data-sort="str">{{$.Strings.T "fetch_type"}}</th>
       <th>{{$.Strings.T "fetch_tags"}}</th>
-      <th>{{$.Strings.T "fetch_org"}}</th>
-      <th>{{$.Strings.T "fetch_last_fetched"}}</th>
+      <th data-sort="str">{{$.Strings.T "fetch_org"}}</th>
+      <th data-sort="str">{{$.Strings.T "fetch_last_fetched"}}</th>
       <th></th>
     </tr>
   </thead>
@@ -46,7 +46,7 @@
     <td>{{.Type}}</td>
     <td>{{range .Tags}}<span class="tag">{{.}}</span>{{end}}</td>
     <td>{{$orgName}}</td>
-    <td class="date-cell">{{if .LastFetchedAt}}{{formatDate $.LangCode .LastFetchedAt}}{{else}}{{$.Strings.T "fetch_never"}}{{end}}</td>
+    <td class="date-cell" data-val="{{.LastFetchedAt}}">{{if .LastFetchedAt}}{{formatDate $.LangCode .LastFetchedAt}}{{else}}{{$.Strings.T "fetch_never"}}{{end}}</td>
     <td class="col-actions">
       <a href="/admin/fetchurls/{{.ID}}/edit" class="btn-sm">{{$.Strings.T "admin_edit"}}</a>
       <button type="button" class="btn-sm btn-run"
@@ -78,6 +78,7 @@ function rowAction(url) {
   document.body.appendChild(f); f.submit();
 }
 
+document.querySelectorAll('table[data-sortable]').forEach(initSortable);
 document.querySelectorAll('.btn-run[data-run-url]').forEach(function(btn) {
   btn.addEventListener('click', function() {
     var url = btn.dataset.runUrl;

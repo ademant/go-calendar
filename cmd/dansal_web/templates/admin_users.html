@@ -29,14 +29,14 @@
 {{end}}
 
 <div class="table-wrap">
-<table class="event-table" id="user-table">
+<table class="event-table" id="user-table" data-sortable>
   <thead>
     <tr>
       {{if $.Data.IsAdmin}}<th class="col-cb"><input type="checkbox" id="cb-all"></th>{{end}}
-      <th>{{$.Strings.T "settings_username"}}</th>
-      {{if $.Data.IsAdmin}}<th>{{$.Strings.T "settings_email"}}</th>{{end}}
-      <th>{{$.Strings.T "settings_role"}}</th>
-      <th>{{$.Strings.T "fetch_org"}}</th>
+      <th data-sort="str">{{$.Strings.T "settings_username"}}</th>
+      {{if $.Data.IsAdmin}}<th data-sort="str">{{$.Strings.T "settings_email"}}</th>{{end}}
+      <th data-sort="str">{{$.Strings.T "settings_role"}}</th>
+      <th data-sort="str">{{$.Strings.T "fetch_org"}}</th>
       {{if $.Data.IsAdmin}}<th></th>{{end}}
     </tr>
   </thead>
@@ -47,7 +47,7 @@
     {{if $.Data.IsAdmin}}<td class="col-cb"><input type="checkbox" name="user_ids" value="{{$uid}}" class="user-cb"></td>{{end}}
     <td>{{.Username}}</td>
     {{if $.Data.IsAdmin}}<td class="email-cell">{{.Email}}</td>{{end}}
-    <td>
+    <td data-val="{{.Role}}">
       {{if $.Data.IsAdmin}}
       <form method="post" action="/admin/users/{{$uid}}/role" style="display:inline">
         <select name="role" class="inline-select" onchange="this.form.submit()">
@@ -170,6 +170,7 @@
 </style>
 
 <script>
+document.querySelectorAll('table[data-sortable]').forEach(initSortable);
 function delUser(id) {
   var f = document.createElement('form');
   f.method = 'post'; f.action = '/admin/users/' + id + '/delete';

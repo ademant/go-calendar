@@ -6,6 +6,16 @@
 </div>
 
 {{with .Data}}
+<div class="loc-filters">
+  <select id="filter-town">
+    <option value="">{{$.Strings.T "filter_all_towns"}}</option>
+  </select>
+  <select id="filter-org">
+    <option value="">{{$.Strings.T "filter_all_orgs"}}</option>
+  </select>
+  <button type="button" class="btn-reset" id="filter-clear">{{$.Strings.T "filter_clear"}}</button>
+</div>
+
 {{if .IsAdmin}}
 <form method="post" action="/admin/locations/bulk-assign" id="bulk-form">
 <div class="bulk-bar">
@@ -19,14 +29,14 @@
 {{end}}
 
 <div class="table-wrap">
-<table class="event-table" id="loc-table">
+<table class="event-table" id="loc-table" data-sortable>
   <thead>
     <tr>
       {{if $.Data.IsAdmin}}<th class="col-cb"><input type="checkbox" id="cb-all" title="{{$.Strings.T "loc_select_all"}}"></th>{{end}}
-      <th>{{$.Strings.T "loc_name"}}</th>
-      <th>{{$.Strings.T "loc_town"}}</th>
-      <th>{{$.Strings.T "loc_country"}}</th>
-      <th>{{$.Strings.T "fetch_org"}}</th>
+      <th data-sort="str">{{$.Strings.T "loc_name"}}</th>
+      <th data-sort="str">{{$.Strings.T "loc_town"}}</th>
+      <th data-sort="str">{{$.Strings.T "loc_country"}}</th>
+      <th data-sort="str">{{$.Strings.T "fetch_org"}}</th>
       <th></th>
     </tr>
   </thead>
@@ -34,9 +44,9 @@
   {{range .Locations}}
   {{$orgName := ""}}
   {{if .OrganizationID}}{{with index $.Data.OrgMap (derefInt .OrganizationID)}}{{$orgName = .Name}}{{end}}{{end}}
-  <tr>
+  <tr data-town="{{.Town}}" data-org="{{$orgName}}">
     {{if $.Data.IsAdmin}}<td class="col-cb"><input type="checkbox" name="loc_ids" value="{{.ID}}" class="loc-cb"></td>{{end}}
-    <td>{{.Location}}{{if .ShortName}} <span class="short-name">({{.ShortName}})</span>{{end}}</td>
+    <td data-val="{{if .ShortName}}{{.ShortName}}{{else}}{{.Location}}{{end}}">{{if .ShortName}}{{.ShortName}}<span class="short-name"> ({{.Location}})</span>{{else}}{{.Location}}{{end}}</td>
     <td>{{.Town}}</td>
     <td>{{.Country}}</td>
     <td>{{$orgName}}</td>
@@ -62,9 +72,35 @@
 .short-name{color:#888;font-size:.85em}
 .btn-del{background:#b00020;color:#fff;border:none}
 .btn-del:hover{background:#800016}
+.loc-filters{display:flex;flex-wrap:wrap;align-items:center;gap:.5rem;margin-bottom:.75rem;padding:.5rem .75rem;background:#f4f6fb;border:1px solid #e0e4ef;border-radius:6px}
+.loc-filters select{padding:.3rem .5rem;border:1px solid #ccc;border-radius:4px;font-size:.875rem;background:#fff}
+.btn-reset{padding:.3rem .7rem;border:1px solid #ccc;border-radius:4px;font-size:.875rem;color:#555;text-decoration:none;background:#fff;cursor:pointer}
+.btn-reset:hover{background:#f0f0f0;border-color:#888}
 </style>
 
 <script>
+document.querySelectorAll('table[data-sortable]').forEach(initSortable);
+(function(){
+  var tbody=document.querySelector('#loc-table tbody');
+  if(!tbody) return;
+  var rows=Array.prototype.slice.call(tbody.querySelectorAll('tr'));
+  function unique(arr){var s={},o=[];arr.forEach(function(v){if(v&&!s[v]){s[v]=true;o.push(v);}});return o.sort();}
+  var towns=unique(rows.map(function(r){return r.dataset.town||'';}));
+  var orgs =unique(rows.map(function(r){return r.dataset.org||'';}));
+  var tSel=document.getElementById('filter-town');
+  var oSel=document.getElementById('filter-org');
+  towns.forEach(function(t){var o=document.createElement('option');o.value=t;o.textContent=t;tSel.appendChild(o);});
+  orgs.forEach(function(o){var el=document.createElement('option');el.value=o;el.textContent=o;oSel.appendChild(el);});
+  function applyFilters(){
+    var t=tSel.value, o=oSel.value;
+    rows.forEach(function(r){
+      r.style.display=(!t||r.dataset.town===t)&&(!o||r.dataset.org===o)?'':'none';
+    });
+  }
+  tSel.addEventListener('change',applyFilters);
+  oSel.addEventListener('change',applyFilters);
+  document.getElementById('filter-clear').addEventListener('click',function(){tSel.value='';oSel.value='';applyFilters();});
+})();
 function delLocation(id) {
   var f = document.createElement('form');
   f.method = 'post'; f.action = '/admin/locations/' + id + '/delete';
