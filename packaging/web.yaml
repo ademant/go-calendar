@@ -8,6 +8,10 @@ listen: "127.0.0.1:8080"
 # Must match the domain served by your reverse proxy.
 domain: "events.example.com"
 
+# Override the canonical public URL. Defaults to https://{domain} when unset.
+# Set this if the web app is served under a sub-path or non-standard port.
+# base_url: "https://events.example.com"
+
 # Internal URL of the dansal REST API.
 dansal_url: "http://127.0.0.1:8000"
 
@@ -18,8 +22,10 @@ db_path: /var/lib/dansal-web/web.db
 # published events and pushes them to follower inboxes.
 poll_secs: 300
 
+# --- Content ---
+
 # Optional: path to a YAML file containing per-language contact info and
-# impressum text.  If omitted, no contact line or Impressum link appears.
+# impressum text. If omitted, no contact line or Impressum link appears.
 # The file is re-read on every /impressum request (no restart needed).
 #
 # Example /etc/dansal/pages.yaml:
@@ -27,12 +33,44 @@ poll_secs: 300
 #   contact:
 #     de: "Kontakt: kontakt@example.com"
 #     en: "Contact: kontakt@example.com"
-#     fr: "Contact : kontakt@example.com"
 #   impressum:
 #     de: |
 #       Angaben gemäß § 5 TMG
-#       Max Mustermann
-#       Musterstraße 1, 12345 Berlin
-#       kontakt@example.com
+#       Max Mustermann, Musterstraße 1, 12345 Berlin
 #
 # pages_file: /etc/dansal/pages.yaml
+
+# Optional: path to a YAML file that overrides the embedded translations.
+# Useful for customising UI strings without rebuilding the binary.
+# i18n_file: /etc/dansal/i18n.yaml
+
+# --- Federation ---
+
+# Whether to show events federated from followed organisations in the main
+# event list. Federated events are always stored in the local database;
+# this only controls their visibility on the public index page.
+show_federated_events: false
+
+# NodeInfo metadata served at /nodeinfo/2.1 (used by fediverse crawlers).
+nodeinfo_description: ""
+nodeinfo_maintainer_name: ""
+nodeinfo_maintainer_email: ""
+
+# --- Appearance ---
+
+# Directory containing custom logo.svg, banner.svg, and favicon.svg.
+# Falls back to the built-in SVGs when unset or the file is missing.
+# images_dir: /var/lib/dansal/images
+
+# Banner height in pixels on the main page (0 = hidden).
+banner_height_main: 200
+
+# Banner height in pixels on sub-pages (0 = hidden, the default).
+banner_height_sub: 0
+
+# Logo height in pixels in the navigation bar.
+logo_height_main: 48
+logo_height_sub: 32
+
+# Colour scheme: auto (follow OS preference), light, or dark.
+dark_mode: auto

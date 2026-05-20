@@ -1,12 +1,86 @@
 server:
+  # TCP port the API listens on.
   port: 8000
+
+  # Path to the SQLite database.
+  db_path: /var/lib/dansal/calendar.db
+
+  # Maximum number of open database connections.
+  db_max_conns: 10
+
+  # Directory where uploaded event/musician/org images are stored.
+  images_dir: /var/lib/dansal/images
+
+  # Maximum dimensions for uploaded images (pixels).
+  image_x_max: 1024
+  image_y_max: 1024
+
+  # Unix socket path used by dansal_admin.
+  admin_socket: /run/dansal/dansal.sock
+
+  # Public base URL of the API, used in email links and iCal feeds.
+  # Required. Example: https://api.dansal.example.com
+  base_url: ""
+
+  # --- Authentication ---
+
+  # Session token lifetime in hours.
   token_expiration_hours: 24
+
+  # Hours before an invite link expires.
+  invite_expiry_hours: 48
+
+  # Hours before an email verification link expires.
+  verification_expiry_hours: 24
+
+  # Seconds a magic-login link remains valid.
+  magic_login_expiry_secs: 900
+
+  # Minimum seconds between magic-login requests from the same address.
+  magic_login_rate_secs: 10
+
+  # --- Rate limiting ---
+
+  # General requests per minute per IP before 429 responses.
+  rate_limit: 100
+
+  # Login attempts per minute per IP.
+  login_rate_limit: 5
+
+  # Seconds to delay a response after a failed login (tarpit).
+  login_tarpit_secs: 10
+
+  # Failed logins within login_failure_window_secs before the account is locked.
+  login_max_failures: 10
+
+  # Rolling window (seconds) for counting login failures.
+  login_failure_window_secs: 600
+
+  # --- Timeouts & connection limits ---
+
+  # Maximum request body size in bytes (1 MiB default).
+  max_body_bytes: 1048576
+
+  read_timeout_secs: 10
+  write_timeout_secs: 30
+  idle_timeout_secs: 60
+
+  # Maximum concurrent connections from a single IP.
+  max_conns_per_ip: 10
+
+  # --- Access control ---
+
+  # IPs allowed to reach /api/v1/admin/* endpoints.
   admin_allowed_ips:
     - "127.0.0.1"
     - "::1"
-  rate_limit: 100
-  login_rate_limit: 5
-  login_tarpit_secs: 10
+
+  # CORS: origins allowed to call the API from a browser.
+  # Leave empty to disable CORS headers entirely.
+  # Example: ["https://dansal.example.com"]
+  allowed_origins: []
+
+  # Usernames that cannot be registered.
   reserved_usernames:
     - admin
     - administrator
@@ -15,27 +89,43 @@ server:
     - sysadmin
     - system
     - su
-  max_body_bytes: 1048576  # 1 MiB
-  read_timeout_secs: 10
-  write_timeout_secs: 30
-  idle_timeout_secs: 60
-  max_conns_per_ip: 10
-  db_path: /var/lib/dansal/calendar.db
-  images_dir: /var/lib/dansal/images
-  admin_socket: /run/dansal/dansal.sock
-  image_x_max: 1024
-  image_y_max: 1024
-  base_url: ""       # Set to your public URL, e.g. https://dansal.example.com
+
+  # --- Metrics ---
+
+  # Port for the Prometheus /metrics endpoint. Set to 0 to disable.
   metrics_port: 9090
+
   metrics_allowed_ips:
     - "127.0.0.1"
     - "::1"
+
+  # --- Integrations (optional) ---
+
+  # Telegram bot for event notifications. Leave blank to disable.
+  telegram_bot_token: ""
+  telegram_bot_name: ""
+
+  # Matrix bot for event notifications. Leave blank to disable.
+  matrix_homeserver: ""
+  matrix_access_token: ""
 
 smtp:
   host: ""
   port: 587
   username: ""
+
+  # Plain-text password. Prefer password_key for production deployments.
   password: ""
+
+  # Path to a file containing only the SMTP password (more secure than
+  # embedding it in this file). Takes precedence over password if set.
+  password_key: ""
+
   from: ""
   from_name: "Dansal"
+
+  # TLS mode: starttls (default), tls, or none.
   tls: starttls
+
+  # Dial and send timeout in seconds.
+  timeout_secs: 30
