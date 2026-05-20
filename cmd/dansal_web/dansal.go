@@ -527,9 +527,9 @@ func (c *DansalClient) UploadOrgImage(ctx context.Context, id int, data []byte, 
 	if err != nil {
 		return err
 	}
-	resp.Body.Close()
+	defer resp.Body.Close()
 	if resp.StatusCode >= 300 {
-		return fmt.Errorf("upload org image: %s", resp.Status)
+		return apiErr(resp)
 	}
 	return nil
 }

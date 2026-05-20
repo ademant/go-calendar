@@ -168,6 +168,16 @@ func adminOrgCreateHandler(cfg *Config, tmpls *Templates, client *DansalClient, 
 			file.Close()
 			if uerr := client.UploadOrgImage(r.Context(), created.ID, data, header.Filename, token); uerr != nil {
 				log.Printf("upload org image error: %v", uerr)
+				errKey := "admin_save_error"
+				if strings.Contains(uerr.Error(), "too large") {
+					errKey = "image_too_large"
+				}
+				title := i18n.T(r, "admin_new")
+				renderTemplate(w, tmpls.adminOrgEdit, tmplData(r, cfg, i18n, title, AdminOrgEditData{
+					Org:      created,
+					ErrorKey: errKey,
+				}))
+				return
 			}
 		}
 		http.Redirect(w, r, "/admin/organizations", http.StatusSeeOther)
@@ -372,6 +382,16 @@ func adminOrgSaveHandler(cfg *Config, tmpls *Templates, client *DansalClient, i1
 			file.Close()
 			if uerr := client.UploadOrgImage(r.Context(), id, data, header.Filename, token); uerr != nil {
 				log.Printf("upload org image error: %v", uerr)
+				errKey := "admin_save_error"
+				if strings.Contains(uerr.Error(), "too large") {
+					errKey = "image_too_large"
+				}
+				title := i18n.T(r, "admin_edit")
+				renderTemplate(w, tmpls.adminOrgEdit, tmplData(r, cfg, i18n, title, AdminOrgEditData{
+					Org:      org,
+					ErrorKey: errKey,
+				}))
+				return
 			}
 		}
 		http.Redirect(w, r, "/admin/organizations", http.StatusSeeOther)

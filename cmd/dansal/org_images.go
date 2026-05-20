@@ -2,13 +2,13 @@ package main
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
-
 )
 
 var orgImagesDir string
@@ -112,7 +112,12 @@ func uploadOrgImage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := r.ParseMultipartForm(config.Server.MaxBodyBytes); err != nil {
-		writeError(w, "Failed to parse form", http.StatusBadRequest)
+		var maxErr *http.MaxBytesError
+		if errors.As(err, &maxErr) {
+			writeError(w, fmt.Sprintf("image too large (max %d MB)", config.Server.MaxBodyBytes>>20), http.StatusRequestEntityTooLarge)
+		} else {
+			writeError(w, "Failed to parse form", http.StatusBadRequest)
+		}
 		return
 	}
 	file, _, err := r.FormFile("image")
