@@ -582,7 +582,7 @@ func eventHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18
 			o, err := client.GetOrganization(r.Context(), *event.OrganizationID)
 			if err == nil {
 				org = &o
-				slug = orgSlug(o.Name)
+				slug = effectiveSlug(o)
 			}
 		}
 
@@ -723,7 +723,7 @@ func orgsHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n
 		for i, o := range orgs {
 			items[i] = OrgListItem{
 				Org:           o,
-				Slug:          orgSlug(o.Name),
+				Slug:          effectiveSlug(o),
 				EventCount:    evtCount[o.ID],
 				LocationCount: locCount[o.ID],
 				FirstTown:     firstTown[o.ID],
