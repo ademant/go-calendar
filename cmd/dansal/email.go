@@ -123,22 +123,26 @@ func SendEmail(to, subject, body string) error {
 		"Content-Type: text/plain; charset=UTF-8\r\n\r\n" +
 		body)
 
-	addr := net.JoinHostPort(cfg.Host, strconv.Itoa(port))
+	portStr := strconv.Itoa(port)
 
 	if cfg.TLS == "tls" {
-		dialer := &net.Dialer{Timeout: timeout}
-		conn, err := tls.DialWithDialer(dialer, "tcp", addr, &tls.Config{ServerName: cfg.Host})
+		raw, err := dialSMTPConn(cfg.Host, portStr, timeout)
 		if err != nil {
-			return fmt.Errorf("TLS dial %s: %w", addr, err)
+			return fmt.Errorf("TLS dial %s:%s: %w", cfg.Host, portStr, err)
 		}
-		conn.SetDeadline(time.Now().Add(timeout))
-		defer conn.Close()
-		return smtpSend(conn, cfg.Host, cfg.Username, password, from, to, msg)
+		raw.SetDeadline(time.Now().Add(timeout))
+		tlsConn := tls.Client(raw, &tls.Config{ServerName: cfg.Host})
+		if err := tlsConn.Handshake(); err != nil {
+			raw.Close()
+			return fmt.Errorf("TLS handshake %s: %w", cfg.Host, err)
+		}
+		defer tlsConn.Close()
+		return smtpSend(tlsConn, cfg.Host, cfg.Username, password, from, to, msg)
 	}
 
-	conn, err := net.DialTimeout("tcp", addr, timeout)
+	conn, err := dialSMTPConn(cfg.Host, portStr, timeout)
 	if err != nil {
-		return fmt.Errorf("dial %s: %w", addr, err)
+		return fmt.Errorf("dial %s:%s: %w", cfg.Host, portStr, err)
 	}
 	conn.SetDeadline(time.Now().Add(timeout))
 	defer conn.Close()
@@ -163,6 +167,31 @@ func SendEmail(to, subject, body string) error {
 		}
 	}
 	return smtpDeliver(c, from, to, msg)
+}
+
+// dialSMTPConn resolves host to all its IP addresses and tries each in order,
+// using a per-address timeout so a dead IPv6 address doesn't block the IPv4 fallback.
+func dialSMTPConn(host, port string, timeout time.Duration) (net.Conn, error) {
+	ips, err := net.LookupHost(host)
+	if err != nil || len(ips) == 0 {
+		return net.DialTimeout("tcp", net.JoinHostPort(host, port), timeout)
+	}
+	perAddr := timeout / time.Duration(len(ips))
+	if perAddr > 10*time.Second {
+		perAddr = 10 * time.Second
+	}
+	if perAddr < 5*time.Second {
+		perAddr = 5 * time.Second
+	}
+	var lastErr error
+	for _, ip := range ips {
+		conn, err := net.DialTimeout("tcp", net.JoinHostPort(ip, port), perAddr)
+		if err == nil {
+			return conn, nil
+		}
+		lastErr = err
+	}
+	return nil, fmt.Errorf("all %d address(es) unreachable for %s: %w", len(ips), host, lastErr)
 }
 
 func smtpSend(conn net.Conn, host, username, password, from, to string, msg []byte) error {
