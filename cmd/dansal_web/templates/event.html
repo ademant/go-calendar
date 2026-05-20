@@ -163,6 +163,25 @@
     {{end}}
     {{end}}
 
+    {{/* Last update info */}}
+    {{if .ChangedAt}}
+    <div class="sidebar-block">
+      <div class="sidebar-label">{{$.Strings.T "evt_last_update"}}</div>
+      <div class="sidebar-meta-text">{{formatTime $.LangCode .ChangedAt}}</div>
+      {{if $.User}}
+        {{if eq .ChangedBy "fetch"}}
+          {{if .FetchSourceID}}
+          <div><a href="/admin/fetchurls/{{.FetchSourceID}}/edit" class="sidebar-link">{{$.Strings.T "evt_import_source"}}</a></div>
+          {{else}}
+          <div class="sidebar-meta-text">{{$.Strings.T "evt_import_source"}}</div>
+          {{end}}
+        {{else if .ChangedBy}}
+        <div class="sidebar-meta-text">{{.ChangedBy}}</div>
+        {{end}}
+      {{end}}
+    </div>
+    {{end}}
+
   </aside>
 </div>
 
@@ -339,6 +358,7 @@
 .sidebar-label{font-size:.78rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--fg-faint);margin-bottom:.4rem}
 .sidebar-link{display:inline-block;color:var(--link);font-size:.9rem;text-decoration:none}
 .sidebar-link:hover{text-decoration:underline}
+.sidebar-meta-text{font-size:.85rem;color:var(--fg-dim)}
 .evt-org{background:var(--bg-card);border:1px solid var(--border);border-radius:6px;padding:1.1rem 1.25rem;margin-top:.5rem}
 .evt-org h2{font-size:1rem;margin-bottom:.35rem}
 .org-links{display:flex;flex-wrap:wrap;gap:.4rem;margin-top:.6rem}

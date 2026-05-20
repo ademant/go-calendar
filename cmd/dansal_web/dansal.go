@@ -66,6 +66,9 @@ type Event struct {
 	Timetable       []TimetableEntry `json:"timetable,omitempty"`
 	CreatedAt       string           `json:"created_at"`
 	SourceURL       string           `json:"source_url,omitempty"`
+	ChangedAt       string           `json:"changed_at,omitempty"`
+	ChangedBy       string           `json:"changed_by,omitempty"`
+	FetchSourceID   int              `json:"fetch_source_id,omitempty"`
 }
 
 type Dance struct {

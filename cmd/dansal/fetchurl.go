@@ -451,6 +451,7 @@ func importFromICalSource(src FetchSource) ([]Event, bool, error) {
 				}
 			}(),
 				SourceLastModified: sourceLastModified,
+				FetchSourceID:      src.ID,
 			}
 
 			locationID, err := ensureLocation(tx, eventReq.Location)

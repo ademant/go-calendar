@@ -602,6 +602,7 @@ func migrateDB() {
 	migrateLocationsLatLng()
 	db.Exec("ALTER TABLE events ADD COLUMN changed_at INTEGER")
 	db.Exec("ALTER TABLE events ADD COLUMN changed_by TEXT DEFAULT ''")
+	db.Exec("ALTER TABLE events ADD COLUMN fetch_source_id INTEGER REFERENCES fetch_sources(id) ON DELETE SET NULL")
 }
 
 func createTables() error {

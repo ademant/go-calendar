@@ -191,6 +191,7 @@ func importRSSItems(items []rssItem, src FetchSource) ([]Event, bool, error) {
 			Source:         src.URL,
 			OrganizationID: src.OrganizationID,
 			Dances:         src.DanceIDs,
+			FetchSourceID:  src.ID,
 		}
 
 		locationID, err := ensureLocation(tx, eventReq.Location)
@@ -275,6 +276,7 @@ func importAtomEntries(entries []atomEntry, src FetchSource) ([]Event, bool, err
 			Source:         src.URL,
 			OrganizationID: src.OrganizationID,
 			Dances:         src.DanceIDs,
+			FetchSourceID:  src.ID,
 		}
 
 		locationID, err := ensureLocation(tx, eventReq.Location)
