@@ -75,15 +75,35 @@
 </div>
 
 <div class="page-section">
-  <h2 class="section-heading">{{$.Strings.T "musician_upcoming_events"}}</h2>
+  <div class="events-heading-row">
+    <h2 class="section-heading">{{$.Strings.T "musician_upcoming_events"}}</h2>
+    {{if .HasPast}}
+    <form method="get" class="past-toggle">
+      {{if .IncludePast}}
+      <button type="submit" name="include_past" value="" class="btn-toggle btn-toggle-active">{{$.Strings.T "filter_include_past"}}</button>
+      {{else}}
+      <button type="submit" name="include_past" value="1" class="btn-toggle">{{$.Strings.T "filter_include_past"}}</button>
+      {{end}}
+    </form>
+    {{end}}
+  </div>
+
   {{if .Events}}
+  {{/* Map — only rendered if at least one event has coordinates */}}
+  <div id="mmap-wrap" hidden>
+    <div id="mmap"></div>
+  </div>
+  <script type="application/json" id="mmap-data">{{eventsGeoJSON .Events}}</script>
+
   <ul class="event-list">
   {{range .Events}}
   <li class="event-item">
     <h3><a href="/events/{{.ID}}">{{.Title}}</a></h3>
     <div class="event-meta">
       {{if .StartTime}}<span>{{formatTime $.LangCode .StartTime}}</span>{{end}}
-      {{if .Location}} &mdash; {{.Location}}{{else if .LocationTown}} &mdash; {{.LocationTown}}{{end}}
+      {{if .LocationShortName}}
+        &mdash; {{.LocationShortName}}{{if .LocationAddress}}, {{.LocationAddress}}{{end}}{{if .LocationTown}}, {{.LocationTown}}{{end}}
+      {{else if .Location}} &mdash; {{.Location}}{{else if .LocationTown}} &mdash; {{.LocationTown}}{{end}}
       {{if .IsCancelled}}<span class="badge cancelled">{{$.Strings.T "badge_cancelled"}}</span>{{end}}
       {{if .HasBall}}<span class="badge">{{$.Strings.T "filter_type_ball"}}</span>{{end}}
       {{if .HasWorkshop}}<span class="badge">{{$.Strings.T "filter_type_workshop"}}</span>{{end}}
@@ -120,5 +140,52 @@
 .feed-link{display:inline-block;margin-left:.4rem;padding:.15rem .5rem;border:1px solid var(--border-mid);border-radius:3px;font-size:.8rem;color:var(--fg-dim);text-decoration:none}
 .feed-link:hover{border-color:var(--fg-faint);color:var(--fg)}
 .empty-msg{color:var(--fg-faint);font-size:.9rem}
+.events-heading-row{display:flex;align-items:center;gap:1rem;flex-wrap:wrap;margin-bottom:.75rem}
+.events-heading-row .section-heading{margin:0}
+.past-toggle{margin:0}
+.btn-toggle{padding:.25rem .75rem;border:1px solid var(--border-mid);border-radius:14px;background:var(--btn-bg);color:var(--fg-dim);cursor:pointer;font-size:.82rem}
+.btn-toggle:hover{border-color:var(--fg-faint);color:var(--fg)}
+.btn-toggle-active{background:var(--heading);color:#fff;border-color:var(--heading)}
+#mmap{height:280px;border-radius:6px;border:1px solid var(--border);margin-bottom:1rem}
 </style>
+
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha384-sHL9NAb7lN7rfvG5lfHpm643Xkcjzp4jFvuavGOndn6pjVqS6ny56CAt3nsEVT4H" crossorigin="anonymous">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha384-cxOPjt7s7Iz04uaHJceBmS+qpjv2JkIHNVcuOrM+YHwZOmJGBXI00mdUXEq65HTH" crossorigin="anonymous"></script>
+<script>
+(function(){
+  var raw = document.getElementById('mmap-data');
+  if(!raw) return;
+  var geo;
+  try { geo = JSON.parse(raw.textContent); } catch(_){ return; }
+  if(!geo || !geo.length) return;
+
+  var wrap = document.getElementById('mmap-wrap');
+  wrap.hidden = false;
+
+  var map = L.map('mmap');
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
+    attribution:'© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+    maxZoom:18
+  }).addTo(map);
+
+  var bounds = [];
+  geo.forEach(function(e){
+    var ll = [e.lat, e.lng];
+    bounds.push(ll);
+    var label = e.loc || e.town || '';
+    var popup = '<b><a href="/events/'+e.id+'">'+escHtml(e.t)+'</a></b>'+
+      (e.s ? '<br><small>'+(e.s||'').slice(0,10)+'</small>' : '')+
+      (label ? '<br><small>'+escHtml(label)+'</small>' : '');
+    L.marker(ll).bindPopup(popup,{maxWidth:240}).addTo(map);
+  });
+
+  if(bounds.length === 1){
+    map.setView(bounds[0], 12);
+  } else {
+    try { map.fitBounds(L.latLngBounds(bounds), {padding:[30,30], maxZoom:10}); } catch(_){}
+  }
+
+  function escHtml(s){ return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+})();
+</script>
 {{end}}

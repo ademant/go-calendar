@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"strconv"
-
+	"time"
 )
 
 type MusiciansPageData struct {
@@ -12,11 +12,13 @@ type MusiciansPageData struct {
 }
 
 type MusicianPageData struct {
-	Musician Musician
-	Events   []Event
-	Slug     string
-	Members  []string
-	Albums   []string
+	Musician    Musician
+	Events      []Event
+	Slug        string
+	Members     []string
+	Albums      []string
+	HasPast     bool
+	IncludePast bool
 }
 
 func musiciansHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {
@@ -43,17 +45,39 @@ func musicianHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *
 			http.NotFound(w, r)
 			return
 		}
-		events, _ := client.GetPublicEventsByMusician(r.Context(), id)
+
+		allEvents, _ := client.GetAllPublicEventsByMusician(r.Context(), id)
+
+		now := time.Now()
+		var futureEvents []Event
+		hasPast := false
+		for _, e := range allEvents {
+			t, err := time.Parse(time.RFC3339, e.EndTime)
+			if err != nil || t.After(now) {
+				futureEvents = append(futureEvents, e)
+			} else {
+				hasPast = true
+			}
+		}
+
+		includePast := r.URL.Query().Get("include_past") == "1"
+		displayEvents := futureEvents
+		if includePast {
+			displayEvents = allEvents
+		}
+
 		var members, albums []string
 		json.Unmarshal([]byte(musician.MembersJSON), &members)
 		json.Unmarshal([]byte(musician.AlbumsJSON), &albums)
 		title := musician.Bandname
 		renderTemplate(w, tmpls.musician, tmplData(r, cfg, i18n, title, MusicianPageData{
-			Musician: musician,
-			Events:   events,
-			Slug:     orgSlug(musician.Bandname),
-			Members:  members,
-			Albums:   albums,
+			Musician:    musician,
+			Events:      displayEvents,
+			Slug:        orgSlug(musician.Bandname),
+			Members:     members,
+			Albums:      albums,
+			HasPast:     hasPast,
+			IncludePast: includePast,
 		}))
 	}
 }
