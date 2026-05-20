@@ -4,9 +4,9 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
-
 )
 
 func getClientIP(r *http.Request) string {
@@ -31,12 +31,18 @@ type LoginPageData struct {
 	Next      string
 }
 
-// safeNext returns next if it is a local path, otherwise "/".
+// safeNext returns next only when it is a local path with no host or scheme,
+// preventing open redirects. Prefix checks alone are insufficient (e.g. "//evil.com"
+// starts with "/" but has a host), so url.Parse is used as the authoritative check.
 func safeNext(next string) string {
-	if next != "" && strings.HasPrefix(next, "/") && !strings.HasPrefix(next, "//") {
-		return next
+	if next == "" || !strings.HasPrefix(next, "/") {
+		return "/"
 	}
-	return "/"
+	u, err := url.Parse(next)
+	if err != nil || u.Host != "" || u.Scheme != "" {
+		return "/"
+	}
+	return next
 }
 
 func loginPageHandler(cfg *Config, tmpls *Templates, i18n *I18n) http.HandlerFunc {

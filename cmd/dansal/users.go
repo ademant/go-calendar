@@ -75,8 +75,9 @@ func isReservedUsername(username string) bool {
 
 // passwordBytes returns the bcrypt input for password.
 // SHA-256 collapses the input to 32 bytes, preventing bcrypt's silent 72-byte truncation.
+// The SHA-256 here is not used as a standalone password hash — it feeds into bcrypt.
 func passwordBytes(password string) []byte {
-	h := sha256.Sum256([]byte(password))
+	h := sha256.Sum256([]byte(password)) //nolint:gosec // pre-hash for bcrypt, not a standalone password hash
 	return h[:]
 }
 
@@ -84,8 +85,10 @@ func passwordBytes(password string) []byte {
 func hashPassword(password string) string {
 	h, err := bcrypt.GenerateFromPassword(passwordBytes(password), bcrypt.DefaultCost)
 	if err != nil {
-		sum := sha256.Sum256([]byte(password))
-		return fmt.Sprintf("%x", sum)
+		// bcrypt.GenerateFromPassword can only fail with an invalid cost (DefaultCost
+		// is always valid) or a nil/empty input (passwordBytes always returns 32 bytes).
+		// Panic rather than silently storing a weak hash.
+		panic(fmt.Sprintf("bcrypt: %v", err))
 	}
 	return string(h)
 }
@@ -105,8 +108,8 @@ func checkPassword(password, stored string) (ok, migrate bool) {
 		}
 		return false, false
 	}
-	// Legacy hex SHA-256 hash.
-	sum := sha256.Sum256([]byte(password))
+	// Legacy hex SHA-256 hash — accepted only to trigger migration to bcrypt.
+	sum := sha256.Sum256([]byte(password)) //nolint:gosec // compared against stored legacy hash, triggers re-hash to bcrypt on success
 	if fmt.Sprintf("%x", sum) == stored {
 		return true, true
 	}

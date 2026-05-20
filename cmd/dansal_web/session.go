@@ -68,12 +68,13 @@ func setSession(w http.ResponseWriter, token string, user SessionUser, expiresAt
 func clearSession(w http.ResponseWriter) {
 	for _, name := range []string{cookieToken, cookieUser} {
 		http.SetCookie(w, &http.Cookie{
-			Name:    name,
-			Value:   "",
-			Path:    "/",
-			MaxAge:  -1,
-			Expires: time.Unix(0, 0),
-			Secure:  true,
+			Name:     name,
+			Value:    "",
+			Path:     "/",
+			MaxAge:   -1,
+			Expires:  time.Unix(0, 0),
+			HttpOnly: true,
+			Secure:   true,
 		})
 	}
 }

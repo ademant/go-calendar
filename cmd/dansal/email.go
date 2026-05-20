@@ -111,6 +111,10 @@ func SendEmail(to, subject, body string) error {
 		fromHeader = mime.QEncoding.Encode("utf-8", cfg.FromName) + " <" + from + ">"
 	}
 
+	// Strip CRLFs from header fields to prevent email header injection.
+	to = stripCRLF(to)
+	fromHeader = stripCRLF(fromHeader)
+
 	msg := []byte("MIME-Version: 1.0\r\n" +
 		"From: " + fromHeader + "\r\n" +
 		"To: " + to + "\r\n" +
@@ -172,6 +176,16 @@ func smtpSend(conn net.Conn, host, username, password, from, to string, msg []by
 		}
 	}
 	return smtpDeliver(c, from, to, msg)
+}
+
+func stripCRLF(s string) string {
+	out := make([]byte, 0, len(s))
+	for i := 0; i < len(s); i++ {
+		if s[i] != '\r' && s[i] != '\n' {
+			out = append(out, s[i])
+		}
+	}
+	return string(out)
 }
 
 func smtpDeliver(c *smtp.Client, from, to string, msg []byte) error {
