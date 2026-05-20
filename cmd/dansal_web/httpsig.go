@@ -182,11 +182,18 @@ func VerifyRequest(r *http.Request, pubKeyPEM string) error {
 	var parts []string
 	for _, h := range headerNames {
 		h = strings.TrimSpace(h)
-		if h == "(request-target)" {
+		var val string
+		switch h {
+		case "(request-target)":
 			parts = append(parts, fmt.Sprintf("(request-target): %s %s", strings.ToLower(r.Method), r.URL.RequestURI()))
-		} else {
-			parts = append(parts, fmt.Sprintf("%s: %s", h, r.Header.Get(http.CanonicalHeaderKey(h))))
+			continue
+		case "host":
+			// Go's HTTP server moves Host out of r.Header into r.Host.
+			val = r.Host
+		default:
+			val = r.Header.Get(http.CanonicalHeaderKey(h))
 		}
+		parts = append(parts, fmt.Sprintf("%s: %s", h, val))
 	}
 	signingString := strings.Join(parts, "\n")
 
