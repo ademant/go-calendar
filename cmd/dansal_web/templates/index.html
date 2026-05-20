@@ -26,7 +26,10 @@
 </div>
 
 <!-- Week view -->
-<div id="week-view" style="margin-top:1.5rem"></div>
+<div id="week-outer">
+  <div id="week-main"></div>
+  <div id="week-mini-cal"></div>
+</div>
 
 <!-- Text filters -->
 <div class="filters" style="margin-top:1.5rem">
@@ -235,6 +238,9 @@ th.sorted-desc::after{content:" ↓";color:var(--link)}
 #load-more[disabled]{display:none}
 .empty-state{text-align:center;padding:2rem;color:var(--fg-muted)}
 .empty-state button{margin-left:.75rem;padding:.3rem .8rem;border:1px solid var(--border-mid);border-radius:4px;background:var(--btn-bg);cursor:pointer;color:var(--fg)}
+#week-outer{display:flex;gap:1rem;align-items:flex-start;margin-top:1.5rem}
+#week-main{flex:1;min-width:0}
+#week-mini-cal{flex:0 0 210px;font-size:.82rem}
 .week-nav{display:flex;align-items:center;gap:.75rem;margin-bottom:.75rem}
 .week-nav button{padding:.25rem .75rem;border:1px solid var(--border-mid);border-radius:4px;background:var(--btn-bg);cursor:pointer;font-size:1.1rem;line-height:1;color:var(--fg)}
 .week-nav button:hover{background:var(--btn-bg-h)}
@@ -252,11 +258,24 @@ th.sorted-desc::after{content:" ↓";color:var(--link)}
 .cal-evt b{display:block;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .cal-evt small{display:block;color:var(--fg-muted);font-size:.78rem}
 .cal-town{color:var(--fg-faint)!important}
+.mc-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:.4rem;font-weight:600;font-size:.83rem}
+.mc-nav{background:none;border:none;cursor:pointer;padding:.1rem .35rem;color:var(--fg-2);font-size:1rem;line-height:1}
+.mc-nav:hover{color:var(--fg)}
+.mc-grid{width:100%;border-collapse:collapse}
+.mc-grid th{font-size:.72rem;color:var(--fg-muted);text-align:center;padding:.15rem 0;font-weight:400}
+.mc-grid td{text-align:center;padding:.18rem .1rem;font-size:.78rem;color:var(--fg-2)}
+tr.mc-week{cursor:pointer}
+tr.mc-week:hover td{background:var(--bg-hover)}
+tr.mc-week.mc-sel td{background:var(--cal-today);font-weight:600}
+.mc-other{color:var(--fg-hint)!important;font-weight:400!important}
+.mc-today{color:var(--link)!important;font-weight:700!important}
 @media(max-width:640px){
   .col-org,.col-actions,.col-fee{display:none}
   .event-table td:nth-child(6),.event-table td:nth-child(7),.event-table td:nth-child(8){display:none}
   .filter-row input[type=date]{display:none}
   #map-container{height:280px}
+  #week-mini-cal{display:none}
+  .week-nav button{display:none}
 }
 </style>
 
@@ -342,11 +361,97 @@ th.sorted-desc::after{content:" ↓";color:var(--link)}
     });
     html += '</tr></tbody></table></div>';
 
-    var wv = document.getElementById('week-view');
+    var wv = document.getElementById('week-main');
     wv.innerHTML = html;
-    document.getElementById('week-prev').addEventListener('click',function(){ weekOffset--; renderWeek(); updateMapMarkers(); });
-    document.getElementById('week-next').addEventListener('click',function(){ weekOffset++; renderWeek(); updateMapMarkers(); });
+    document.getElementById('week-prev').addEventListener('click',function(){ weekOffset--; syncMiniCalToWeek(); renderWeek(); renderMiniCal(); updateMapMarkers(); });
+    document.getElementById('week-next').addEventListener('click',function(){ weekOffset++; syncMiniCalToWeek(); renderWeek(); renderMiniCal(); updateMapMarkers(); });
   }
+
+  // ── Mini monthly calendar ─────────────────────────────────────────────────
+  var miniCalYear, miniCalMonth;
+  (function(){ var w=getWeekStart(0); miniCalYear=w.getFullYear(); miniCalMonth=w.getMonth(); })();
+
+  function syncMiniCalToWeek(){
+    var thu=new Date(getWeekStart(weekOffset).getTime()+3*86400000);
+    miniCalYear=thu.getFullYear(); miniCalMonth=thu.getMonth();
+  }
+
+  function renderMiniCal(){
+    var lang=document.documentElement.lang||'de';
+    var ws=getWeekStart(weekOffset);
+    var wsIso=dateToIso(ws);
+    var weIso=dateToIso(new Date(ws.getTime()+6*86400000));
+    var today=todayIso();
+    var monthDate=new Date(miniCalYear,miniCalMonth,1);
+    var fmtMY=new Intl.DateTimeFormat(lang,{month:'long',year:'numeric'});
+    var fmtWd=new Intl.DateTimeFormat(lang,{weekday:'narrow'});
+
+    // Monday of first week
+    var cur=new Date(monthDate);
+    var dow=cur.getDay();
+    cur.setDate(cur.getDate()-(dow===0?6:dow-1));
+
+    // Weekday headers
+    var wdHdr='';
+    for(var i=0;i<7;i++){var hd=new Date(cur);hd.setDate(hd.getDate()+i);wdHdr+='<th>'+escHtml(fmtWd.format(hd))+'</th>';}
+
+    var html='<div class="mc-header">'+
+      '<button class="mc-nav" id="mc-prev">&#8592;</button>'+
+      '<span>'+escHtml(fmtMY.format(monthDate))+'</span>'+
+      '<button class="mc-nav" id="mc-next">&#8594;</button>'+
+      '</div>'+
+      '<table class="mc-grid"><thead><tr>'+wdHdr+'</tr></thead><tbody>';
+
+    for(var row=0;row<6;row++){
+      var rMonIso=dateToIso(cur);
+      var rSunIso=dateToIso(new Date(cur.getTime()+6*86400000));
+      var sel=(wsIso<=rSunIso&&weIso>=rMonIso);
+      html+='<tr class="mc-week'+(sel?' mc-sel':'')+'" data-mon="'+rMonIso+'">';
+      for(var col=0;col<7;col++){
+        var iso=dateToIso(cur);
+        var cls=(cur.getMonth()!==miniCalMonth?'mc-other':'')+(iso===today?' mc-today':'');
+        html+='<td'+(cls?' class="'+cls.trim()+'"':'')+'>'+cur.getDate()+'</td>';
+        cur.setDate(cur.getDate()+1);
+      }
+      html+='</tr>';
+      if(row>=3&&cur.getMonth()!==miniCalMonth)break;
+    }
+
+    html+='</tbody></table>';
+    var mc=document.getElementById('week-mini-cal');
+    mc.innerHTML=html;
+
+    document.getElementById('mc-prev').addEventListener('click',function(e){
+      e.stopPropagation();
+      if(--miniCalMonth<0){miniCalMonth=11;miniCalYear--;} renderMiniCal();
+    });
+    document.getElementById('mc-next').addEventListener('click',function(e){
+      e.stopPropagation();
+      if(++miniCalMonth>11){miniCalMonth=0;miniCalYear++;} renderMiniCal();
+    });
+    mc.querySelectorAll('tr.mc-week').forEach(function(tr){
+      tr.addEventListener('click',function(){
+        var p=this.dataset.mon.split('-');
+        var rowMon=new Date(+p[0],+p[1]-1,+p[2]);
+        weekOffset=Math.round((rowMon-getWeekStart(0))/(7*86400000));
+        renderWeek(); renderMiniCal(); updateMapMarkers();
+      });
+    });
+  }
+
+  // ── Touch swipe on week table (mobile) ───────────────────────────────────
+  (function(){
+    var el=document.getElementById('week-main'), sx=null;
+    el.addEventListener('touchstart',function(e){sx=e.touches[0].clientX;},{passive:true});
+    el.addEventListener('touchend',function(e){
+      if(sx===null)return;
+      var dx=e.changedTouches[0].clientX-sx; sx=null;
+      if(Math.abs(dx)>50){
+        weekOffset+=dx<0?1:-1;
+        renderWeek(); renderMiniCal(); updateMapMarkers();
+      }
+    },{passive:true});
+  })();
 
   // ── Map ───────────────────────────────────────────────────────────────────
   var eventsGeo = JSON.parse(document.getElementById('events-geo').textContent);
@@ -532,6 +637,7 @@ th.sorted-desc::after{content:" ↓";color:var(--link)}
 
     // Week view first so weekKeys is populated before the map reads it
     renderWeek();
+    renderMiniCal();
 
     // Map
     updateMapMarkers();
