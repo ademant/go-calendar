@@ -32,7 +32,7 @@
     <div class="field-row">
       <div>
         <label for="date">{{$.Strings.T "evt_date"}}</label>
-        <input id="date" type="date" name="date" value="{{isoDate .Event.StartTime}}">
+        <input id="date" type="date" name="date" value="{{isoDate .Event.StartTime}}" oninput="onStartDateChange(this.value)">
       </div>
       <div>
         <label for="start_time">{{$.Strings.T "evt_start"}}</label>
@@ -41,6 +41,10 @@
       <div>
         <label for="end_time">{{$.Strings.T "evt_end"}}</label>
         <input id="end_time" type="time" name="end_time" value="{{isoTime .Event.EndTime}}">
+      </div>
+      <div>
+        <label for="end_date">{{$.Strings.T "evt_end_date"}}</label>
+        <input id="end_date" type="date" name="end_date" value="{{isoDate .Event.EndTime}}">
       </div>
     </div>
 
@@ -384,6 +388,10 @@
 <script>
 function removeImage(url){var f=document.createElement('form');f.method='post';f.action=url;document.body.appendChild(f);f.submit();}
 
+function onStartDateChange(v){
+  var ed=document.getElementById('end_date');
+  if(ed&&!ed.value) ed.value=v;
+}
 function toggleWorkshopDifficulty(){
   document.getElementById('workshop-difficulty').hidden=!document.getElementById('has_workshop').checked;
 }

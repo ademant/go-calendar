@@ -30,7 +30,7 @@
     <div class="field-row">
       <div>
         <label for="date">{{$.Strings.T "evt_date"}}</label>
-        <input id="date" type="date" name="date">
+        <input id="date" type="date" name="date" oninput="onStartDateChange(this.value)">
       </div>
       <div>
         <label for="start_time">{{$.Strings.T "evt_start"}}</label>
@@ -39,6 +39,10 @@
       <div>
         <label for="end_time">{{$.Strings.T "evt_end"}}</label>
         <input id="end_time" type="time" name="end_time">
+      </div>
+      <div>
+        <label for="end_date">{{$.Strings.T "evt_end_date"}}</label>
+        <input id="end_date" type="date" name="end_date">
       </div>
     </div>
 
@@ -263,6 +267,10 @@
 </style>
 
 <script>
+function onStartDateChange(v){
+  var ed=document.getElementById('end_date');
+  if(ed&&!ed.value) ed.value=v;
+}
 function toggleWorkshopDifficulty(){
   document.getElementById('workshop-difficulty').hidden=!document.getElementById('has_workshop').checked;
 }

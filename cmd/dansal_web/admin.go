@@ -1608,14 +1608,18 @@ func adminEventCreateHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *
 		}
 
 		date := r.FormValue("date")
+		endDate := r.FormValue("end_date")
+		if endDate == "" {
+			endDate = date
+		}
 		startT := r.FormValue("start_time")
 		endT := r.FormValue("end_time")
 		startTime, endTime := "", ""
 		if date != "" && startT != "" {
 			startTime = date + "T" + startT + ":00"
 		}
-		if date != "" && endT != "" {
-			endTime = date + "T" + endT + ":00"
+		if endDate != "" && endT != "" {
+			endTime = endDate + "T" + endT + ":00"
 		}
 
 		var orgID *int
@@ -1906,14 +1910,18 @@ func adminEventSaveHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *Da
 		}
 
 		date := r.FormValue("date")
+		endDate := r.FormValue("end_date")
+		if endDate == "" {
+			endDate = date
+		}
 		startT := r.FormValue("start_time")
 		endT := r.FormValue("end_time")
 		startTime, endTime := "", ""
 		if date != "" && startT != "" {
 			startTime = date + "T" + startT + ":00"
 		}
-		if date != "" && endT != "" {
-			endTime = date + "T" + endT + ":00"
+		if endDate != "" && endT != "" {
+			endTime = endDate + "T" + endT + ":00"
 		}
 
 		var orgID *int
