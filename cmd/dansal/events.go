@@ -55,8 +55,8 @@ type Event struct {
 	LocationZipcode string           `json:"location_zipcode,omitempty"`
 	LocationTown    string           `json:"location_town,omitempty"`
 	LocationCountry string           `json:"location_country,omitempty"`
-	LocationLat     string           `json:"location_lat,omitempty"`
-	LocationLng     string           `json:"location_lng,omitempty"`
+	LocationLat     *float64         `json:"location_lat,omitempty"`
+	LocationLng     *float64         `json:"location_lng,omitempty"`
 	BookingURL      string           `json:"booking_url,omitempty"`
 	Availability    string           `json:"availability,omitempty"`
 	TicketsTotal    int              `json:"tickets_total,omitempty"`
@@ -125,14 +125,14 @@ type EventCreateRequest struct {
 }
 
 type EventLocationRequest struct {
-	Location  string `json:"location"`
-	Address   string `json:"address"`
-	Zipcode   string `json:"zipcode"`
-	Town      string `json:"town"`
-	Country   string `json:"country"`
-	Latitude  string `json:"latitude"`
-	Longitude string `json:"longitude"`
-	Eventsite string `json:"eventsite"`
+	Location  string   `json:"location"`
+	Address   string   `json:"address"`
+	Zipcode   string   `json:"zipcode"`
+	Town      string   `json:"town"`
+	Country   string   `json:"country"`
+	Latitude  *float64 `json:"latitude,omitempty"`
+	Longitude *float64 `json:"longitude,omitempty"`
+	Eventsite string   `json:"eventsite"`
 }
 
 // Price is one entry in a multi-tier pricing list.
@@ -163,7 +163,7 @@ var timeFormats = []string{
 }
 
 // SELECT used by all event list / single-event queries
-const eventListSelect = `SELECT e.id, e.uid, e.title, e.description, e.start_time, e.end_time, e.has_ball, e.has_workshop, e.has_festival, e.is_cancelled, e.tags, e.is_published, e.short_code, COALESCE(e.url,''), COALESCE(e.source,''), e.created_at, COALESCE(l.location,''), COALESCE(l.short_name,''), COALESCE(l.address,''), COALESCE(l.zipcode,''), e.organization_id, COALESCE(e.pricing,''), e.location_id, COALESCE(l.town,''), COALESCE(l.country,''), COALESCE(l.latitude,''), COALESCE(l.longitude,''), COALESCE(e.workshop_difficulty,''), COALESCE(e.booking_url,''), COALESCE(e.availability,''), COALESCE(e.tickets_total,0), COALESCE(e.booking_enabled,0), COALESCE((SELECT GROUP_CONCAT(d.name,',') FROM event_dances ed JOIN dances d ON d.id=ed.dance_id WHERE ed.event_id=e.id),''), COALESCE(e.changed_at,0), COALESCE(e.changed_by,''), COALESCE(e.fetch_source_id,0) FROM events e LEFT JOIN locations l ON e.location_id = l.id`
+const eventListSelect = `SELECT e.id, e.uid, e.title, e.description, e.start_time, e.end_time, e.has_ball, e.has_workshop, e.has_festival, e.is_cancelled, e.tags, e.is_published, e.short_code, COALESCE(e.url,''), COALESCE(e.source,''), e.created_at, COALESCE(l.location,''), COALESCE(l.short_name,''), COALESCE(l.address,''), COALESCE(l.zipcode,''), e.organization_id, COALESCE(e.pricing,''), e.location_id, COALESCE(l.town,''), COALESCE(l.country,''), l.latitude, l.longitude, COALESCE(e.workshop_difficulty,''), COALESCE(e.booking_url,''), COALESCE(e.availability,''), COALESCE(e.tickets_total,0), COALESCE(e.booking_enabled,0), COALESCE((SELECT GROUP_CONCAT(d.name,',') FROM event_dances ed JOIN dances d ON d.id=ed.dance_id WHERE ed.event_id=e.id),''), COALESCE(e.changed_at,0), COALESCE(e.changed_by,''), COALESCE(e.fetch_source_id,0) FROM events e LEFT JOIN locations l ON e.location_id = l.id`
 
 // ── low-level helpers ──────────────────────────────────────────────────────
 
@@ -217,15 +217,24 @@ func scanEventRow(s scanner) (Event, error) {
 	var orgID, locID sql.NullInt64
 	var uid sql.NullString
 	var danceNamesCSV string
+	var locLat, locLng sql.NullFloat64
 	if err := s.Scan(&event.ID, &uid, &event.Title, &event.Description, &startEpoch, &endEpoch,
 		&hasBallInt, &hasWorkshopInt, &hasFestivalInt, &isCancelledInt, &event.TagsJSON, &isPublishedInt,
 		&event.ShortCode, &event.URL, &event.Source, &event.CreatedAt, &event.Location,
 		&event.LocationShortName, &event.LocationAddress, &event.LocationZipcode, &orgID,
 		&event.PricingJSON, &locID, &event.LocationTown, &event.LocationCountry,
-		&event.LocationLat, &event.LocationLng, &event.WorkshopDifficulty, &event.BookingURL,
+		&locLat, &locLng, &event.WorkshopDifficulty, &event.BookingURL,
 		&event.Availability, &event.TicketsTotal, &bookingEnabledInt, &danceNamesCSV,
 		&changedAtEpoch, &event.ChangedBy, &event.FetchSourceID); err != nil {
 		return Event{}, err
+	}
+	if locLat.Valid {
+		v := locLat.Float64
+		event.LocationLat = &v
+	}
+	if locLng.Valid {
+		v := locLng.Float64
+		event.LocationLng = &v
 	}
 	if changedAtEpoch > 0 {
 		event.ChangedAt = epochToLocal(changedAtEpoch)
@@ -372,7 +381,7 @@ func applyEventFilters(r *http.Request, query *string, args *[]any) {
 		if latErr == nil && lonErr == nil && radErr == nil && radius > 0 {
 			latDelta := radius / 111.0
 			lonDelta := radius / (111.0 * math.Cos(lat*math.Pi/180))
-			*query += " AND CAST(l.latitude AS REAL) BETWEEN ? AND ? AND CAST(l.longitude AS REAL) BETWEEN ? AND ?"
+			*query += " AND l.latitude BETWEEN ? AND ? AND l.longitude BETWEEN ? AND ?"
 			*args = append(*args, lat-latDelta, lat+latDelta, lon-lonDelta, lon+lonDelta)
 		}
 	}
@@ -722,16 +731,25 @@ func fetchEventMusicians(eventID int) ([]Musician, error) {
 // (events.location_id) first, followed by any entries in event_locations.
 func fetchAllEventLocations(eventID int) ([]Location, error) {
 	const cols = `l.id, l.location, COALESCE(l.short_name,''), COALESCE(l.address,''),
-		COALESCE(l.zipcode,''), COALESCE(l.town,''), COALESCE(l.country,''), COALESCE(l.latitude,''),
-		COALESCE(l.longitude,''), COALESCE(l.internetsite,''), l.created_at, l.organization_id`
+		COALESCE(l.zipcode,''), COALESCE(l.town,''), COALESCE(l.country,''), l.latitude,
+		l.longitude, COALESCE(l.internetsite,''), l.created_at, l.organization_id`
 
 	scanLoc := func(s scanner) (Location, error) {
 		var loc Location
 		var orgID sql.NullInt64
+		var lat, lng sql.NullFloat64
 		if err := s.Scan(&loc.ID, &loc.Location, &loc.ShortName, &loc.Address,
-			&loc.Zipcode, &loc.Town, &loc.Country, &loc.Latitude, &loc.Longitude,
+			&loc.Zipcode, &loc.Town, &loc.Country, &lat, &lng,
 			&loc.Internetsite, &loc.CreatedAt, &orgID); err != nil {
 			return Location{}, err
+		}
+		if lat.Valid {
+			v := lat.Float64
+			loc.Latitude = &v
+		}
+		if lng.Valid {
+			v := lng.Float64
+			loc.Longitude = &v
 		}
 		if orgID.Valid {
 			v := int(orgID.Int64)
@@ -973,7 +991,8 @@ func createEvent(w http.ResponseWriter, r *http.Request) {
 					URL:         attachURL(event),
 					OrganizationID: orgID,
 					Location: func() EventLocationRequest {
-						var loc, lat, lon string
+						var loc string
+						var lat, lon *float64
 						if p := event.GetProperty(ics.ComponentPropertyLocation); p != nil {
 							loc = p.Value
 						}

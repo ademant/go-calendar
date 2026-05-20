@@ -57,7 +57,7 @@ func ensureLocation(q querier, loc EventLocationRequest) (int64, error) {
 	var id int64
 	err := q.QueryRow("SELECT id FROM locations WHERE location = ?", loc.Location).Scan(&id)
 	if err == nil {
-		if loc.Latitude != "" || loc.Longitude != "" {
+		if loc.Latitude != nil || loc.Longitude != nil {
 			q.Exec("UPDATE locations SET latitude=?, longitude=? WHERE id=? AND latitude IS NULL AND longitude IS NULL",
 				loc.Latitude, loc.Longitude, id)
 		}
@@ -77,11 +77,18 @@ func ensureLocation(q querier, loc EventLocationRequest) (int64, error) {
 }
 
 // parseICalGeo splits a GEO property value ("lat;lon") into its components.
-func parseICalGeo(s string) (lat, lon string) {
+func parseICalGeo(s string) (lat, lon *float64) {
 	if i := strings.IndexByte(s, ';'); i >= 0 {
-		return strings.TrimSpace(s[:i]), strings.TrimSpace(s[i+1:])
+		if f, err := strconv.ParseFloat(strings.TrimSpace(s[:i]), 64); err == nil {
+			v := f
+			lat = &v
+		}
+		if f, err := strconv.ParseFloat(strings.TrimSpace(s[i+1:]), 64); err == nil {
+			v := f
+			lon = &v
+		}
 	}
-	return "", ""
+	return
 }
 
 // parseICalDuration parses an RFC 5545 DURATION value (e.g. "PT1H30M", "P1D")

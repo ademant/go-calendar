@@ -15,6 +15,18 @@ import (
 
 )
 
+// parseLatLng parses a form string to *float64; returns nil for empty or invalid input.
+func parseLatLng(s string) *float64 {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return nil
+	}
+	if f, err := strconv.ParseFloat(s, 64); err == nil {
+		return &f
+	}
+	return nil
+}
+
 // requireLogin redirects to /login if no session user, returning false when redirect was sent.
 func requireLogin(w http.ResponseWriter, r *http.Request) (*SessionUser, bool) {
 	u := getSessionUser(r)
@@ -1062,8 +1074,8 @@ func adminLocationCreateHandler(cfg *Config, tmpls *Templates, client *DansalCli
 			Zipcode:      strings.TrimSpace(r.FormValue("zipcode")),
 			Town:         strings.TrimSpace(r.FormValue("town")),
 			Country:      strings.TrimSpace(r.FormValue("country")),
-			Latitude:     strings.TrimSpace(r.FormValue("latitude")),
-			Longitude:    strings.TrimSpace(r.FormValue("longitude")),
+			Latitude:     parseLatLng(r.FormValue("latitude")),
+			Longitude:    parseLatLng(r.FormValue("longitude")),
 			Internetsite: strings.TrimSpace(r.FormValue("internetsite")),
 			OrganizationID: orgID,
 		}
@@ -1136,8 +1148,8 @@ func adminLocationSaveHandler(cfg *Config, tmpls *Templates, client *DansalClien
 			Zipcode:        strings.TrimSpace(r.FormValue("zipcode")),
 			Town:           strings.TrimSpace(r.FormValue("town")),
 			Country:        strings.TrimSpace(r.FormValue("country")),
-			Latitude:       strings.TrimSpace(r.FormValue("latitude")),
-			Longitude:      strings.TrimSpace(r.FormValue("longitude")),
+			Latitude:       parseLatLng(r.FormValue("latitude")),
+			Longitude:      parseLatLng(r.FormValue("longitude")),
 			Internetsite:   strings.TrimSpace(r.FormValue("internetsite")),
 			OrganizationID: orgID,
 		}
@@ -1668,8 +1680,8 @@ func adminEventCreateHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *
 				Zipcode:   strings.TrimSpace(r.FormValue("new_loc_zip")),
 				Town:      strings.TrimSpace(r.FormValue("new_loc_town")),
 				Country:   strings.TrimSpace(r.FormValue("new_loc_country")),
-				Latitude:  strings.TrimSpace(r.FormValue("new_loc_lat")),
-				Longitude: strings.TrimSpace(r.FormValue("new_loc_lng")),
+				Latitude:  parseLatLng(r.FormValue("new_loc_lat")),
+				Longitude: parseLatLng(r.FormValue("new_loc_lng")),
 			}
 		}
 
@@ -1967,8 +1979,8 @@ func adminEventSaveHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *Da
 				Zipcode:   strings.TrimSpace(r.FormValue("new_loc_zip")),
 				Town:      strings.TrimSpace(r.FormValue("new_loc_town")),
 				Country:   strings.TrimSpace(r.FormValue("new_loc_country")),
-				Latitude:  strings.TrimSpace(r.FormValue("new_loc_lat")),
-				Longitude: strings.TrimSpace(r.FormValue("new_loc_lng")),
+				Latitude:  parseLatLng(r.FormValue("new_loc_lat")),
+				Longitude: parseLatLng(r.FormValue("new_loc_lng")),
 			}
 		}
 

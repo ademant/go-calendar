@@ -699,12 +699,8 @@ func buildAPEvent(cfg *Config, slug string, e Event) APEvent {
 	}
 	if locationName != "" {
 		place := &APPlace{Type: "Place", Name: locationName}
-		if lat, err := strconv.ParseFloat(e.LocationLat, 64); err == nil {
-			place.Latitude = &lat
-		}
-		if lng, err := strconv.ParseFloat(e.LocationLng, 64); err == nil {
-			place.Longitude = &lng
-		}
+		place.Latitude = e.LocationLat
+		place.Longitude = e.LocationLng
 		if e.LocationAddress != "" || e.LocationZipcode != "" || e.LocationTown != "" || e.LocationCountry != "" {
 			place.Address = &APPostalAddress{
 				Type:            "PostalAddress",

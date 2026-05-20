@@ -281,6 +281,12 @@ var tmplFuncMap = template.FuncMap{
 		b, _ := json.Marshal(s)
 		return template.JS(b)
 	},
+	"floatVal": func(f *float64) string {
+		if f == nil {
+			return ""
+		}
+		return strconv.FormatFloat(*f, 'f', -1, 64)
+	},
 	"derefInt": func(p *int) int {
 		if p == nil {
 			return 0
@@ -323,11 +329,11 @@ var tmplFuncMap = template.FuncMap{
 		}
 		var geo []geoEvent
 		for _, e := range events {
-			lat, errLat := strconv.ParseFloat(e.LocationLat, 64)
-			lng, errLng := strconv.ParseFloat(e.LocationLng, 64)
-			if errLat != nil || errLng != nil || (lat == 0 && lng == 0) {
+			if e.LocationLat == nil || e.LocationLng == nil || (*e.LocationLat == 0 && *e.LocationLng == 0) {
 				continue
 			}
+			lat := *e.LocationLat
+			lng := *e.LocationLng
 			fee := ""
 			if e.Pricing != nil {
 				switch e.Pricing.Type {

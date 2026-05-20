@@ -46,11 +46,11 @@
   <div class="form-row">
     <div>
       <label for="latitude">{{$.Strings.T "loc_latitude"}}</label>
-      <input id="latitude" type="text" name="latitude" value="{{.Location.Latitude}}" placeholder="52.5200">
+      <input id="latitude" type="text" name="latitude" value="{{floatVal .Location.Latitude}}" placeholder="52.5200">
     </div>
     <div>
       <label for="longitude">{{$.Strings.T "loc_longitude"}}</label>
-      <input id="longitude" type="text" name="longitude" value="{{.Location.Longitude}}" placeholder="13.4050">
+      <input id="longitude" type="text" name="longitude" value="{{floatVal .Location.Longitude}}" placeholder="13.4050">
     </div>
   </div>
 

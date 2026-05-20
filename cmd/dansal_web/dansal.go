@@ -54,8 +54,8 @@ type Event struct {
 	LocationZipcode string     `json:"location_zipcode,omitempty"`
 	LocationTown    string     `json:"location_town,omitempty"`
 	LocationCountry string     `json:"location_country,omitempty"`
-	LocationLat     string     `json:"location_lat,omitempty"`
-	LocationLng     string     `json:"location_lng,omitempty"`
+	LocationLat     *float64   `json:"location_lat,omitempty"`
+	LocationLng     *float64   `json:"location_lng,omitempty"`
 	BookingURL      string     `json:"booking_url,omitempty"`
 	Availability    string     `json:"availability,omitempty"`
 	TicketsTotal    int        `json:"tickets_total,omitempty"`
@@ -138,18 +138,18 @@ type Musician struct {
 }
 
 type Location struct {
-	ID             int    `json:"id"`
-	Location       string `json:"location"`
-	ShortName      string `json:"short_name,omitempty"`
-	Address        string `json:"address"`
-	Zipcode        string `json:"zipcode"`
-	Town           string `json:"town"`
-	Country        string `json:"country,omitempty"`
-	Latitude       string `json:"latitude"`
-	Longitude      string `json:"longitude"`
-	Internetsite   string `json:"internetsite"`
-	CreatedAt      string `json:"created_at"`
-	OrganizationID *int   `json:"organization_id,omitempty"`
+	ID             int      `json:"id"`
+	Location       string   `json:"location"`
+	ShortName      string   `json:"short_name,omitempty"`
+	Address        string   `json:"address"`
+	Zipcode        string   `json:"zipcode"`
+	Town           string   `json:"town"`
+	Country        string   `json:"country,omitempty"`
+	Latitude       *float64 `json:"latitude,omitempty"`
+	Longitude      *float64 `json:"longitude,omitempty"`
+	Internetsite   string   `json:"internetsite"`
+	CreatedAt      string   `json:"created_at"`
+	OrganizationID *int     `json:"organization_id,omitempty"`
 }
 
 type FetchSource struct {
@@ -874,13 +874,13 @@ type EventUpdateReq struct {
 }
 
 type EventLocReq struct {
-	Location  string `json:"location"`
-	Address   string `json:"address,omitempty"`
-	Zipcode   string `json:"zipcode,omitempty"`
-	Town      string `json:"town,omitempty"`
-	Country   string `json:"country,omitempty"`
-	Latitude  string `json:"latitude,omitempty"`
-	Longitude string `json:"longitude,omitempty"`
+	Location  string   `json:"location"`
+	Address   string   `json:"address,omitempty"`
+	Zipcode   string   `json:"zipcode,omitempty"`
+	Town      string   `json:"town,omitempty"`
+	Country   string   `json:"country,omitempty"`
+	Latitude  *float64 `json:"latitude,omitempty"`
+	Longitude *float64 `json:"longitude,omitempty"`
 }
 
 type TimetableEntryReq struct {

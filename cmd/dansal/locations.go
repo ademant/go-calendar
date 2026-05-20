@@ -13,31 +13,31 @@ import (
 )
 
 type Location struct {
-	ID             int    `json:"id"`
-	Location       string `json:"location"`
-	ShortName      string `json:"short_name,omitempty"`
-	Address        string `json:"address"`
-	Zipcode        string `json:"zipcode"`
-	Town           string `json:"town"`
-	Country        string `json:"country,omitempty"`
-	Latitude       string `json:"latitude"`
-	Longitude      string `json:"longitude"`
-	Internetsite   string `json:"internetsite"`
-	CreatedAt      string `json:"created_at"`
-	OrganizationID *int   `json:"organization_id,omitempty"`
+	ID             int      `json:"id"`
+	Location       string   `json:"location"`
+	ShortName      string   `json:"short_name,omitempty"`
+	Address        string   `json:"address"`
+	Zipcode        string   `json:"zipcode"`
+	Town           string   `json:"town"`
+	Country        string   `json:"country,omitempty"`
+	Latitude       *float64 `json:"latitude,omitempty"`
+	Longitude      *float64 `json:"longitude,omitempty"`
+	Internetsite   string   `json:"internetsite"`
+	CreatedAt      string   `json:"created_at"`
+	OrganizationID *int     `json:"organization_id,omitempty"`
 }
 
 type LocationCreateRequest struct {
-	Location       string `json:"location"`
-	ShortName      string `json:"short_name"`
-	Address        string `json:"address"`
-	Zipcode        string `json:"zipcode"`
-	Town           string `json:"town"`
-	Country        string `json:"country"`
-	Latitude       string `json:"latitude"`
-	Longitude      string `json:"longitude"`
-	Internetsite   string `json:"internetsite"`
-	OrganizationID *int   `json:"organization_id,omitempty"`
+	Location       string   `json:"location"`
+	ShortName      string   `json:"short_name"`
+	Address        string   `json:"address"`
+	Zipcode        string   `json:"zipcode"`
+	Town           string   `json:"town"`
+	Country        string   `json:"country"`
+	Latitude       *float64 `json:"latitude,omitempty"`
+	Longitude      *float64 `json:"longitude,omitempty"`
+	Internetsite   string   `json:"internetsite"`
+	OrganizationID *int     `json:"organization_id,omitempty"`
 }
 
 type LocationCreateResponse struct {
@@ -84,7 +84,7 @@ func similarLocations(name, street, town string) []Location {
 	if base != "" {
 		rows, err = db.Query(`
 			SELECT id, location, COALESCE(short_name,''), address, COALESCE(zipcode,''), town,
-			       COALESCE(country,''), COALESCE(latitude,''), COALESCE(longitude,''), COALESCE(internetsite,''),
+			       COALESCE(country,''), latitude, longitude, COALESCE(internetsite,''),
 			       created_at, organization_id
 			FROM locations
 			WHERE town = ?
@@ -96,7 +96,7 @@ func similarLocations(name, street, town string) []Location {
 	} else {
 		rows, err = db.Query(`
 			SELECT id, location, COALESCE(short_name,''), address, COALESCE(zipcode,''), town,
-			       COALESCE(country,''), COALESCE(latitude,''), COALESCE(longitude,''), COALESCE(internetsite,''),
+			       COALESCE(country,''), latitude, longitude, COALESCE(internetsite,''),
 			       created_at, organization_id
 			FROM locations
 			WHERE town = ?
@@ -127,21 +127,21 @@ func similarLocations(name, street, town string) []Location {
 }
 
 type LocationUpdateRequest struct {
-	ShortName    string `json:"short_name"`
-	Address      string `json:"address"`
-	Zipcode      string `json:"zipcode"`
-	Town         string `json:"town"`
-	Country      string `json:"country"`
-	Latitude     string `json:"latitude"`
-	Longitude    string `json:"longitude"`
-	Internetsite string `json:"internetsite"`
+	ShortName    string   `json:"short_name"`
+	Address      string   `json:"address"`
+	Zipcode      string   `json:"zipcode"`
+	Town         string   `json:"town"`
+	Country      string   `json:"country"`
+	Latitude     *float64 `json:"latitude,omitempty"`
+	Longitude    *float64 `json:"longitude,omitempty"`
+	Internetsite string   `json:"internetsite"`
 }
 
 // GET /api/v1/locations - List all locations
 func getLocations(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
-	rows, err := db.Query("SELECT id, location, COALESCE(short_name,''), address, COALESCE(zipcode,''), town, COALESCE(country,''), COALESCE(latitude,''), COALESCE(longitude,''), COALESCE(internetsite,''), created_at, organization_id FROM locations")
+	rows, err := db.Query("SELECT id, location, COALESCE(short_name,''), address, COALESCE(zipcode,''), town, COALESCE(country,''), latitude, longitude, COALESCE(internetsite,''), created_at, organization_id FROM locations")
 	if err != nil {
 		writeError(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -283,7 +283,7 @@ func getLocation(w http.ResponseWriter, r *http.Request) {
 	var location Location
 	var orgID sql.NullInt64
 	err := db.QueryRow(
-		"SELECT id, location, COALESCE(short_name,''), address, COALESCE(zipcode,''), town, COALESCE(country,''), COALESCE(latitude,''), COALESCE(longitude,''), COALESCE(internetsite,''), created_at, organization_id FROM locations WHERE id = ?",
+		"SELECT id, location, COALESCE(short_name,''), address, COALESCE(zipcode,''), town, COALESCE(country,''), latitude, longitude, COALESCE(internetsite,''), created_at, organization_id FROM locations WHERE id = ?",
 		id,
 	).Scan(&location.ID, &location.Location, &location.ShortName, &location.Address, &location.Zipcode, &location.Town, &location.Country, &location.Latitude, &location.Longitude, &location.Internetsite, &location.CreatedAt, &orgID)
 	if orgID.Valid {
@@ -333,16 +333,16 @@ func patchLocation(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req struct {
-		Location       string `json:"location"`
-		ShortName      string `json:"short_name"`
-		Address        string `json:"address"`
-		Zipcode        string `json:"zipcode"`
-		Town           string `json:"town"`
-		Country        string `json:"country"`
-		Latitude       string `json:"latitude"`
-		Longitude      string `json:"longitude"`
-		Internetsite   string `json:"internetsite"`
-		OrganizationID *int   `json:"organization_id"`
+		Location       string   `json:"location"`
+		ShortName      string   `json:"short_name"`
+		Address        string   `json:"address"`
+		Zipcode        string   `json:"zipcode"`
+		Town           string   `json:"town"`
+		Country        string   `json:"country"`
+		Latitude       *float64 `json:"latitude"`
+		Longitude      *float64 `json:"longitude"`
+		Internetsite   string   `json:"internetsite"`
+		OrganizationID *int     `json:"organization_id"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, "Invalid request body", http.StatusBadRequest)
@@ -352,7 +352,7 @@ func patchLocation(w http.ResponseWriter, r *http.Request) {
 	var loc Location
 	var orgID sql.NullInt64
 	err := db.QueryRow(
-		"SELECT id, location, COALESCE(short_name,''), address, COALESCE(zipcode,''), town, COALESCE(country,''), COALESCE(latitude,''), COALESCE(longitude,''), COALESCE(internetsite,''), created_at, organization_id FROM locations WHERE id = ?", id,
+		"SELECT id, location, COALESCE(short_name,''), address, COALESCE(zipcode,''), town, COALESCE(country,''), latitude, longitude, COALESCE(internetsite,''), created_at, organization_id FROM locations WHERE id = ?", id,
 	).Scan(&loc.ID, &loc.Location, &loc.ShortName, &loc.Address, &loc.Zipcode, &loc.Town, &loc.Country, &loc.Latitude, &loc.Longitude, &loc.Internetsite, &loc.CreatedAt, &orgID)
 	if err == sql.ErrNoRows {
 		writeError(w, "Location not found", http.StatusNotFound)
