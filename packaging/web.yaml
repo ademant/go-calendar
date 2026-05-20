@@ -58,9 +58,10 @@ nodeinfo_maintainer_email: ""
 
 # --- Appearance ---
 
-# Directory containing custom logo.svg, banner.svg, and favicon.svg.
-# Falls back to the built-in SVGs when unset or the file is missing.
-# images_dir: /var/lib/dansal/images
+# Directory for uploaded site assets (logo, banner, favicon).
+# Defaults to /var/lib/dansal-web (the service state directory).
+# Override only if you want to store assets elsewhere.
+# images_dir: /var/lib/dansal-web
 
 # Banner height in pixels on the main page (0 = hidden).
 banner_height_main: 200

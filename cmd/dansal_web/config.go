@@ -55,6 +55,7 @@ func loadConfig() *Config {
 		Listen:           ":8080",
 		DBPath:           "web.db",
 		PollSecs:         300,
+		ImagesDir:        "/var/lib/dansal-web",
 		BannerHeightMain: 200,
 		BannerHeightSub:  0,
 		LogoHeightMain:   48,
