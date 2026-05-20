@@ -259,8 +259,8 @@
     {{range .ContactPosts}}
     <div class="board-item">
       <div class="board-item-header">
-        <span class="board-type-icon">{{if eq .Type "ride_offer"}}🚗{{else if eq .Type "ride_request"}}🚗{{else if eq .Type "sleep_offer"}}🏠{{else}}🏠{{end}}</span>
-        <span class="board-type-label">{{if eq .Type "ride_offer"}}{{$.Strings.T "board_ride_offer"}}{{else if eq .Type "ride_request"}}{{$.Strings.T "board_ride_request"}}{{else if eq .Type "sleep_offer"}}{{$.Strings.T "board_sleep_offer"}}{{else}}{{$.Strings.T "board_sleep_request"}}{{end}}</span>
+        <span class="board-type-icon">{{if eq .Type "ride_offer"}}🚗{{else if eq .Type "ride_request"}}🚗{{else if eq .Type "sleep_offer"}}🏠{{else if eq .Type "sleep_request"}}🏠{{else if eq .Type "ticket_offer"}}🎟️{{else}}🎟️{{end}}</span>
+        <span class="board-type-label">{{if eq .Type "ride_offer"}}{{$.Strings.T "board_ride_offer"}}{{else if eq .Type "ride_request"}}{{$.Strings.T "board_ride_request"}}{{else if eq .Type "sleep_offer"}}{{$.Strings.T "board_sleep_offer"}}{{else if eq .Type "sleep_request"}}{{$.Strings.T "board_sleep_request"}}{{else if eq .Type "ticket_offer"}}{{$.Strings.T "board_ticket_offer"}}{{else}}{{$.Strings.T "board_ticket_request"}}{{end}}</span>
         <span class="board-city">{{.City}}</span>
         <span class="board-persons">· {{.Persons}} {{$.Strings.T "board_persons"}}</span>
         <span class="board-nick">· {{.Nickname}}</span>
@@ -296,6 +296,8 @@
           <option value="ride_request">{{$.Strings.T "board_ride_request"}}</option>
           <option value="sleep_offer">{{$.Strings.T "board_sleep_offer"}}</option>
           <option value="sleep_request">{{$.Strings.T "board_sleep_request"}}</option>
+          <option value="ticket_offer">{{$.Strings.T "board_ticket_offer"}}</option>
+          <option value="ticket_request">{{$.Strings.T "board_ticket_request"}}</option>
         </select>
       </div>
       <div class="board-form-row">

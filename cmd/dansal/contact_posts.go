@@ -129,7 +129,7 @@ func createContactPost(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "type, city, nickname and email are required", http.StatusBadRequest)
 		return
 	}
-	validTypes := map[string]bool{"ride_offer": true, "ride_request": true, "sleep_offer": true, "sleep_request": true}
+	validTypes := map[string]bool{"ride_offer": true, "ride_request": true, "sleep_offer": true, "sleep_request": true, "ticket_offer": true, "ticket_request": true}
 	if !validTypes[req.Type] {
 		writeError(w, "type must be one of: ride_offer, ride_request, sleep_offer, sleep_request", http.StatusBadRequest)
 		return
