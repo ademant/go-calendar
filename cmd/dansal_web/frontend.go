@@ -319,6 +319,7 @@ var tmplFuncMap = template.FuncMap{
 			Cancelled          bool    `json:"x,omitempty"`
 			Availability       string  `json:"av,omitempty"`
 			BookingEnabled     bool    `json:"book,omitempty"`
+			Fee                string  `json:"fee,omitempty"` // "free"|"donation"|"paid"|""
 		}
 		var geo []geoEvent
 		for _, e := range events {
@@ -326,6 +327,17 @@ var tmplFuncMap = template.FuncMap{
 			lng, errLng := strconv.ParseFloat(e.LocationLng, 64)
 			if errLat != nil || errLng != nil || (lat == 0 && lng == 0) {
 				continue
+			}
+			fee := ""
+			if e.Pricing != nil {
+				switch e.Pricing.Type {
+				case "free":
+					fee = "free"
+				case "donation":
+					fee = "donation"
+				case "single", "multiple":
+					fee = "paid"
+				}
 			}
 			geo = append(geo, geoEvent{
 				ID: e.ID, Title: e.Title, Start: e.StartTime,
@@ -335,6 +347,7 @@ var tmplFuncMap = template.FuncMap{
 				Festival: e.HasFestival,
 				Cancelled: e.IsCancelled, Availability: e.Availability,
 				BookingEnabled: e.BookingEnabled,
+				Fee: fee,
 			})
 		}
 		if geo == nil {
