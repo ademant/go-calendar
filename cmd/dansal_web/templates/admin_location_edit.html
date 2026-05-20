@@ -1,7 +1,7 @@
 {{template "base" .}}
 {{define "content"}}
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha384-sHL9NAb7lN7rfvG5lfHpm643Xkcjzp4jFvuavGOndn6pjVqS6ny56CAt3nsEVT4H" crossorigin="anonymous">
-<h1>{{.Strings.T "admin_edit"}}{{with .Data.Location.Location}} — {{.}}{{end}}</h1>
+<h1>{{.Strings.T "admin_edit"}} — {{if .Data.Location.ShortName}}{{.Data.Location.ShortName}}{{else}}{{.Data.Location.Location}}{{end}}</h1>
 
 <div class="edit-wrap">
 {{with .Data}}
