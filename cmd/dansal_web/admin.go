@@ -1665,6 +1665,7 @@ func adminEventCreateHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *
 		case "new":
 			locReq = EventLocReq{
 				Location:  strings.TrimSpace(r.FormValue("new_loc_name")),
+				ShortName: strings.TrimSpace(r.FormValue("new_loc_short_name")),
 				Address:   strings.TrimSpace(r.FormValue("new_loc_address")),
 				Zipcode:   strings.TrimSpace(r.FormValue("new_loc_zip")),
 				Town:      strings.TrimSpace(r.FormValue("new_loc_town")),
@@ -1967,6 +1968,7 @@ func adminEventSaveHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *Da
 		case "new":
 			locReq = EventLocReq{
 				Location:  strings.TrimSpace(r.FormValue("new_loc_name")),
+				ShortName: strings.TrimSpace(r.FormValue("new_loc_short_name")),
 				Address:   strings.TrimSpace(r.FormValue("new_loc_address")),
 				Zipcode:   strings.TrimSpace(r.FormValue("new_loc_zip")),
 				Town:      strings.TrimSpace(r.FormValue("new_loc_town")),

@@ -126,6 +126,7 @@ type EventCreateRequest struct {
 
 type EventLocationRequest struct {
 	Location  string   `json:"location"`
+	ShortName string   `json:"short_name,omitempty"`
 	Address   string   `json:"address"`
 	Zipcode   string   `json:"zipcode"`
 	Town      string   `json:"town"`

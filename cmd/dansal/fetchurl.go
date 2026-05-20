@@ -61,14 +61,15 @@ func ensureLocation(q querier, loc EventLocationRequest) (int64, error) {
 			q.Exec("UPDATE locations SET latitude=?, longitude=? WHERE id=? AND latitude IS NULL AND longitude IS NULL",
 				loc.Latitude, loc.Longitude, id)
 		}
-		if loc.Address != "" || loc.Town != "" || loc.Zipcode != "" || loc.Country != "" {
+		if loc.ShortName != "" || loc.Address != "" || loc.Town != "" || loc.Zipcode != "" || loc.Country != "" {
 			q.Exec(`UPDATE locations SET
-				address = COALESCE(NULLIF(address,''), ?),
-				town    = COALESCE(NULLIF(town,''),    ?),
-				zipcode = COALESCE(NULLIF(zipcode,''), ?),
-				country = COALESCE(NULLIF(country,''), ?)
+				short_name = COALESCE(NULLIF(short_name,''), ?),
+				address    = COALESCE(NULLIF(address,''),    ?),
+				town       = COALESCE(NULLIF(town,''),       ?),
+				zipcode    = COALESCE(NULLIF(zipcode,''),    ?),
+				country    = COALESCE(NULLIF(country,''),    ?)
 				WHERE id = ?`,
-				loc.Address, loc.Town, loc.Zipcode, loc.Country, id)
+				loc.ShortName, loc.Address, loc.Town, loc.Zipcode, loc.Country, id)
 		}
 		return id, nil
 	}
@@ -76,8 +77,8 @@ func ensureLocation(q querier, loc EventLocationRequest) (int64, error) {
 		return 0, err
 	}
 	result, err := q.Exec(
-		"INSERT INTO locations (location, address, zipcode, town, country, latitude, longitude, internetsite) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-		loc.Location, loc.Address, loc.Zipcode, loc.Town, loc.Country, loc.Latitude, loc.Longitude, loc.Eventsite,
+		"INSERT INTO locations (location, short_name, address, zipcode, town, country, latitude, longitude, internetsite) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+		loc.Location, loc.ShortName, loc.Address, loc.Zipcode, loc.Town, loc.Country, loc.Latitude, loc.Longitude, loc.Eventsite,
 	)
 	if err != nil {
 		return 0, err

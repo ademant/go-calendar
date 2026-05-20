@@ -995,6 +995,7 @@ type EventUpdateReq struct {
 
 type EventLocReq struct {
 	Location  string   `json:"location"`
+	ShortName string   `json:"short_name,omitempty"`
 	Address   string   `json:"address,omitempty"`
 	Zipcode   string   `json:"zipcode,omitempty"`
 	Town      string   `json:"town,omitempty"`
