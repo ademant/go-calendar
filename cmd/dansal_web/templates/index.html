@@ -260,6 +260,13 @@ th.sorted-desc::after{content:" ↓";color:var(--link)}
 .cal-evt b{display:block;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .cal-evt small{display:block;color:var(--fg-muted);font-size:.78rem}
 .cal-town{color:var(--fg-faint)!important}
+.wt-multi-row td{padding:0 0 .25rem}
+.wt-multi-cell{padding:0 .15rem .25rem!important}
+.cal-evt-span{display:block;border-radius:4px;padding:.3rem .5rem;background:var(--heading);color:#fff!important;border:none;text-decoration:none;font-size:.82rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cal-evt-span:hover{opacity:.88}
+.cal-evt-span.cal-cancelled{background:#9e9e9e;text-decoration:line-through}
+.cal-evt-span b{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block}
+.cal-evt-span small{opacity:.85;font-size:.75rem}
 .mc-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:.4rem;font-weight:600;font-size:.83rem}
 .mc-nav{background:none;border:none;cursor:pointer;padding:.1rem .35rem;color:var(--fg-2);font-size:1rem;line-height:1}
 .mc-nav:hover{color:var(--fg)}
@@ -316,15 +323,44 @@ tr.mc-week.mc-sel td{background:var(--cal-today);font-weight:600}
       days.push(d); keys.push(dateToIso(d));
     }
     weekKeys = keys;
+    var weekStart=keys[0], weekEnd=keys[6];
     var today = todayIso();
     var lang = document.documentElement.lang || 'de';
 
-    var byDay={};
+    // Separate multi-day events (spanning >1 day) from single-day events
+    var multiDay=[], byDay={};
     keys.forEach(function(k){ byDay[k]=[]; });
     visible.forEach(function(r){
       var s=r.dataset.date, e=r.dataset.endDate||s;
-      keys.forEach(function(k){ if(k>=s&&k<=e) byDay[k].push(r); });
+      if(s!==e && s<=weekEnd && e>=weekStart){
+        // Clip to week boundaries
+        multiDay.push({r:r, s:s<weekStart?weekStart:s, e:e>weekEnd?weekEnd:e});
+      } else if(byDay[s]){
+        byDay[s].push(r);
+      }
     });
+
+    // Greedy row-packing: each packed row holds non-overlapping events
+    var packedRows=[];
+    multiDay.forEach(function(ev){
+      for(var ri=0;ri<packedRows.length;ri++){
+        var ok=packedRows[ri].every(function(o){ return ev.s>o.e||ev.e<o.s; });
+        if(ok){ packedRows[ri].push(ev); return; }
+      }
+      packedRows.push([ev]);
+    });
+
+    function evtCls(r){
+      var avail=r.dataset.availability||'';
+      return 'cal-evt'+(r.classList.contains('is-cancelled')?' cal-cancelled':'')+
+        (avail==='sold_out'?' cal-sold-out':avail==='limited'?' cal-limited':'');
+    }
+    function feeSym(r){
+      var fee=r.dataset.fee||'';
+      return fee==='free'?'<span class="fee-sym fee-free">0€</span>':
+             fee==='donation'?'<span class="fee-sym fee-donation">♥</span>':
+             fee==='paid'?'<span class="fee-sym fee-paid">€</span>':'';
+    }
 
     var fmtRange = new Intl.DateTimeFormat(lang,{day:'numeric',month:'long'});
     var fmtRangeY = new Intl.DateTimeFormat(lang,{day:'numeric',month:'long',year:'numeric'});
@@ -340,25 +376,42 @@ tr.mc-week.mc-sel td{background:var(--cal-today);font-weight:600}
     days.forEach(function(d,i){
       html += '<th'+(keys[i]===today?' class="wt-today"':'')+'>'+escHtml(fmtDay.format(d))+'</th>';
     });
-    html += '</tr></thead><tbody><tr>';
+    html += '</tr></thead><tbody>';
+
+    // One <tr> per packed row of multi-day events
+    packedRows.forEach(function(row){
+      row.sort(function(a,b){ return a.s<b.s?-1:1; });
+      html += '<tr class="wt-multi-row">';
+      var col=0;
+      row.forEach(function(ev){
+        var sc=keys.indexOf(ev.s), ec=keys.indexOf(ev.e);
+        if(sc>col) html += '<td colspan="'+(sc-col)+'"></td>';
+        var span=ec-sc+1;
+        var fs=feeSym(ev.r);
+        html += '<td colspan="'+span+'" class="wt-multi-cell">'+
+          '<a href="'+(ev.r.dataset.href||('/events/'+ev.r.dataset.id))+'" class="'+evtCls(ev.r)+' cal-evt-span">'+
+          '<b>'+escHtml(ev.r.dataset.title)+'</b>'+
+          (fs?'<small>'+fs+'</small>':'')+
+          '</a></td>';
+        col=ec+1;
+      });
+      if(col<7) html += '<td colspan="'+(7-col)+'"></td>';
+      html += '</tr>';
+    });
+
+    // Single-day events row
+    html += '<tr>';
     days.forEach(function(d,i){
       var k=keys[i];
       html += '<td'+(k===today?' class="wt-today"':'')+'>'+
         byDay[k].map(function(r){
           var start=r.dataset.start||'';
           var time=start.length>=16?start.slice(11,16):'';
-          var org=r.dataset.title;
           var town=r.dataset.town||'';
-          var avail=r.dataset.availability||'';
-          var fee=r.dataset.fee||'';
-          var feeSym=fee==='free'?'<span class="fee-sym fee-free">0€</span>':
-                     fee==='donation'?'<span class="fee-sym fee-donation">♥</span>':
-                     fee==='paid'?'<span class="fee-sym fee-paid">€</span>':'';
-          var cls='cal-evt'+(r.classList.contains('is-cancelled')?' cal-cancelled':'')+
-            (avail==='sold_out'?' cal-sold-out':avail==='limited'?' cal-limited':'');
-          return '<a href="'+(r.dataset.href||('/events/'+r.dataset.id))+'" class="'+cls+'">'+
-            '<b>'+escHtml(org)+'</b>'+
-            (time||feeSym?'<small>'+(time?escHtml(time):'')+(feeSym?' '+feeSym:'')+'</small>':'')+
+          var fs=feeSym(r);
+          return '<a href="'+(r.dataset.href||('/events/'+r.dataset.id))+'" class="'+evtCls(r)+'">'+
+            '<b>'+escHtml(r.dataset.title)+'</b>'+
+            (time||fs?'<small>'+(time?escHtml(time):'')+(fs?' '+fs:'')+'</small>':'')+
             (town?'<small class="cal-town">'+escHtml(town)+'</small>':'')+
             '</a>';
         }).join('')+
