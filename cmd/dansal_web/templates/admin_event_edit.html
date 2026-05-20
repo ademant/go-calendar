@@ -438,6 +438,8 @@ function geocodeLocation(){
         var city=a.city||a.town||a.village||a.hamlet||a.municipality||'';
         if(city) document.getElementById('new_loc_town').value=city;
         if(a.country) document.getElementById('new_loc_country').value=a.country;
+        var snInp=document.getElementById('new_loc_short_name');
+        if(!snInp.value){var sn=r.name||a.amenity||'';if(sn)snInp.value=sn;}
         status.textContent='✓ '+r.display_name;
       } else {
         status.textContent='Not found';
