@@ -133,7 +133,7 @@ func getOrganizationStats(w http.ResponseWriter, r *http.Request) {
 	rows, err := db.Query(`
 		SELECT o.id,
 			(SELECT COUNT(*) FROM events WHERE organization_id = o.id),
-			(SELECT COUNT(*) FROM locations WHERE organization_id = o.id),
+			(SELECT COUNT(*) FROM location_organizations WHERE organization_id = o.id),
 			(SELECT COUNT(*) FROM fetch_sources WHERE organization_id = o.id)
 		FROM organizations o`)
 	if err != nil {
