@@ -75,6 +75,7 @@
   {{$org := orgName $orgMap .OrganizationID}}
   <tr class="event-row{{if .IsCancelled}} is-cancelled{{end}}"
       data-date="{{isoDate .StartTime}}"
+      data-end-date="{{isoDate .EndTime}}"
       data-title="{{.Title}}"
       data-location="{{if .LocationShortName}}{{.LocationShortName}}{{else if .Location}}{{.Location}}{{else}}{{.LocationTown}}{{end}}"
       data-country="{{.LocationCountry}}"
@@ -122,6 +123,7 @@
   {{range $.Data.FederatedEvents}}
   <tr class="event-row federated-event"
       data-date="{{isoDate .StartTime}}"
+      data-end-date="{{isoDate .EndTime}}"
       data-title="{{.Name}}"
       data-location="{{.LocationName}}"
       data-country=""
@@ -319,7 +321,10 @@ tr.mc-week.mc-sel td{background:var(--cal-today);font-weight:600}
 
     var byDay={};
     keys.forEach(function(k){ byDay[k]=[]; });
-    visible.forEach(function(r){ if(byDay[r.dataset.date]) byDay[r.dataset.date].push(r); });
+    visible.forEach(function(r){
+      var s=r.dataset.date, e=r.dataset.endDate||s;
+      keys.forEach(function(k){ if(k>=s&&k<=e) byDay[k].push(r); });
+    });
 
     var fmtRange = new Intl.DateTimeFormat(lang,{day:'numeric',month:'long'});
     var fmtRangeY = new Intl.DateTimeFormat(lang,{day:'numeric',month:'long',year:'numeric'});
@@ -543,10 +548,13 @@ tr.mc-week.mc-sel td{background:var(--cal-today);font-weight:600}
     var weekSet={};
     weekKeys.forEach(function(k){ weekSet[k]=true; });
     var layers=[];
+    var weekDates=Object.keys(weekSet).sort();
+    var weekStart=weekDates[0], weekEnd=weekDates[weekDates.length-1];
     eventsGeo.forEach(function(e){
       if(!allMarkers[e.id] || !visIds[e.id]) return;
-      var eDate=(e.s||'').slice(0,10);
-      if(weekSet[eDate]) layers.push(allMarkers[e.id]);
+      var eStart=(e.s||'').slice(0,10);
+      var eEnd=e.e||eStart;
+      if(eStart<=weekEnd && eEnd>=weekStart) layers.push(allMarkers[e.id]);
     });
     var noCoords = document.getElementById('map-no-coords');
     if(layers.length===0){

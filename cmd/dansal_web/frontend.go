@@ -322,6 +322,7 @@ var tmplFuncMap = template.FuncMap{
 			ID                 int     `json:"id"`
 			Title              string  `json:"t"`
 			Start              string  `json:"s"`
+			End                string  `json:"e,omitempty"`
 			Location           string  `json:"loc,omitempty"`
 			Town               string  `json:"town,omitempty"`
 			Country            string  `json:"c,omitempty"`
@@ -355,8 +356,12 @@ var tmplFuncMap = template.FuncMap{
 					fee = "paid"
 				}
 			}
+			end := ""
+			if t, err := time.Parse(time.RFC3339, e.EndTime); err == nil {
+				end = t.Format("2006-01-02")
+			}
 			geo = append(geo, geoEvent{
-				ID: e.ID, Title: e.Title, Start: e.StartTime,
+				ID: e.ID, Title: e.Title, Start: e.StartTime, End: end,
 				Location: e.Location, Town: e.LocationTown, Country: e.LocationCountry,
 				Lat: lat, Lng: lng, URL: e.URL,
 				Ball: e.HasBall, Workshop: e.HasWorkshop, WorkshopDifficulty: e.WorkshopDifficulty,
