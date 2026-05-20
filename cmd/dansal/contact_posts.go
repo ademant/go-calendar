@@ -167,17 +167,19 @@ func createContactPost(w http.ResponseWriter, r *http.Request) {
 	}
 	id, _ := result.LastInsertId()
 
-	// Send verification email (best-effort — failure does not block the response).
+	// Send verification email in background — never blocks the 201 response.
 	base := strings.TrimRight(config.Server.BaseURL, "/")
 	verifyURL := base + "/api/v1/contact-posts/verify/" + verifyToken
 	deleteURL := base + "/api/v1/contact-posts/delete/" + deleteToken
-	body := fmt.Sprintf(
+	emailBody := fmt.Sprintf(
 		"Hello %s,\n\nPlease confirm your contact board post by clicking this link:\n\n%s\n\nYour post will become visible once confirmed.\n\nTo delete your post at any time use:\n\n%s\n\nThis post expires on %s.\n",
 		req.Nickname, verifyURL, deleteURL, expiresAt.Format("2006-01-02"),
 	)
-	if err := SendEmail(req.Email, "Confirm your contact board post", body); err != nil {
-		log.Printf("contact_posts: verify email failed for post %d: %v", id, err)
-	}
+	go func() {
+		if err := SendEmail(req.Email, "Confirm your contact board post", emailBody); err != nil {
+			log.Printf("contact_posts: verify email failed for post %d: %v", id, err)
+		}
+	}()
 
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(map[string]any{
