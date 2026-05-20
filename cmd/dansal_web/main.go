@@ -171,7 +171,17 @@ func main() {
 	go startDelivery(cfg, db, client, relayActor)
 
 	log.Printf("web server listening on %s (domain: %s)", cfg.Listen, cfg.Domain)
-	if err := http.ListenAndServe(cfg.Listen, r); err != nil {
+	if err := http.ListenAndServe(cfg.Listen, securityHeadersMiddleware(r)); err != nil {
 		log.Fatal(err)
 	}
+}
+
+func securityHeadersMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		w.Header().Set("X-Frame-Options", "SAMEORIGIN")
+		w.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")
+		w.Header().Set("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+		next.ServeHTTP(w, r)
+	})
 }
