@@ -108,6 +108,29 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 	json.NewEncoder(w).Encode(v)
 }
 
+func actorsListHandler(cfg *Config, db *sql.DB) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		slugs, err := listOrgActorSlugs(db)
+		if err != nil {
+			writeJSONError(w, http.StatusInternalServerError, "database error")
+			return
+		}
+		type entry struct {
+			Handle string `json:"handle"`
+			URL    string `json:"url"`
+		}
+		result := make([]entry, 0, len(slugs))
+		for _, slug := range slugs {
+			result = append(result, entry{
+				Handle: "@" + slug + "@" + cfg.Domain,
+				URL:    actorURL(cfg, slug),
+			})
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(result)
+	}
+}
+
 func writeJSONError(w http.ResponseWriter, status int, msg string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)

@@ -53,6 +53,7 @@ func main() {
 	buildHandler := func(cfg *Config, i18n *I18n) http.Handler {
 		r := http.NewServeMux()
 
+		r.HandleFunc("GET /actors", actorsListHandler(cfg, db))
 		r.HandleFunc("GET /.well-known/webfinger", webfingerHandler(cfg, db, client))
 		r.HandleFunc("GET /.well-known/nodeinfo", nodeinfoIndexHandler(cfg))
 		r.HandleFunc("GET /nodeinfo/2.0", nodeinfoHandler(cfg))
