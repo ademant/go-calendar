@@ -82,6 +82,9 @@ var errNotImage = errors.New("data is not an image")
 // isAVIF reports whether head contains an ISO BMFF ftyp box with an AVIF brand.
 // http.DetectContentType misidentifies AVIF as video/mp4 because they share the
 // ISO Base Media File Format container; this check catches the case it misses.
+// It scans the major brand (offset 8) and all compatible brands (offset 16+),
+// skipping the minor version at offset 12, so encoders that place "avif"/"avis"
+// only in the compatible brands list are accepted.
 func isAVIF(head []byte) bool {
 	if len(head) < 12 {
 		return false
@@ -89,8 +92,20 @@ func isAVIF(head []byte) bool {
 	if string(head[4:8]) != "ftyp" {
 		return false
 	}
-	brand := string(head[8:12])
-	return brand == "avif" || brand == "avis" || brand == "mif1"
+	end := len(head)
+	if end > 128 {
+		end = 128
+	}
+	for i := 8; i+4 <= end; i += 4 {
+		if i == 12 {
+			continue // minor version, not a brand
+		}
+		switch string(head[i : i+4]) {
+		case "avif", "avis":
+			return true
+		}
+	}
+	return false
 }
 
 // saveImageToDir decodes image data from r, resizes, and stores as AVIF in the given directory.
