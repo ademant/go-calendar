@@ -73,6 +73,7 @@ func clearSession(w http.ResponseWriter) {
 			Path:    "/",
 			MaxAge:  -1,
 			Expires: time.Unix(0, 0),
+			Secure:  true,
 		})
 	}
 }
