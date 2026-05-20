@@ -150,9 +150,9 @@ func svgHandler(data []byte) http.HandlerFunc {
 	}
 }
 
-func dynamicSVGHandler(db *sql.DB, key string, fallback []byte) http.HandlerFunc {
+func dynamicSVGHandler(imagesDir, key string, fallback []byte) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		data := getSiteAsset(db, key)
+		data := findSiteAssetOnDisk(imagesDir, key)
 		if len(data) == 0 {
 			data = fallback
 		}

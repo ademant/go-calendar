@@ -4,8 +4,6 @@ import (
 	"log"
 	"log/syslog"
 	"net/http"
-	"os"
-	"path/filepath"
 	"time"
 
 )
@@ -46,21 +44,9 @@ func main() {
 	r.HandleFunc("POST /org/{name}/inbox", inboxHandler(cfg, db, client))
 	r.HandleFunc("POST /inbox", sharedInboxHandler(cfg, db, client))
 
-	faviconData, logoData, bannerData := faviconSVG, logoSVG, bannerSVG
-	if cfg.ImagesDir != "" {
-		if b, err := os.ReadFile(filepath.Join(cfg.ImagesDir, "favicon.svg")); err == nil {
-			faviconData = b
-		}
-		if b, err := os.ReadFile(filepath.Join(cfg.ImagesDir, "logo.svg")); err == nil {
-			logoData = b
-		}
-		if b, err := os.ReadFile(filepath.Join(cfg.ImagesDir, "banner.svg")); err == nil {
-			bannerData = b
-		}
-	}
-	r.HandleFunc("GET /favicon.svg", dynamicSVGHandler(db, "favicon", faviconData))
-	r.HandleFunc("GET /logo.svg", dynamicSVGHandler(db, "logo", logoData))
-	r.HandleFunc("GET /banner.svg", dynamicSVGHandler(db, "banner", bannerData))
+	r.HandleFunc("GET /favicon.svg", dynamicSVGHandler(cfg.ImagesDir, "favicon", faviconSVG))
+	r.HandleFunc("GET /logo.svg", dynamicSVGHandler(cfg.ImagesDir, "logo", logoSVG))
+	r.HandleFunc("GET /banner.svg", dynamicSVGHandler(cfg.ImagesDir, "banner", bannerSVG))
 	r.HandleFunc("GET /federated-events/{id}", federatedEventHandler(db))
 	r.HandleFunc("GET /", indexHandler(cfg, tmpls, db, client, i18n))
 	r.HandleFunc("GET /events/{id}", eventHandler(cfg, tmpls, client, i18n))

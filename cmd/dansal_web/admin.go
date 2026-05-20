@@ -8,6 +8,8 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"os"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -2255,9 +2257,9 @@ func adminSiteConfigHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *D
 			TelegramBotName:   ac.TelegramBotName,
 			MatrixHomeserver:  ac.MatrixHomeserver,
 			MatrixAccessToken: ac.MatrixAccessToken,
-			HasLogo:           len(getSiteAsset(db, "logo")) > 0,
-			HasBanner:         len(getSiteAsset(db, "banner")) > 0,
-			HasFavicon:        len(getSiteAsset(db, "favicon")) > 0,
+			HasLogo:           len(findSiteAssetOnDisk(cfg.ImagesDir, "logo")) > 0,
+			HasBanner:         len(findSiteAssetOnDisk(cfg.ImagesDir, "banner")) > 0,
+			HasFavicon:        len(findSiteAssetOnDisk(cfg.ImagesDir, "favicon")) > 0,
 			Dances:            dances,
 			DefaultDanceNames: defaultDanceNames,
 			Success:           r.URL.Query().Get("saved") == "1",
@@ -2327,11 +2329,54 @@ func adminSiteConfigSaveHandler(cfg *Config, db *sql.DB, client *DansalClient) h
 			if key != "favicon" && mime == "image/gif" {
 				continue
 			}
-			_ = setSiteAsset(db, key, data)
+			if err := saveSiteAssetToDisk(cfg.ImagesDir, key, data); err != nil {
+				log.Printf("save site asset %s: %v", key, err)
+			}
 		}
 
 		http.Redirect(w, r, "/admin/site-config?saved=1", http.StatusSeeOther)
 	}
+}
+
+var siteAssetExts = []string{".svg", ".avif", ".jpg", ".gif"}
+
+// findSiteAssetOnDisk returns the raw bytes of key.{svg,avif,jpg,gif} from dir, or nil.
+func findSiteAssetOnDisk(dir, key string) []byte {
+	if dir == "" {
+		return nil
+	}
+	for _, ext := range siteAssetExts {
+		if data, err := os.ReadFile(filepath.Join(dir, key+ext)); err == nil {
+			return data
+		}
+	}
+	return nil
+}
+
+// saveSiteAssetToDisk writes data to dir/key.ext, removing stale format files.
+func saveSiteAssetToDisk(dir, key string, data []byte) error {
+	if dir == "" {
+		return fmt.Errorf("images_dir not configured")
+	}
+	var ext string
+	switch detectAssetMIME(data) {
+	case "image/svg+xml":
+		ext = ".svg"
+	case "image/avif":
+		ext = ".avif"
+	case "image/jpeg":
+		ext = ".jpg"
+	case "image/gif":
+		ext = ".gif"
+	default:
+		return fmt.Errorf("unsupported format")
+	}
+	for _, old := range siteAssetExts {
+		if old != ext {
+			os.Remove(filepath.Join(dir, key+old))
+		}
+	}
+	return os.WriteFile(filepath.Join(dir, key+ext), data, 0o644)
 }
 
 // detectAssetMIME returns the MIME type for supported site asset formats

@@ -62,11 +62,6 @@ CREATE TABLE IF NOT EXISTS site_settings (
     key TEXT PRIMARY KEY,
     value TEXT NOT NULL DEFAULT ''
 );
-CREATE TABLE IF NOT EXISTS site_assets (
-    key TEXT PRIMARY KEY,
-    data BLOB NOT NULL,
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-);
 `); err != nil {
 		log.Fatalf("init db schema: %v", err)
 	}
@@ -273,19 +268,6 @@ func setSiteSetting(db *sql.DB, key, value string) error {
 	return err
 }
 
-func getSiteAsset(db *sql.DB, key string) []byte {
-	var data []byte
-	db.QueryRow("SELECT data FROM site_assets WHERE key = ?", key).Scan(&data)
-	return data
-}
-
-func setSiteAsset(db *sql.DB, key string, data []byte) error {
-	_, err := db.Exec(
-		"INSERT INTO site_assets(key,data,updated_at) VALUES(?,?,CURRENT_TIMESTAMP) ON CONFLICT(key) DO UPDATE SET data=excluded.data,updated_at=CURRENT_TIMESTAMP",
-		key, data,
-	)
-	return err
-}
 
 type FederatedEvent struct {
 	ID           int64
