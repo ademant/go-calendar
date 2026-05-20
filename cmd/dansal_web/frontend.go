@@ -14,6 +14,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/yuin/goldmark"
@@ -560,22 +561,28 @@ func renderTemplate(w http.ResponseWriter, tmpl *template.Template, data any) {
 
 func indexHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *DansalClient, i18n *I18n) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		events, err := client.GetEvents(r.Context(), "")
-		if err != nil {
+		var events []Event
+		var orgs []Organization
+		var dances []Dance
+		var fetchErr error
+		var wg sync.WaitGroup
+		wg.Add(3)
+		go func() { defer wg.Done(); events, fetchErr = client.GetEvents(r.Context(), "") }()
+		go func() { defer wg.Done(); orgs, _ = client.GetOrganizations(r.Context()) }()
+		go func() { defer wg.Done(); dances, _ = client.GetDances(r.Context()) }()
+		wg.Wait()
+		if fetchErr != nil {
 			http.Error(w, "could not load events", http.StatusBadGateway)
 			return
 		}
-		orgMap := make(map[int]Organization)
-		if orgs, err := client.GetOrganizations(r.Context()); err == nil {
-			for _, o := range orgs {
-				orgMap[o.ID] = o
-			}
+		orgMap := make(map[int]Organization, len(orgs))
+		for _, o := range orgs {
+			orgMap[o.ID] = o
 		}
 		var fedEvents []FederatedEvent
 		if cfg.ShowFederatedEvents {
 			fedEvents, _ = listFederatedEvents(db)
 		}
-		dances, _ := client.GetDances(r.Context())
 		title := i18n.T(r, "events_title")
 		renderTemplate(w, tmpls.index, tmplData(r, cfg, i18n, title, IndexData{Events: events, OrgMap: orgMap, FederatedEvents: fedEvents, Dances: dances}))
 	}
@@ -712,39 +719,39 @@ func orgFrontendHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *Dansa
 
 func orgsHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		orgs, err := client.GetOrganizations(r.Context())
-		if err != nil {
+		var orgs []Organization
+		var statMap map[int]OrgStatRecord
+		var locs []Location
+		var orgsErr error
+		var wg sync.WaitGroup
+		wg.Add(3)
+		go func() { defer wg.Done(); orgs, orgsErr = client.GetOrganizations(r.Context()) }()
+		go func() { defer wg.Done(); statMap, _ = client.GetOrgStats(r.Context()) }()
+		go func() { defer wg.Done(); locs, _ = client.GetLocations(r.Context()) }()
+		wg.Wait()
+		if orgsErr != nil {
 			http.Error(w, "could not load organizations", http.StatusBadGateway)
 			return
 		}
-		events, _ := client.GetEvents(r.Context(), "")
-		locs, _ := client.GetLocations(r.Context())
 
-		evtCount := map[int]int{}
-		for _, e := range events {
-			if e.OrganizationID != nil {
-				evtCount[*e.OrganizationID]++
-			}
-		}
-		locCount := map[int]int{}
 		firstTown := map[int]string{}
 		for _, l := range locs {
 			if l.OrganizationID != nil {
-				orgID := *l.OrganizationID
-				locCount[orgID]++
-				if firstTown[orgID] == "" && l.Town != "" {
-					firstTown[orgID] = l.Town
+				id := *l.OrganizationID
+				if firstTown[id] == "" && l.Town != "" {
+					firstTown[id] = l.Town
 				}
 			}
 		}
 
 		items := make([]OrgListItem, len(orgs))
 		for i, o := range orgs {
+			st := statMap[o.ID]
 			items[i] = OrgListItem{
 				Org:           o,
 				Slug:          effectiveSlug(o),
-				EventCount:    evtCount[o.ID],
-				LocationCount: locCount[o.ID],
+				EventCount:    st.EventCount,
+				LocationCount: st.LocationCount,
 				FirstTown:     firstTown[o.ID],
 			}
 		}

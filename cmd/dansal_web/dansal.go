@@ -10,11 +10,113 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
+	"time"
+)
+
+// cacheEntry holds a cached value and when it was fetched.
+type cacheEntry[T any] struct {
+	val       T
+	fetchedAt time.Time
+}
+
+const (
+	orgsTTL      = 60 * time.Second
+	dancesTTL    = 5 * time.Minute
+	musiciansTTL = 30 * time.Second
+	locationsTTL = 30 * time.Second
 )
 
 type DansalClient struct {
 	BaseURL string
 	HTTP    *http.Client
+
+	mu             sync.Mutex
+	orgsCache      cacheEntry[[]Organization]
+	dancesCache    cacheEntry[[]Dance]
+	musiciansCache cacheEntry[[]Musician]
+	locationsCache cacheEntry[[]Location]
+}
+
+// cached fetches from cache when fresh; otherwise calls fetch and stores the result.
+// Concurrent cache misses may trigger multiple fetches (thundering-herd at small scale is fine).
+func cached[T any](mu *sync.Mutex, entry *cacheEntry[T], ttl time.Duration, fetch func() (T, error)) (T, error) {
+	mu.Lock()
+	if !entry.fetchedAt.IsZero() && time.Since(entry.fetchedAt) < ttl {
+		v := entry.val
+		mu.Unlock()
+		return v, nil
+	}
+	mu.Unlock()
+	val, err := fetch()
+	if err != nil {
+		var zero T
+		return zero, err
+	}
+	mu.Lock()
+	*entry = cacheEntry[T]{val: val, fetchedAt: time.Now()}
+	mu.Unlock()
+	return val, nil
+}
+
+func (c *DansalClient) invalidateOrgs() {
+	c.mu.Lock()
+	c.orgsCache.fetchedAt = time.Time{}
+	c.mu.Unlock()
+}
+
+func (c *DansalClient) invalidateMusicians() {
+	c.mu.Lock()
+	c.musiciansCache.fetchedAt = time.Time{}
+	c.mu.Unlock()
+}
+
+func (c *DansalClient) invalidateLocations() {
+	c.mu.Lock()
+	c.locationsCache.fetchedAt = time.Time{}
+	c.mu.Unlock()
+}
+
+// OrgStatRecord is returned by GetOrgStats: per-org event/location/source counts.
+type OrgStatRecord struct {
+	ID            int `json:"id"`
+	EventCount    int `json:"event_count"`
+	LocationCount int `json:"location_count"`
+	SourceCount   int `json:"source_count"`
+}
+
+// GetOrgStats returns a map of org ID → counts, fetched via a single aggregation query.
+func (c *DansalClient) GetOrgStats(ctx context.Context) (map[int]OrgStatRecord, error) {
+	var records []OrgStatRecord
+	if err := c.get(ctx, "/api/v1/organizations/stats", &records); err != nil {
+		return nil, err
+	}
+	m := make(map[int]OrgStatRecord, len(records))
+	for _, r := range records {
+		m[r.ID] = r
+	}
+	return m, nil
+}
+
+// RefBundle holds all four slow-changing reference lists needed by admin forms.
+type RefBundle struct {
+	Orgs      []Organization
+	Locations []Location
+	Musicians []Musician
+	Dances    []Dance
+}
+
+// FetchRefBundle loads all four reference lists in parallel (cache hits are in-memory).
+func (c *DansalClient) FetchRefBundle(ctx context.Context) RefBundle {
+	var b RefBundle
+	var wg sync.WaitGroup
+	wg.Add(4)
+	go func() { defer wg.Done(); b.Orgs, _ = c.GetOrganizations(ctx) }()
+	go func() { defer wg.Done(); b.Locations, _ = c.GetLocations(ctx) }()
+	go func() { defer wg.Done(); b.Musicians, _ = c.GetMusicians(ctx) }()
+	go func() { defer wg.Done(); b.Dances, _ = c.GetDances(ctx) }()
+	wg.Wait()
+	return b
 }
 
 func apiErr(resp *http.Response) error {
@@ -269,11 +371,10 @@ func (c *DansalClient) GetEvent(ctx context.Context, id int) (Event, error) {
 }
 
 func (c *DansalClient) GetOrganizations(ctx context.Context) ([]Organization, error) {
-	var orgs []Organization
-	if err := c.get(ctx, "/api/v1/organizations", &orgs); err != nil {
-		return nil, err
-	}
-	return orgs, nil
+	return cached(&c.mu, &c.orgsCache, orgsTTL, func() ([]Organization, error) {
+		var orgs []Organization
+		return orgs, c.get(ctx, "/api/v1/organizations", &orgs)
+	})
 }
 
 func (c *DansalClient) GetOrganization(ctx context.Context, id int) (Organization, error) {
@@ -301,8 +402,10 @@ func (c *DansalClient) GetPublicEventsByMusician(ctx context.Context, musicianID
 }
 
 func (c *DansalClient) GetMusicians(ctx context.Context) ([]Musician, error) {
-	var ms []Musician
-	return ms, c.get(ctx, "/api/v1/musicians", &ms)
+	return cached(&c.mu, &c.musiciansCache, musiciansTTL, func() ([]Musician, error) {
+		var ms []Musician
+		return ms, c.get(ctx, "/api/v1/musicians", &ms)
+	})
 }
 
 func (c *DansalClient) GetMusician(ctx context.Context, id int) (Musician, error) {
@@ -324,6 +427,7 @@ func (c *DansalClient) CreateMusician(ctx context.Context, m Musician, token str
 	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil || len(out) == 0 {
 		return Musician{}, err
 	}
+	c.invalidateMusicians()
 	return out[0], nil
 }
 
@@ -337,6 +441,7 @@ func (c *DansalClient) UpdateMusician(ctx context.Context, id int, m Musician, t
 	if resp.StatusCode != http.StatusOK {
 		return apiErr(resp)
 	}
+	c.invalidateMusicians()
 	return nil
 }
 
@@ -349,6 +454,7 @@ func (c *DansalClient) DeleteMusician(ctx context.Context, id int, token string)
 	if resp.StatusCode != http.StatusNoContent {
 		return apiErr(resp)
 	}
+	c.invalidateMusicians()
 	return nil
 }
 
@@ -361,6 +467,7 @@ func (c *DansalClient) DeleteLocation(ctx context.Context, id int, token string)
 	if resp.StatusCode != http.StatusNoContent {
 		return apiErr(resp)
 	}
+	c.invalidateLocations()
 	return nil
 }
 
@@ -423,11 +530,9 @@ func (c *DansalClient) UploadOrgImage(ctx context.Context, id int, data []byte, 
 }
 
 func (c *DansalClient) authed(ctx context.Context, method, path, token string, body []byte) (*http.Response, error) {
-	var bodyReader *bytes.Reader
+	var bodyReader io.Reader = http.NoBody
 	if body != nil {
 		bodyReader = bytes.NewReader(body)
-	} else {
-		bodyReader = bytes.NewReader(nil)
 	}
 	req, err := http.NewRequestWithContext(ctx, method, c.BaseURL+path, bodyReader)
 	if err != nil {
@@ -454,7 +559,11 @@ func (c *DansalClient) CreateOrganization(ctx context.Context, org Organization,
 		return Organization{}, apiErr(resp)
 	}
 	var out Organization
-	return out, json.NewDecoder(resp.Body).Decode(&out)
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		return Organization{}, err
+	}
+	c.invalidateOrgs()
+	return out, nil
 }
 
 func (c *DansalClient) UpdateOrganization(ctx context.Context, id int, org Organization, token string) error {
@@ -470,6 +579,7 @@ func (c *DansalClient) UpdateOrganization(ctx context.Context, id int, org Organ
 	if resp.StatusCode != http.StatusOK {
 		return apiErr(resp)
 	}
+	c.invalidateOrgs()
 	return nil
 }
 
@@ -485,6 +595,7 @@ func (c *DansalClient) DeleteOrganization(ctx context.Context, id int, token str
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent {
 		return apiErr(resp)
 	}
+	c.invalidateOrgs()
 	return nil
 }
 
@@ -563,11 +674,10 @@ func (c *DansalClient) UpdateFetchSource(ctx context.Context, id int, typ string
 }
 
 func (c *DansalClient) GetLocations(ctx context.Context) ([]Location, error) {
-	var locs []Location
-	if err := c.get(ctx, "/api/v1/locations", &locs); err != nil {
-		return nil, err
-	}
-	return locs, nil
+	return cached(&c.mu, &c.locationsCache, locationsTTL, func() ([]Location, error) {
+		var locs []Location
+		return locs, c.get(ctx, "/api/v1/locations", &locs)
+	})
 }
 
 func (c *DansalClient) GetLocation(ctx context.Context, id int) (Location, error) {
@@ -592,7 +702,11 @@ func (c *DansalClient) CreateLocation(ctx context.Context, loc Location, token s
 		return Location{}, apiErr(resp)
 	}
 	var created Location
-	return created, json.NewDecoder(resp.Body).Decode(&created)
+	if err := json.NewDecoder(resp.Body).Decode(&created); err != nil {
+		return Location{}, err
+	}
+	c.invalidateLocations()
+	return created, nil
 }
 
 func (c *DansalClient) UpdateLocation(ctx context.Context, id int, loc Location, token string) error {
@@ -608,6 +722,7 @@ func (c *DansalClient) UpdateLocation(ctx context.Context, id int, loc Location,
 	if resp.StatusCode != http.StatusOK {
 		return apiErr(resp)
 	}
+	c.invalidateLocations()
 	return nil
 }
 
@@ -1358,8 +1473,10 @@ func (c *DansalClient) RemoveOrgMember(ctx context.Context, orgID, userID int, t
 }
 
 func (c *DansalClient) GetDances(ctx context.Context) ([]Dance, error) {
-	var dances []Dance
-	return dances, c.get(ctx, "/api/v1/dances", &dances)
+	return cached(&c.mu, &c.dancesCache, dancesTTL, func() ([]Dance, error) {
+		var dances []Dance
+		return dances, c.get(ctx, "/api/v1/dances", &dances)
+	})
 }
 
 func (c *DansalClient) CreateDance(ctx context.Context, name, token string) (Dance, error) {

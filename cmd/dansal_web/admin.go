@@ -11,8 +11,8 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
-
 )
 
 // parseLatLng parses a form string to *float64; returns nil for empty or invalid input.
@@ -82,26 +82,19 @@ func adminOrgsHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n 
 			return
 		}
 		token := getSessionToken(r)
-		orgs, err := client.GetOrganizations(r.Context())
-		if err != nil {
+		var orgs []Organization
+		var statMap map[int]OrgStatRecord
+		var sources []FetchSource
+		var orgsErr error
+		var wg sync.WaitGroup
+		wg.Add(3)
+		go func() { defer wg.Done(); orgs, orgsErr = client.GetOrganizations(r.Context()) }()
+		go func() { defer wg.Done(); statMap, _ = client.GetOrgStats(r.Context()) }()
+		go func() { defer wg.Done(); sources, _ = client.GetFetchSources(r.Context(), token) }()
+		wg.Wait()
+		if orgsErr != nil {
 			http.Error(w, "could not load organizations", http.StatusBadGateway)
 			return
-		}
-		events, _ := client.GetEvents(r.Context(), "")
-		locs, _ := client.GetLocations(r.Context())
-		sources, _ := client.GetFetchSources(r.Context(), token)
-
-		evtCount := map[int]int{}
-		for _, e := range events {
-			if e.OrganizationID != nil {
-				evtCount[*e.OrganizationID]++
-			}
-		}
-		locCount := map[int]int{}
-		for _, l := range locs {
-			if l.OrganizationID != nil {
-				locCount[*l.OrganizationID]++
-			}
 		}
 		srcsByOrg := map[int][]FetchSource{}
 		for _, s := range sources {
@@ -109,18 +102,17 @@ func adminOrgsHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n 
 				srcsByOrg[*s.OrganizationID] = append(srcsByOrg[*s.OrganizationID], s)
 			}
 		}
-
 		stats := make([]OrgStats, len(orgs))
 		for i, o := range orgs {
+			st := statMap[o.ID]
 			stats[i] = OrgStats{
 				Org:           o,
 				Slug:          effectiveSlug(o),
-				EventCount:    evtCount[o.ID],
-				LocationCount: locCount[o.ID],
+				EventCount:    st.EventCount,
+				LocationCount: st.LocationCount,
 				FetchSources:  srcsByOrg[o.ID],
 			}
 		}
-
 		title := i18n.T(r, "admin_orgs_title")
 		renderTemplate(w, tmpls.adminOrgs, tmplData(r, cfg, i18n, title, AdminOrgsData{
 			Stats:   stats,
@@ -1578,18 +1570,15 @@ func adminEventNewPageHandler(cfg *Config, tmpls *Templates, db *sql.DB, client 
 		if !ok {
 			return
 		}
-		orgs, _ := client.GetOrganizations(r.Context())
-		locs, _ := client.GetLocations(r.Context())
-		musicians, _ := client.GetMusicians(r.Context())
-		dances, _ := client.GetDances(r.Context())
+		bundle := client.FetchRefBundle(r.Context())
 		defaultDanceIDs := loadDefaultDanceIDs(db)
-		selected := buildSelectedDanceNamesFromIDs(defaultDanceIDs, dances)
+		selected := buildSelectedDanceNamesFromIDs(defaultDanceIDs, bundle.Dances)
 		title := i18n.T(r, "admin_event_new_title")
 		renderTemplate(w, tmpls.adminEventNew, tmplData(r, cfg, i18n, title, AdminEventNewData{
-			Organizations:      orgs,
-			Locations:          locs,
-			Musicians:          musicians,
-			Dances:             dances,
+			Organizations:      bundle.Orgs,
+			Locations:          bundle.Locations,
+			Musicians:          bundle.Musicians,
+			Dances:             bundle.Dances,
 			SelectedDanceNames: selected,
 		}))
 	}
@@ -1606,17 +1595,14 @@ func adminEventCreateHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *
 			return
 		}
 
+		bundle := client.FetchRefBundle(r.Context())
 		renderErr := func(errKey string) {
-			orgs, _ := client.GetOrganizations(r.Context())
-			locs, _ := client.GetLocations(r.Context())
-			musicians, _ := client.GetMusicians(r.Context())
-			dances, _ := client.GetDances(r.Context())
 			title := i18n.T(r, "admin_event_new_title")
 			renderTemplate(w, tmpls.adminEventNew, tmplData(r, cfg, i18n, title, AdminEventNewData{
-				Organizations: orgs,
-				Locations:     locs,
-				Musicians:     musicians,
-				Dances:        dances,
+				Organizations: bundle.Orgs,
+				Locations:     bundle.Locations,
+				Musicians:     bundle.Musicians,
+				Dances:        bundle.Dances,
 				ErrorKey:      errKey,
 			}))
 		}
@@ -1657,8 +1643,7 @@ func adminEventCreateHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *
 		case "existing":
 			if v := r.FormValue("loc_id"); v != "" {
 				if n, err := strconv.Atoi(v); err == nil {
-					locs, _ := client.GetLocations(r.Context())
-					for _, l := range locs {
+					for _, l := range bundle.Locations {
 						if l.ID == n {
 							locReq = EventLocReq{
 								Location:  l.Location,
@@ -1865,22 +1850,25 @@ func adminEventEditPageHandler(cfg *Config, tmpls *Templates, client *DansalClie
 			http.NotFound(w, r)
 			return
 		}
-		event, err := client.GetEvent(r.Context(), id)
-		if err != nil {
+		var event Event
+		var eventErr error
+		var bundle RefBundle
+		var wg sync.WaitGroup
+		wg.Add(2)
+		go func() { defer wg.Done(); event, eventErr = client.GetEvent(r.Context(), id) }()
+		go func() { defer wg.Done(); bundle = client.FetchRefBundle(r.Context()) }()
+		wg.Wait()
+		if eventErr != nil {
 			http.NotFound(w, r)
 			return
 		}
-		orgs, _ := client.GetOrganizations(r.Context())
-		locs, _ := client.GetLocations(r.Context())
-		musicians, _ := client.GetMusicians(r.Context())
-		dances, _ := client.GetDances(r.Context())
 		title := i18n.T(r, "admin_event_edit_title")
 		renderTemplate(w, tmpls.adminEventEdit, tmplData(r, cfg, i18n, title, AdminEventEditData{
 			Event:              event,
-			Organizations:      orgs,
-			Locations:          locs,
-			Musicians:          musicians,
-			Dances:             dances,
+			Organizations:      bundle.Orgs,
+			Locations:          bundle.Locations,
+			Musicians:          bundle.Musicians,
+			Dances:             bundle.Dances,
 			SelectedDanceNames: buildSelectedDanceNames(event),
 		}))
 	}
@@ -1902,19 +1890,16 @@ func adminEventSaveHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *Da
 			return
 		}
 
+		bundle := client.FetchRefBundle(r.Context())
 		renderErr := func(errKey string) {
 			event, _ := client.GetEvent(r.Context(), id)
-			orgs, _ := client.GetOrganizations(r.Context())
-			locs, _ := client.GetLocations(r.Context())
-			musicians, _ := client.GetMusicians(r.Context())
-			dances, _ := client.GetDances(r.Context())
 			title := i18n.T(r, "admin_event_edit_title")
 			renderTemplate(w, tmpls.adminEventEdit, tmplData(r, cfg, i18n, title, AdminEventEditData{
 				Event:              event,
-				Organizations:      orgs,
-				Locations:          locs,
-				Musicians:          musicians,
-				Dances:             dances,
+				Organizations:      bundle.Orgs,
+				Locations:          bundle.Locations,
+				Musicians:          bundle.Musicians,
+				Dances:             bundle.Dances,
 				SelectedDanceNames: buildSelectedDanceNames(event),
 				ErrorKey:           errKey,
 			}))
@@ -1956,8 +1941,7 @@ func adminEventSaveHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *Da
 		case "existing":
 			if v := r.FormValue("loc_id"); v != "" {
 				if n, err := strconv.Atoi(v); err == nil {
-					locs, _ := client.GetLocations(r.Context())
-					for _, l := range locs {
+					for _, l := range bundle.Locations {
 						if l.ID == n {
 							locReq = EventLocReq{
 								Location:  l.Location,
