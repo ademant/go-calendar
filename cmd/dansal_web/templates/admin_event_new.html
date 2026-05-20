@@ -111,7 +111,7 @@
       <label for="loc_id">{{$.Strings.T "evt_loc_select_existing"}}</label>
       <select id="loc_id" name="loc_id">
         <option value="">—</option>
-        {{range .Locations}}<option value="{{.ID}}">{{.Location}}{{if .Town}}, {{.Town}}{{end}}</option>{{end}}
+        {{range .Locations}}<option value="{{.ID}}">{{if .ShortName}}{{.ShortName}}{{else}}{{.Location}}{{end}}{{if .Town}}, {{.Town}}{{end}}</option>{{end}}
       </select>
     </div>
 
