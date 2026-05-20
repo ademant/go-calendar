@@ -1319,6 +1319,35 @@ func getEventsByTownICS(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte(cal.Serialize()))
 }
 
+// icsRouter wraps a handler to intercept GET requests whose path ends with ".ics".
+// Go's net/http ServeMux requires wildcard segments to span the whole path segment,
+// so patterns like {id}.ics are rejected at startup. This wrapper dispatches those
+// paths manually before they reach the mux.
+func icsRouter(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet || !strings.HasSuffix(r.URL.Path, ".ics") {
+			next.ServeHTTP(w, r)
+			return
+		}
+		p := r.URL.Path
+		switch {
+		case p == "/api/v1/events.ics":
+			getEventsICS(w, r)
+		case strings.HasPrefix(p, "/api/v1/events/tag/"):
+			r.SetPathValue("tag", strings.TrimSuffix(strings.TrimPrefix(p, "/api/v1/events/tag/"), ".ics"))
+			getEventsByTagICS(w, r)
+		case strings.HasPrefix(p, "/api/v1/events/town/"):
+			r.SetPathValue("town", strings.TrimSuffix(strings.TrimPrefix(p, "/api/v1/events/town/"), ".ics"))
+			getEventsByTownICS(w, r)
+		case strings.HasPrefix(p, "/api/v1/events/"):
+			r.SetPathValue("id", strings.TrimSuffix(strings.TrimPrefix(p, "/api/v1/events/"), ".ics"))
+			getEventICS(w, r)
+		default:
+			next.ServeHTTP(w, r)
+		}
+	})
+}
+
 // checkPublicCacheHeaders runs cntQuery (must SELECT COUNT(*), MAX(created_at))
 // and emits ETag/Last-Modified/Cache-Control headers. Returns true and writes
 // 304 when the client's cached copy is still fresh; caller must return immediately.

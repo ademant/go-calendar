@@ -978,13 +978,6 @@ func main() {
 	smux.HandleFunc("POST /api/v1/events/{id}/bookings", createBooking)
 	smux.HandleFunc("GET /api/v1/bookings/verify/{token}", verifyBooking)
 
-	// iCal feeds (public, no auth); {id}.ics uses plain wildcard — non-numeric
-	// IDs are rejected by the handler's strconv.Atoi call.
-	smux.HandleFunc("GET /api/v1/events.ics", getEventsICS)
-	smux.HandleFunc("GET /api/v1/events/{id}.ics", getEventICS)
-	smux.HandleFunc("GET /api/v1/events/tag/{tag}.ics", getEventsByTagICS)
-	smux.HandleFunc("GET /api/v1/events/town/{town}.ics", getEventsByTownICS)
-
 	// Public reads — OptionalTokenMiddleware enriches the response when a valid
 	// token is present (e.g. editable flag, unpublished events).
 	smux.Handle("GET /api/v1/events", optAuth(http.HandlerFunc(getEvents)))
@@ -1088,7 +1081,7 @@ func main() {
 	smux.Handle("PATCH /api/v1/admin/config", auth(patchAdminConfig))
 
 	// Middleware chain: MetricsMiddleware is outermost to capture all status codes.
-	handler := MetricsMiddleware(smux)(middlewareChain(smux,
+	handler := MetricsMiddleware(smux)(middlewareChain(icsRouter(smux),
 		CORSMiddleware,
 		SecurityHeadersMiddleware,
 		GzipMiddleware,
