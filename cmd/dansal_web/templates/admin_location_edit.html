@@ -182,6 +182,11 @@
     var city = a.city||a.town||a.village||a.hamlet||a.municipality||'';
     if (city)                                    document.getElementById('town').value = city;
     if (a.country)                               document.getElementById('country').value = a.country;
+    var snInp = document.getElementById('short_name');
+    if (!snInp.value) {
+      var sn = item.name || a.amenity || '';
+      if (sn) snInp.value = sn;
+    }
     clearResultMarkers();
     results.innerHTML = '';
     map.closePopup();
