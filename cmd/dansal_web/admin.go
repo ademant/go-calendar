@@ -2309,7 +2309,7 @@ func adminSiteConfigSaveHandler(cfg *Config, db *sql.DB, client *DansalClient) h
 		}
 		_ = client.PatchAdminConfig(r.Context(), token, ac)
 
-		// SVG uploads
+		// Image uploads: logo/banner accept SVG/AVIF/JPG; favicon also accepts GIF
 		for _, key := range []string{"logo", "banner", "favicon"} {
 			f, _, err := r.FormFile(key)
 			if err != nil {
@@ -2317,7 +2317,14 @@ func adminSiteConfigSaveHandler(cfg *Config, db *sql.DB, client *DansalClient) h
 			}
 			data, err := io.ReadAll(f)
 			f.Close()
-			if err != nil || !isSVG(data) {
+			if err != nil {
+				continue
+			}
+			mime := detectAssetMIME(data)
+			if mime == "" {
+				continue
+			}
+			if key != "favicon" && mime == "image/gif" {
 				continue
 			}
 			_ = setSiteAsset(db, key, data)
@@ -2327,8 +2334,40 @@ func adminSiteConfigSaveHandler(cfg *Config, db *sql.DB, client *DansalClient) h
 	}
 }
 
-// isSVG returns true if data looks like an SVG file.
-func isSVG(data []byte) bool {
-	s := strings.TrimSpace(string(data))
-	return strings.HasPrefix(s, "<svg") || strings.HasPrefix(s, "<?xml") || strings.Contains(s, "<svg")
+// detectAssetMIME returns the MIME type for supported site asset formats
+// (SVG, AVIF, JPEG, GIF) or "" if the data is not a recognised format.
+func detectAssetMIME(data []byte) string {
+	if len(data) == 0 {
+		return ""
+	}
+	// SVG: text-based, look for the <svg element
+	s := strings.TrimSpace(string(data[:min(len(data), 512)]))
+	if strings.HasPrefix(s, "<svg") || strings.HasPrefix(s, "<?xml") || strings.Contains(s, "<svg") {
+		return "image/svg+xml"
+	}
+	// AVIF: ISO BMFF ftyp box with avif/avis brand
+	if len(data) >= 12 && string(data[4:8]) == "ftyp" {
+		end := len(data)
+		if end > 128 {
+			end = 128
+		}
+		for i := 8; i+4 <= end; i += 4 {
+			if i == 12 {
+				continue // minor version, not a brand
+			}
+			switch string(data[i : i+4]) {
+			case "avif", "avis":
+				return "image/avif"
+			}
+		}
+	}
+	// JPEG: FF D8 magic
+	if len(data) >= 2 && data[0] == 0xFF && data[1] == 0xD8 {
+		return "image/jpeg"
+	}
+	// GIF: GIF87a or GIF89a magic
+	if len(data) >= 6 && (string(data[:6]) == "GIF87a" || string(data[:6]) == "GIF89a") {
+		return "image/gif"
+	}
+	return ""
 }

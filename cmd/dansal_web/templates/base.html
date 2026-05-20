@@ -13,7 +13,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{{.Title}} — {{.SiteName}}</title>
-<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="icon" href="/favicon.svg">
 <style>
 :root{
   --bg:#fafafa;--bg-card:#fff;--bg-subtle:#f4f6fb;--bg-hover:#f0f4ff;
@@ -68,8 +68,8 @@ nav{background:#1a1a2e;color:#fff;padding:.4rem 1rem;margin:0 -1rem 0;display:fl
 .nav-brand{display:flex;align-items:center;text-decoration:none}
 .nav-brand img{object-fit:contain;height:{{.LogoHeight}}px;width:{{.LogoHeight}}px}
 .nav-brand:hover{opacity:.85}
-.site-banner{margin:0 -1rem 1.5rem;background:var(--site-banner-bg)}
-.site-banner img{width:100%;height:auto;display:block}
+.site-banner{max-width:960px;margin:0 auto 1.5rem;background:var(--site-banner-bg)}
+.site-banner img{width:100%;height:auto;display:block;border-radius:0}
 .nav-lang{display:flex;align-items:center}
 .lang-select{background:#2a2a4a;color:#c0c8ff;border:1px solid #4a4a7a;border-radius:4px;padding:.2rem .4rem;font-size:.9rem;cursor:pointer}
 .lang-select:hover{border-color:#c0c8ff}

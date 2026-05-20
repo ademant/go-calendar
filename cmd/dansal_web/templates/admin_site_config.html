@@ -18,18 +18,18 @@
       <p class="hint">{{$.Strings.T "admin_site_config_site_name_hint"}}</p>
     </div>
     <div class="field">
-      <label>{{$.Strings.T "admin_site_config_logo"}} <span class="hint-inline">{{$.Strings.T "admin_site_config_svg_only"}}</span></label>
-      <input type="file" name="logo" accept=".svg,image/svg+xml">
+      <label>{{$.Strings.T "admin_site_config_logo"}} <span class="hint-inline">(SVG, AVIF, JPG)</span></label>
+      <input type="file" name="logo" accept=".svg,.avif,.jpg,.jpeg,image/svg+xml,image/avif,image/jpeg">
       {{if .HasLogo}}<p class="hint">{{$.Strings.T "admin_site_config_logo_set"}}</p>{{end}}
     </div>
     <div class="field">
-      <label>{{$.Strings.T "admin_site_config_banner"}} <span class="hint-inline">{{$.Strings.T "admin_site_config_svg_only"}}</span></label>
-      <input type="file" name="banner" accept=".svg,image/svg+xml">
+      <label>{{$.Strings.T "admin_site_config_banner"}} <span class="hint-inline">(SVG, AVIF, JPG)</span></label>
+      <input type="file" name="banner" accept=".svg,.avif,.jpg,.jpeg,image/svg+xml,image/avif,image/jpeg">
       {{if .HasBanner}}<p class="hint">{{$.Strings.T "admin_site_config_banner_set"}}</p>{{end}}
     </div>
     <div class="field">
-      <label>{{$.Strings.T "admin_site_config_favicon"}} <span class="hint-inline">{{$.Strings.T "admin_site_config_svg_only"}}</span></label>
-      <input type="file" name="favicon" accept=".svg,image/svg+xml">
+      <label>{{$.Strings.T "admin_site_config_favicon"}} <span class="hint-inline">(SVG, AVIF, JPG, GIF)</span></label>
+      <input type="file" name="favicon" accept=".svg,.avif,.jpg,.jpeg,.gif,image/svg+xml,image/avif,image/jpeg,image/gif">
       {{if .HasFavicon}}<p class="hint">{{$.Strings.T "admin_site_config_favicon_set"}}</p>{{end}}
     </div>
   </section>

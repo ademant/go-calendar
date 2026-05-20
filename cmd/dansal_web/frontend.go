@@ -156,7 +156,11 @@ func dynamicSVGHandler(db *sql.DB, key string, fallback []byte) http.HandlerFunc
 		if len(data) == 0 {
 			data = fallback
 		}
-		w.Header().Set("Content-Type", "image/svg+xml")
+		mime := detectAssetMIME(data)
+		if mime == "" {
+			mime = "image/svg+xml"
+		}
+		w.Header().Set("Content-Type", mime)
 		w.Header().Set("Cache-Control", "public, max-age=3600")
 		w.Write(data)
 	}
