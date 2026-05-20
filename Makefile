@@ -12,7 +12,7 @@ SYSTEMDDIR := /etc/systemd/system
 .DEFAULT_GOAL := build
 
 .PHONY: build build-dansal build-dansal_web build-dansal_admin \
-        run fmt vet clean install install-web update deb
+        run fmt vet clean install install-web install-units update deb
 
 build:
 	$(MAKE) -j3 build-dansal build-dansal_web build-dansal_admin
@@ -61,14 +61,13 @@ install: build
 	# preflight helper
 	install -d -m 755 /usr/lib/dansal
 	install -m 755 packaging/preflight /usr/lib/dansal/preflight
-	# systemd unit
-	install -m 644 dansal.service $(SYSTEMDDIR)/dansal.service
+	# systemd units
+	$(MAKE) install-units
 	# Ensure the database file is owned by the service user even if it was
 	# previously created as root (e.g. during testing).
 	touch $(STATEDIR)/calendar.db
 	chown $(SERVICE):$(SERVICE) $(STATEDIR)/calendar.db
 	chmod 640 $(STATEDIR)/calendar.db
-	systemctl daemon-reload
 	systemctl enable --now $(SERVICE)
 	# fail2ban
 	@if [ -d /etc/fail2ban ]; then \
@@ -90,11 +89,16 @@ install-web: build-dansal_web
 		echo "$(SYSCONFDIR)/web.yaml already exists — not overwriting"; \
 	fi
 	install -m 755 dansal_web $(BINDIR)/dansal-web
-	install -m 644 dansal-web.service $(SYSTEMDDIR)/dansal-web.service
-	systemctl daemon-reload
+	$(MAKE) install-units
 	systemctl enable --now dansal-web.service
 
-update: build
+install-units:
+	@[ "$(shell id -u)" = "0" ] || { echo "install-units requires root"; exit 1; }
+	install -m 644 dansal.service     $(SYSTEMDDIR)/dansal.service
+	install -m 644 dansal-web.service $(SYSTEMDDIR)/dansal-web.service
+	systemctl daemon-reload
+
+update: build install-units
 	@[ "$(shell id -u)" = "0" ] || { echo "update requires root"; exit 1; }
 	install -m 755 dansal        $(BINDIR)/dansal
 	install -m 755 dansal_admin  $(BINDIR)/dansal_admin
