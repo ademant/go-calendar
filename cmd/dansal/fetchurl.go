@@ -61,6 +61,15 @@ func ensureLocation(q querier, loc EventLocationRequest) (int64, error) {
 			q.Exec("UPDATE locations SET latitude=?, longitude=? WHERE id=? AND latitude IS NULL AND longitude IS NULL",
 				loc.Latitude, loc.Longitude, id)
 		}
+		if loc.Address != "" || loc.Town != "" || loc.Zipcode != "" || loc.Country != "" {
+			q.Exec(`UPDATE locations SET
+				address = COALESCE(NULLIF(address,''), ?),
+				town    = COALESCE(NULLIF(town,''),    ?),
+				zipcode = COALESCE(NULLIF(zipcode,''), ?),
+				country = COALESCE(NULLIF(country,''), ?)
+				WHERE id = ?`,
+				loc.Address, loc.Town, loc.Zipcode, loc.Country, id)
+		}
 		return id, nil
 	}
 	if err != sql.ErrNoRows {
@@ -89,6 +98,114 @@ func parseICalGeo(s string) (lat, lon *float64) {
 		}
 	}
 	return
+}
+
+// parseGeoURI parses a "geo:lat,lon" URI into its components.
+func parseGeoURI(s string) (lat, lon *float64) {
+	s = strings.TrimPrefix(strings.ToLower(s), "geo:")
+	if i := strings.IndexByte(s, ','); i >= 0 {
+		if f, err := strconv.ParseFloat(strings.TrimSpace(s[:i]), 64); err == nil {
+			v := f
+			lat = &v
+		}
+		if f, err := strconv.ParseFloat(strings.TrimSpace(s[i+1:]), 64); err == nil {
+			v := f
+			lon = &v
+		}
+	}
+	return
+}
+
+// icalUnescapeText unescapes iCal text-value escaping: \, \; \\ \n \N.
+func icalUnescapeText(s string) string {
+	var b strings.Builder
+	b.Grow(len(s))
+	for i := 0; i < len(s); i++ {
+		if s[i] == '\\' && i+1 < len(s) {
+			i++
+			switch s[i] {
+			case ',':
+				b.WriteByte(',')
+			case ';':
+				b.WriteByte(';')
+			case '\\':
+				b.WriteByte('\\')
+			case 'n', 'N':
+				b.WriteByte('\n')
+			default:
+				b.WriteByte('\\')
+				b.WriteByte(s[i])
+			}
+		} else {
+			b.WriteByte(s[i])
+		}
+	}
+	return b.String()
+}
+
+// looksLikeZipCode returns true for purely numeric strings of 4–10 digits.
+func looksLikeZipCode(s string) bool {
+	if len(s) < 4 || len(s) > 10 {
+		return false
+	}
+	for _, c := range s {
+		if c < '0' || c > '9' {
+			return false
+		}
+	}
+	return true
+}
+
+// fillAddressFromApple parses Apple's X-ADDRESS string (already unescaped, comma-separated)
+// into the structured fields of loc.  Typical format: "street, city[, state, zip, country]".
+func fillAddressFromApple(addr string, loc *EventLocationRequest) {
+	if addr == "" {
+		return
+	}
+	parts := strings.Split(addr, ", ")
+	for i, p := range parts {
+		parts[i] = strings.TrimSpace(p)
+	}
+	n := len(parts)
+	if n >= 1 {
+		loc.Address = parts[0]
+	}
+	if n >= 2 {
+		loc.Town = parts[1]
+	}
+	// Scan remaining parts for zip code; treat the last non-zip part as country.
+	for i := 2; i < n; i++ {
+		if looksLikeZipCode(parts[i]) {
+			loc.Zipcode = parts[i]
+		}
+	}
+	if n >= 3 && !looksLikeZipCode(parts[n-1]) {
+		loc.Country = parts[n-1]
+	}
+}
+
+// parseAppleStructuredLocation extracts location data from the non-standard
+// X-APPLE-STRUCTURED-LOCATION property.  Returns nil when the property is absent.
+func parseAppleStructuredLocation(vevent *ics.VEvent) *EventLocationRequest {
+	prop := vevent.GetProperty(ics.ComponentProperty("X-APPLE-STRUCTURED-LOCATION"))
+	if prop == nil {
+		return nil
+	}
+	loc := &EventLocationRequest{}
+	if v := prop.ICalParameters["X-TITLE"]; len(v) > 0 {
+		loc.Location = icalUnescapeText(v[0])
+	}
+	if v := prop.ICalParameters["X-ADDRESS"]; len(v) > 0 {
+		fillAddressFromApple(icalUnescapeText(v[0]), loc)
+	}
+	if lat, lon := parseGeoURI(prop.Value); lat != nil {
+		loc.Latitude = lat
+		loc.Longitude = lon
+	}
+	if loc.Location == "" && loc.Address == "" {
+		return nil
+	}
+	return loc
 }
 
 // parseICalDuration parses an RFC 5545 DURATION value (e.g. "PT1H30M", "P1D")
@@ -450,6 +567,15 @@ func importFromICalSource(src FetchSource) ([]Event, bool, error) {
 				OrganizationID:     orgID,
 				Dances:             src.DanceIDs,
 				Location: func() EventLocationRequest {
+				if apple := parseAppleStructuredLocation(vevent); apple != nil {
+					if apple.Location == "" {
+						apple.Location = prop(ics.ComponentPropertyLocation)
+					}
+					if apple.Latitude == nil {
+						apple.Latitude, apple.Longitude = parseICalGeo(prop(ics.ComponentPropertyGeo))
+					}
+					return *apple
+				}
 				lat, lon := parseICalGeo(prop(ics.ComponentPropertyGeo))
 				return EventLocationRequest{
 					Location:  prop(ics.ComponentPropertyLocation),

@@ -991,6 +991,19 @@ func createEvent(w http.ResponseWriter, r *http.Request) {
 					URL:         attachURL(event),
 					OrganizationID: orgID,
 					Location: func() EventLocationRequest {
+						if apple := parseAppleStructuredLocation(event); apple != nil {
+							if apple.Location == "" {
+								if p := event.GetProperty(ics.ComponentPropertyLocation); p != nil {
+									apple.Location = p.Value
+								}
+							}
+							if apple.Latitude == nil {
+								if p := event.GetProperty(ics.ComponentPropertyGeo); p != nil {
+									apple.Latitude, apple.Longitude = parseICalGeo(p.Value)
+								}
+							}
+							return *apple
+						}
 						var loc string
 						var lat, lon *float64
 						if p := event.GetProperty(ics.ComponentPropertyLocation); p != nil {
