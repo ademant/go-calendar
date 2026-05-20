@@ -342,7 +342,7 @@ tr.mc-week.mc-sel td{background:var(--cal-today);font-weight:600}
         byDay[k].map(function(r){
           var start=r.dataset.start||'';
           var time=start.length>=16?start.slice(11,16):'';
-          var org=r.dataset.organizer||r.dataset.title;
+          var org=r.dataset.title;
           var town=r.dataset.town||'';
           var avail=r.dataset.availability||'';
           var fee=r.dataset.fee||'';
