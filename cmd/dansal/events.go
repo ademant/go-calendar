@@ -413,12 +413,13 @@ func insertEvent(q querier, title, description string, startTime, endTime int64,
 	var existingID int
 	var existingShortCode string
 	var existingSourceLastModified int64
+	var existingChangedAt int64
 	var lookupErr error = sql.ErrNoRows
 
 	if uid != "" {
 		lookupErr = q.QueryRow(
-			"SELECT id, short_code, COALESCE(source_last_modified, 0) FROM events WHERE uid = ?", uid,
-		).Scan(&existingID, &existingShortCode, &existingSourceLastModified)
+			"SELECT id, short_code, COALESCE(source_last_modified, 0), COALESCE(changed_at, 0) FROM events WHERE uid = ?", uid,
+		).Scan(&existingID, &existingShortCode, &existingSourceLastModified, &existingChangedAt)
 		if lookupErr != nil && lookupErr != sql.ErrNoRows {
 			return 0, "", false, lookupErr
 		}
@@ -427,8 +428,8 @@ func insertEvent(q querier, title, description string, startTime, endTime int64,
 	// URL tier: fires when uid is absent or not found.
 	if lookupErr == sql.ErrNoRows && url != "" {
 		lookupErr = q.QueryRow(
-			"SELECT id, short_code, COALESCE(source_last_modified, 0) FROM events WHERE url = ?", url,
-		).Scan(&existingID, &existingShortCode, &existingSourceLastModified)
+			"SELECT id, short_code, COALESCE(source_last_modified, 0), COALESCE(changed_at, 0) FROM events WHERE url = ?", url,
+		).Scan(&existingID, &existingShortCode, &existingSourceLastModified, &existingChangedAt)
 		if lookupErr != nil && lookupErr != sql.ErrNoRows {
 			return 0, "", false, lookupErr
 		}
@@ -438,9 +439,9 @@ func insertEvent(q querier, title, description string, startTime, endTime int64,
 	if lookupErr == sql.ErrNoRows {
 		const threeHours = int64(3 * 60 * 60)
 		lookupErr = q.QueryRow(
-			"SELECT id, short_code, COALESCE(source_last_modified, 0) FROM events WHERE title = ? AND location_id = ? AND ABS(start_time - ?) < ?",
+			"SELECT id, short_code, COALESCE(source_last_modified, 0), COALESCE(changed_at, 0) FROM events WHERE title = ? AND location_id = ? AND ABS(start_time - ?) < ?",
 			title, locationID, startTime, threeHours,
-		).Scan(&existingID, &existingShortCode, &existingSourceLastModified)
+		).Scan(&existingID, &existingShortCode, &existingSourceLastModified, &existingChangedAt)
 	}
 
 	if lookupErr != nil && lookupErr != sql.ErrNoRows {
@@ -461,10 +462,56 @@ func insertEvent(q querier, title, description string, startTime, endTime int64,
 		if sourceLastModified > 0 && sourceLastModified <= existingSourceLastModified {
 			return existingID, existingShortCode, false, nil
 		}
+
 		var slmArg any
 		if sourceLastModified > 0 {
 			slmArg = sourceLastModified
 		}
+
+		// Protect manual edits from being overwritten by imports (source != "").
+		if source != "" && existingChangedAt > 0 {
+			if sourceLastModified == 0 || sourceLastModified <= existingChangedAt {
+				// Source has no timestamp or is not newer than the manual edit — skip.
+				return existingID, existingShortCode, false, nil
+			}
+			// Source is newer than the manual edit — do a merge update: only
+			// overwrite fields where the source provides non-empty content, and
+			// preserve user-set fields (has_ball/workshop/festival, is_published,
+			// booking_url) that iCal/RSS sources never populate.
+			var tagsArg any
+			if len(tags) > 0 {
+				tagsArg = string(tagsJSON)
+			}
+			_, err := q.Exec(`UPDATE events SET
+				title=?,
+				description=CASE WHEN ?!='' THEN ? ELSE description END,
+				start_time=?, end_time=?,
+				location_id=CASE WHEN ?!=0 THEN ? ELSE location_id END,
+				is_cancelled=?,
+				workshop_difficulty=CASE WHEN ?!='' THEN ? ELSE workshop_difficulty END,
+				tags=CASE WHEN ? IS NOT NULL THEN ? ELSE tags END,
+				url=CASE WHEN ? IS NOT NULL THEN ? ELSE url END,
+				source_last_modified=?,
+				pricing=CASE WHEN ? IS NOT NULL THEN ? ELSE pricing END
+				WHERE id=?`,
+				title,
+				description, description,
+				startTime, endTime,
+				locationID, locationID,
+				isCancelled,
+				workshopDifficulty, workshopDifficulty,
+				tagsArg, tagsArg,
+				urlVal(url), urlVal(url),
+				slmArg,
+				pricingArg, pricingArg,
+				existingID,
+			)
+			if err != nil {
+				return 0, "", false, err
+			}
+			return existingID, existingShortCode, false, nil
+		}
+
 		_, err := q.Exec(
 			"UPDATE events SET description=?, start_time=?, end_time=?, location_id=?, has_ball=?, has_workshop=?, has_festival=?, is_cancelled=?, workshop_difficulty=?, tags=?, is_published=?, url=?, source_last_modified=?, pricing=? WHERE id=?",
 			description, startTime, endTime, locationID, hasBall, hasWorkshop, hasFestival, isCancelled, workshopDifficulty, string(tagsJSON), isPublished, urlVal(url), slmArg, pricingArg, existingID,
@@ -1103,11 +1150,13 @@ func updateEvent(w http.ResponseWriter, r *http.Request) {
 		`UPDATE events SET title=?, description=?, start_time=?, end_time=?, location_id=?,
 		 has_ball=?, has_workshop=?, has_festival=?, is_cancelled=?, is_published=?,
 		 workshop_difficulty=?, tags=?, url=?, booking_url=?, organization_id=?, pricing=?,
-		 availability=?, tickets_total=?, booking_enabled=? WHERE id=?`,
+		 availability=?, tickets_total=?, booking_enabled=?,
+		 changed_at=?, changed_by=? WHERE id=?`,
 		req.Title, req.Description, startTime, endTime, locationID,
 		req.HasBall, req.HasWorkshop, req.HasFestival, req.IsCancelled, req.IsPublished,
 		req.WorkshopDifficulty, string(tagsJSON), urlVal(req.URL), urlVal(req.BookingURL), orgIDArg, pricingArg,
-		req.Availability, req.TicketsTotal, req.BookingEnabled, id,
+		req.Availability, req.TicketsTotal, req.BookingEnabled,
+		time.Now().UTC().Unix(), strconv.Itoa(callerID), id,
 	); err != nil {
 		writeError(w, err.Error(), http.StatusInternalServerError)
 		return

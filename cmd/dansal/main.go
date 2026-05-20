@@ -600,6 +600,8 @@ func migrateDB() {
 		JOIN dances d ON d.id = CAST(j.value AS INTEGER)
 		WHERE fs.dance_ids IS NOT NULL AND fs.dance_ids != '[]'`)
 	migrateLocationsLatLng()
+	db.Exec("ALTER TABLE events ADD COLUMN changed_at INTEGER")
+	db.Exec("ALTER TABLE events ADD COLUMN changed_by TEXT DEFAULT ''")
 }
 
 func createTables() error {
