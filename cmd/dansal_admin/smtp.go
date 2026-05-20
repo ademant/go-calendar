@@ -8,17 +8,33 @@ import (
 	"text/tabwriter"
 )
 
+type smtpConfig struct {
+	Host        string `json:"host"`
+	Port        int    `json:"port"`
+	Username    string `json:"username"`
+	From        string `json:"from"`
+	FromName    string `json:"from_name"`
+	TLS         string `json:"tls"`
+	TimeoutSecs int    `json:"timeout_secs"`
+	PasswordSet bool   `json:"password_set"`
+}
+
 func cmdSMTPShow(_ []string) {
 	resp := send(socketPath, request{Cmd: "smtp-get"})
 	if !resp.OK {
 		die("%s", resp.Error)
 	}
-	var cfg map[string]any
+	var cfg smtpConfig
 	json.Unmarshal(resp.Data, &cfg)
 	tw := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-	for _, k := range []string{"host", "port", "username", "from", "from_name", "tls", "timeout_secs", "password_set"} {
-		fmt.Fprintf(tw, "%s\t%v\n", k, cfg[k])
-	}
+	fmt.Fprintf(tw, "host\t%s\n", cfg.Host)
+	fmt.Fprintf(tw, "port\t%d\n", cfg.Port)
+	fmt.Fprintf(tw, "username\t%s\n", cfg.Username)
+	fmt.Fprintf(tw, "from\t%s\n", cfg.From)
+	fmt.Fprintf(tw, "from_name\t%s\n", cfg.FromName)
+	fmt.Fprintf(tw, "tls\t%s\n", cfg.TLS)
+	fmt.Fprintf(tw, "timeout_secs\t%d\n", cfg.TimeoutSecs)
+	fmt.Fprintf(tw, "password_set\t%v\n", cfg.PasswordSet)
 	tw.Flush()
 }
 
@@ -92,30 +108,30 @@ func cmdSMTPTest(args []string) {
 	if !cfgResp.OK {
 		die("could not read SMTP config: %s", cfgResp.Error)
 	}
-	var cfg map[string]any
+	var cfg smtpConfig
 	json.Unmarshal(cfgResp.Data, &cfg)
 
-	port := cfg["port"]
-	if port == nil || port == float64(0) {
+	port := cfg.Port
+	if port == 0 {
 		port = 587
 	}
-	tls := cfg["tls"]
-	if tls == nil || tls == "" {
+	tls := cfg.TLS
+	if tls == "" {
 		tls = "starttls"
 	}
-	timeout := cfg["timeout_secs"]
-	if timeout == nil || timeout == float64(0) {
+	timeout := cfg.TimeoutSecs
+	if timeout == 0 {
 		timeout = 30
 	}
 
 	fmt.Println("SMTP configuration:")
 	tw := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-	fmt.Fprintf(tw, "  host\t%v:%v\n", cfg["host"], port)
-	fmt.Fprintf(tw, "  tls\t%v\n", tls)
-	fmt.Fprintf(tw, "  username\t%v\n", cfg["username"])
-	fmt.Fprintf(tw, "  from\t%v\n", cfg["from"])
-	fmt.Fprintf(tw, "  timeout\t%vs\n", timeout)
-	fmt.Fprintf(tw, "  password_set\t%v\n", cfg["password_set"])
+	fmt.Fprintf(tw, "  host\t%s:%d\n", cfg.Host, port)
+	fmt.Fprintf(tw, "  tls\t%s\n", tls)
+	fmt.Fprintf(tw, "  username\t%s\n", cfg.Username)
+	fmt.Fprintf(tw, "  from\t%s\n", cfg.From)
+	fmt.Fprintf(tw, "  timeout\t%ds\n", timeout)
+	fmt.Fprintf(tw, "  password_set\t%v\n", cfg.PasswordSet)
 	tw.Flush()
 	fmt.Printf("\nSending test email to %s...\n", *to)
 
