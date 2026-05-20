@@ -72,20 +72,10 @@ func main() {
 	r.HandleFunc("POST /checkin/{qr_token}", checkinPostHandler(cfg, client))
 	r.HandleFunc("POST /events/{id}/book", bookingPostHandler(cfg, client, i18n))
 	r.HandleFunc("GET /bookings/verify/{token}", bookingVerifyHandler(cfg, tmpls, client, i18n))
-	r.HandleFunc("GET /events/{id}.ics", feedEventICSHandler(cfg, client))
 	r.HandleFunc("GET /musicians", musiciansHandler(cfg, tmpls, client, i18n))
 	r.HandleFunc("GET /musicians/{id}", musicianHandler(cfg, tmpls, client, i18n))
 	r.HandleFunc("GET /organizations", orgsHandler(cfg, tmpls, client, i18n))
 	r.HandleFunc("GET /impressum", impressumHandler(cfg, tmpls, i18n))
-
-	// Feed exports
-	r.HandleFunc("GET /feed/org/{slug}/events.{format}", feedOrgHandler(cfg, db, client))
-	r.HandleFunc("GET /feed/musician/{slug}/events.{format}", feedMusicianHandler(cfg, client))
-	r.HandleFunc("GET /feed/location/{slug}/events.{format}", feedLocationHandler(cfg, client))
-	r.HandleFunc("GET /feed/ball/events.{format}", feedTypeHandler(cfg, client, "ball"))
-	r.HandleFunc("GET /feed/workshop/events.{format}", feedTypeHandler(cfg, client, "workshop"))
-	r.HandleFunc("GET /feed/festival/events.{format}", feedTypeHandler(cfg, client, "festival"))
-	r.HandleFunc("GET /feed/events.{format}", feedMainHandler(cfg, db, client))
 
 	r.HandleFunc("GET /login", loginPageHandler(cfg, tmpls, i18n))
 	r.HandleFunc("POST /login", loginHandler(cfg, tmpls, client, i18n))
@@ -171,7 +161,7 @@ func main() {
 	go startDelivery(cfg, db, client, relayActor)
 
 	log.Printf("web server listening on %s (domain: %s)", cfg.Listen, cfg.Domain)
-	if err := http.ListenAndServe(cfg.Listen, securityHeadersMiddleware(r)); err != nil {
+	if err := http.ListenAndServe(cfg.Listen, securityHeadersMiddleware(feedRouter(cfg, db, client)(r))); err != nil {
 		log.Fatal(err)
 	}
 }

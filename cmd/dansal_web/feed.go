@@ -314,3 +314,75 @@ func serveRSSFeed(w http.ResponseWriter, cfg *Config, title, selfURL string, eve
 func feedURL(cfg *Config, path, format string) string {
 	return "https://" + cfg.Domain + path + "/events." + format
 }
+
+// feedRouter is an HTTP middleware that intercepts GET requests whose paths match
+// feed or ICS URL patterns that Go's net/http ServeMux rejects at startup because
+// the wildcard is not the whole path segment (e.g. "{id}.ics", "events.{format}").
+func feedRouter(cfg *Config, db *sql.DB, client *DansalClient) func(http.Handler) http.Handler {
+	icsH := feedEventICSHandler(cfg, client)
+	mainH := feedMainHandler(cfg, db, client)
+	orgH := feedOrgHandler(cfg, db, client)
+	musicianH := feedMusicianHandler(cfg, client)
+	locationH := feedLocationHandler(cfg, client)
+	ballH := feedTypeHandler(cfg, client, "ball")
+	workshopH := feedTypeHandler(cfg, client, "workshop")
+	festivalH := feedTypeHandler(cfg, client, "festival")
+
+	const evDot = "/events."
+
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != http.MethodGet {
+				next.ServeHTTP(w, r)
+				return
+			}
+			p := r.URL.Path
+			switch {
+			case strings.HasPrefix(p, "/events/") && strings.HasSuffix(p, ".ics"):
+				r.SetPathValue("id", strings.TrimSuffix(strings.TrimPrefix(p, "/events/"), ".ics"))
+				icsH.ServeHTTP(w, r)
+			case strings.HasPrefix(p, "/feed/org/"):
+				rest := strings.TrimPrefix(p, "/feed/org/")
+				if i := strings.LastIndex(rest, evDot); i >= 0 {
+					r.SetPathValue("slug", rest[:i])
+					r.SetPathValue("format", rest[i+len(evDot):])
+					orgH.ServeHTTP(w, r)
+				} else {
+					next.ServeHTTP(w, r)
+				}
+			case strings.HasPrefix(p, "/feed/musician/"):
+				rest := strings.TrimPrefix(p, "/feed/musician/")
+				if i := strings.LastIndex(rest, evDot); i >= 0 {
+					r.SetPathValue("slug", rest[:i])
+					r.SetPathValue("format", rest[i+len(evDot):])
+					musicianH.ServeHTTP(w, r)
+				} else {
+					next.ServeHTTP(w, r)
+				}
+			case strings.HasPrefix(p, "/feed/location/"):
+				rest := strings.TrimPrefix(p, "/feed/location/")
+				if i := strings.LastIndex(rest, evDot); i >= 0 {
+					r.SetPathValue("slug", rest[:i])
+					r.SetPathValue("format", rest[i+len(evDot):])
+					locationH.ServeHTTP(w, r)
+				} else {
+					next.ServeHTTP(w, r)
+				}
+			case strings.HasPrefix(p, "/feed/ball/events."):
+				r.SetPathValue("format", strings.TrimPrefix(p, "/feed/ball/events."))
+				ballH.ServeHTTP(w, r)
+			case strings.HasPrefix(p, "/feed/workshop/events."):
+				r.SetPathValue("format", strings.TrimPrefix(p, "/feed/workshop/events."))
+				workshopH.ServeHTTP(w, r)
+			case strings.HasPrefix(p, "/feed/festival/events."):
+				r.SetPathValue("format", strings.TrimPrefix(p, "/feed/festival/events."))
+				festivalH.ServeHTTP(w, r)
+			case strings.HasPrefix(p, "/feed/events."):
+				r.SetPathValue("format", strings.TrimPrefix(p, "/feed/events."))
+				mainH.ServeHTTP(w, r)
+			default:
+				next.ServeHTTP(w, r)
+			}
+		})
+	}
+}
