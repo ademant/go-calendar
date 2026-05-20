@@ -254,6 +254,24 @@ func updateFollowStateByActivityID(db *sql.DB, followActivityID, state string) e
 	return err
 }
 
+func listOrgActorSlugs(db *sql.DB) (map[int]string, error) {
+	rows, err := db.Query("SELECT org_id, org_slug FROM actors WHERE org_id > 0")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	m := make(map[int]string)
+	for rows.Next() {
+		var orgID int
+		var slug string
+		if err := rows.Scan(&orgID, &slug); err != nil {
+			return nil, err
+		}
+		m[orgID] = slug
+	}
+	return m, nil
+}
+
 func getSiteSetting(db *sql.DB, key string) string {
 	var v string
 	db.QueryRow("SELECT value FROM site_settings WHERE key = ?", key).Scan(&v)

@@ -18,6 +18,7 @@
   <div class="org-card-name">{{.Org.Name}}</div>
   {{if .FirstTown}}<div class="org-card-town">{{.FirstTown}}</div>{{end}}
   {{if .Org.Description}}<p class="org-card-desc">{{.Org.Description}}</p>{{end}}
+  {{if .FedHandle}}<div class="org-card-handle">{{.FedHandle}}</div>{{end}}
   <div class="org-card-meta">
     {{if .EventCount}}<span class="chip">{{.EventCount}} {{$.Strings.T "org_events_title"}}</span>{{end}}
     {{if .LocationCount}}<span class="chip">{{.LocationCount}} {{$.Strings.T "org_locations"}}</span>{{end}}
@@ -35,6 +36,7 @@
 .org-card-name{font-weight:700;font-size:1rem}
 .org-card-town{font-size:.85rem;color:var(--fg-faint)}
 .org-card-desc{font-size:.85rem;color:var(--fg-dim);display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;line-height:1.5;margin:0}
+.org-card-handle{font-size:.78rem;color:var(--fg-faint);font-family:monospace;margin-top:.1rem}
 .org-card-meta{display:flex;flex-wrap:wrap;gap:.3rem;margin-top:.15rem}
 #omap-wrap{margin-bottom:1.5rem}
 #omap{height:340px;border-radius:6px;border:1px solid var(--border)}

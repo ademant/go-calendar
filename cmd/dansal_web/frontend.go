@@ -115,6 +115,7 @@ type OrgListItem struct {
 	EventCount    int
 	LocationCount int
 	FirstTown     string
+	FedHandle     string // "@slug@domain" when the org has a fediverse actor
 }
 
 type OrgMapPin struct {
@@ -775,7 +776,7 @@ func orgNameByID(orgs []Organization, id int) string {
 	return ""
 }
 
-func orgsHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {
+func orgsHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *DansalClient, i18n *I18n) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var orgs []Organization
 		var statMap map[int]OrgStatRecord
@@ -791,6 +792,8 @@ func orgsHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n
 			http.Error(w, "could not load organizations", http.StatusBadGateway)
 			return
 		}
+
+		actorSlugs, _ := listOrgActorSlugs(db)
 
 		orgSlugMap := make(map[int]string, len(orgs))
 		for _, o := range orgs {
@@ -823,12 +826,18 @@ func orgsHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n
 		items := make([]OrgListItem, len(orgs))
 		for i, o := range orgs {
 			st := statMap[o.ID]
+			slug := effectiveSlug(o)
+			fedHandle := ""
+			if aslug, ok := actorSlugs[o.ID]; ok {
+				fedHandle = "@" + aslug + "@" + cfg.Domain
+			}
 			items[i] = OrgListItem{
 				Org:           o,
-				Slug:          effectiveSlug(o),
+				Slug:          slug,
 				EventCount:    st.EventCount,
 				LocationCount: st.LocationCount,
 				FirstTown:     firstTown[o.ID],
+				FedHandle:     fedHandle,
 			}
 		}
 		title := i18n.T(r, "orgs_title")
