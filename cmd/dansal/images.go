@@ -79,6 +79,20 @@ func (c *imageCache) remove(id int) {
 
 var errNotImage = errors.New("data is not an image")
 
+// isAVIF reports whether head contains an ISO BMFF ftyp box with an AVIF brand.
+// http.DetectContentType misidentifies AVIF as video/mp4 because they share the
+// ISO Base Media File Format container; this check catches the case it misses.
+func isAVIF(head []byte) bool {
+	if len(head) < 12 {
+		return false
+	}
+	if string(head[4:8]) != "ftyp" {
+		return false
+	}
+	brand := string(head[8:12])
+	return brand == "avif" || brand == "avis" || brand == "mif1"
+}
+
 // saveImageToDir decodes image data from r, resizes, and stores as AVIF in the given directory.
 // The file is named "{id}.avif". The caller is responsible for updating any cache.
 func saveImageToDir(id int, dir string, r io.Reader) error {
@@ -87,7 +101,7 @@ func saveImageToDir(id int, dir string, r io.Reader) error {
 	if err != nil && err != io.ErrUnexpectedEOF {
 		return fmt.Errorf("read: %w", err)
 	}
-	if !strings.HasPrefix(http.DetectContentType(head[:n]), "image/") {
+	if !strings.HasPrefix(http.DetectContentType(head[:n]), "image/") && !isAVIF(head[:n]) {
 		return errNotImage
 	}
 	img, _, err := image.Decode(io.MultiReader(bytes.NewReader(head[:n]), r))
