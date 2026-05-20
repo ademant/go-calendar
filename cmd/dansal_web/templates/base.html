@@ -243,6 +243,31 @@ function cycleTheme(){
   if(next==='dark')h.classList.add('dark');
   else if(next==='light')h.classList.add('light');
 }
+function isDarkMode(){
+  var h=document.documentElement;
+  return h.classList.contains('dark')||(
+    !h.classList.contains('light')&&window.matchMedia('(prefers-color-scheme:dark)').matches);
+}
+function makeTileLayer(){
+  return isDarkMode()
+    ?L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{
+        attribution:'© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors © <a href="https://carto.com/attributions">CARTO</a>',
+        maxZoom:19})
+    :L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
+        attribution:'© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+        maxZoom:18});
+}
+function attachTileLayer(map){
+  var tl=makeTileLayer().addTo(map);
+  new MutationObserver(function(){map.removeLayer(tl);tl=makeTileLayer().addTo(map);})
+    .observe(document.documentElement,{attributes:true,attributeFilter:['class']});
+  window.matchMedia('(prefers-color-scheme:dark)').addEventListener('change',function(){
+    if(!document.documentElement.classList.contains('dark')&&
+       !document.documentElement.classList.contains('light')){
+      map.removeLayer(tl);tl=makeTileLayer().addTo(map);
+    }
+  });
+}
 </script>
 <main>
 {{block "content" .}}{{end}}

@@ -119,10 +119,7 @@
     if (map) return;
     mapDiv.classList.add('visible');
     map = L.map('map').setView([lat, lon], zoom);
-    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
-      maxZoom: 19
-    }).addTo(map);
+    attachTileLayer(map);
     map.on('click', function(e) {
       placeSelected(e.latlng.lat, e.latlng.lng);
     });

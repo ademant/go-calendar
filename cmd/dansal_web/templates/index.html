@@ -519,10 +519,7 @@ tr.mc-week.mc-sel td{background:var(--cal-today);font-weight:600}
 
   function initMap(){
     map = L.map('map-container').setView([50,10],5);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
-      attribution:'© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
-      maxZoom:18
-    }).addTo(map);
+    attachTileLayer(map);
     clusterGroup = L.markerClusterGroup({maxClusterRadius:40});
     map.addLayer(clusterGroup);
     eventsGeo.forEach(function(e){

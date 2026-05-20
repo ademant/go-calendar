@@ -447,7 +447,7 @@ document.querySelectorAll('.btn-contact-toggle').forEach(function(btn){
   var lat=parseFloat(el.dataset.lat), lng=parseFloat(el.dataset.lng);
   if(isNaN(lat)||isNaN(lng)) return;
   var map=L.map(el,{zoomControl:false,dragging:false,scrollWheelZoom:false,doubleClickZoom:false,boxZoom:false,keyboard:false,touchZoom:false}).setView([lat,lng],15);
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'}).addTo(map);
+  attachTileLayer(map);
   L.marker([lat,lng]).addTo(map);
   el.addEventListener('click',function(){window.open('https://www.openstreetmap.org/?mlat='+lat+'&mlon='+lng+'#map=16/'+lat+'/'+lng,'_blank');});
   el.style.cursor='pointer';

@@ -46,7 +46,7 @@
   var geo = {{$geo}};
   if (!geo.length) return;
   var map = L.map('org-map');
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'&copy; OpenStreetMap'}).addTo(map);
+  attachTileLayer(map);
   var bounds = [];
   geo.forEach(function(e){
     if (!e.lat || !e.lng) return;
