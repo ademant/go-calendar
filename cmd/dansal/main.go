@@ -612,6 +612,14 @@ func migrateDB() {
 	)`)
 	db.Exec(`INSERT OR IGNORE INTO location_organizations (location_id, organization_id)
 		SELECT id, organization_id FROM locations WHERE organization_id IS NOT NULL`)
+	// Drop stale columns now superseded by join tables. Errors are silently
+	// ignored (column already gone, or SQLite < 3.35 — neither is harmful).
+	db.Exec("ALTER TABLE locations DROP COLUMN organization_id")
+	db.Exec("ALTER TABLE fetch_sources DROP COLUMN dance_ids")
+	// Indexes missing from earlier migrations
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_org_members_user_id ON organization_members(user_id)")
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_location_organizations_org_id ON location_organizations(organization_id)")
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_locations_town ON locations(town)")
 }
 
 func createTables() error {
@@ -688,7 +696,6 @@ func createTables() error {
 		latitude REAL,
 		longitude REAL,
 		internetsite TEXT,
-		organization_id INTEGER,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 	);
 	CREATE TABLE IF NOT EXISTS musicians (
@@ -726,6 +733,13 @@ func createTables() error {
 		organization_id INTEGER REFERENCES organizations(id) ON DELETE SET NULL,
 		last_fetched_at DATETIME,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+	);
+	CREATE TABLE IF NOT EXISTS location_organizations (
+		location_id INTEGER NOT NULL,
+		organization_id INTEGER NOT NULL,
+		PRIMARY KEY (location_id, organization_id),
+		FOREIGN KEY (location_id) REFERENCES locations(id) ON DELETE CASCADE,
+		FOREIGN KEY (organization_id) REFERENCES organizations(id) ON DELETE CASCADE
 	);
 	CREATE TABLE IF NOT EXISTS fetch_source_dances (
 		fetch_source_id INTEGER NOT NULL,
@@ -877,7 +891,10 @@ func createTables() error {
 	CREATE INDEX IF NOT EXISTS idx_events_location_id     ON events(location_id);
 	CREATE INDEX IF NOT EXISTS idx_events_organization_id ON events(organization_id) WHERE organization_id IS NOT NULL;
 	CREATE INDEX IF NOT EXISTS idx_locations_location     ON locations(location);
+	CREATE INDEX IF NOT EXISTS idx_locations_town         ON locations(town);
 	CREATE INDEX IF NOT EXISTS idx_tokens_expires_at      ON tokens(expires_at);
+	CREATE INDEX IF NOT EXISTS idx_org_members_user_id    ON organization_members(user_id);
+	CREATE INDEX IF NOT EXISTS idx_location_organizations_org_id ON location_organizations(organization_id);
 	`
 	_, err := db.Exec(schema)
 	return err
