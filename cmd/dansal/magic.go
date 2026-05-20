@@ -12,13 +12,14 @@ import (
 )
 
 // POST /api/v1/login/magic — request a magic login link.
-// Body: {"username":"..."} or {"email":"..."}.
+// Body: {"username":"..."} or {"email":"..."}, optional "channel":"email"|"telegram".
 // Always returns 204 to prevent user enumeration.
 // Returns 429 when the per-user rate limit is active.
 func requestMagicLogin(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Username string `json:"username"`
 		Email    string `json:"email"`
+		Channel  string `json:"channel"` // "email" (default) or "telegram"
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, "Invalid request body", http.StatusBadRequest)
@@ -28,32 +29,49 @@ func requestMagicLogin(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "username or email is required", http.StatusBadRequest)
 		return
 	}
-
-	var user User
-	var emailVerified int
-	var lastMagicSentAt string
-
-	var err error
-	if req.Username != "" {
-		err = db.QueryRow(
-			"SELECT id, username, email, role, created_at, COALESCE(email_verified,0), COALESCE(last_magic_sent_at,'') FROM users WHERE username=?",
-			req.Username,
-		).Scan(&user.ID, &user.Username, &user.Email, &user.Role, &user.CreatedAt, &emailVerified, &lastMagicSentAt)
-	} else {
-		err = db.QueryRow(
-			"SELECT id, username, email, role, created_at, COALESCE(email_verified,0), COALESCE(last_magic_sent_at,'') FROM users WHERE email=?",
-			req.Email,
-		).Scan(&user.ID, &user.Username, &user.Email, &user.Role, &user.CreatedAt, &emailVerified, &lastMagicSentAt)
+	if req.Channel == "" {
+		req.Channel = "email"
 	}
 
-	if err == sql.ErrNoRows || emailVerified == 0 {
-		// Anti-enumeration: do not reveal whether the user exists or has a verified email.
+	var user User
+	var emailVerified, telegramVerified int
+	var telegramChatID, lastMagicSentAt string
+
+	const q = `SELECT id, username, email, role, created_at,
+	            COALESCE(email_verified,0), COALESCE(last_magic_sent_at,''),
+	            COALESCE(telegram_verified,0), COALESCE(telegram_chat_id,'')
+	           FROM users WHERE `
+	var err error
+	if req.Username != "" {
+		err = db.QueryRow(q+"username=?", req.Username).Scan(
+			&user.ID, &user.Username, &user.Email, &user.Role, &user.CreatedAt,
+			&emailVerified, &lastMagicSentAt, &telegramVerified, &telegramChatID)
+	} else {
+		err = db.QueryRow(q+"email=?", req.Email).Scan(
+			&user.ID, &user.Username, &user.Email, &user.Role, &user.CreatedAt,
+			&emailVerified, &lastMagicSentAt, &telegramVerified, &telegramChatID)
+	}
+
+	// Anti-enumeration: silently succeed if user not found or channel not available.
+	if err == sql.ErrNoRows {
 		w.WriteHeader(http.StatusNoContent)
 		return
 	}
 	if err != nil {
 		writeError(w, "Internal server error", http.StatusInternalServerError)
 		return
+	}
+	switch req.Channel {
+	case "telegram":
+		if telegramVerified == 0 || telegramChatID == "" {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+	default: // "email"
+		if emailVerified == 0 {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
 	}
 
 	// Per-user rate limit: enforce minimum seconds between magic link requests.
@@ -94,18 +112,32 @@ func requestMagicLogin(w http.ResponseWriter, r *http.Request) {
 
 	magicURL := buildMagicBase(r) + "/api/v1/login/magic/" + token
 
-	body := fmt.Sprintf(
-		"Hello %s,\n\nclick the link below to log in without a password:\n\n%s\n\nThis link expires in %d minutes and can only be used once.\n",
-		user.Username, magicURL, config.Server.MagicLoginExpirySecs/60,
-	)
-	if err := SendEmail(user.Email, "Your login link", body); err != nil {
-		db.Exec("DELETE FROM magic_login_tokens WHERE token=?", token)
-		log.Printf("magic: send failed for user %d (%s): %v", user.ID, user.Username, err)
-		writeError(w, "Failed to send login link: "+err.Error(), http.StatusBadGateway)
-		return
+	switch req.Channel {
+	case "telegram":
+		text := fmt.Sprintf(
+			"Hi %s,\n\nclick the link below to log in:\n\n%s\n\nThis link expires in %d minutes and can only be used once.",
+			user.Username, magicURL, config.Server.MagicLoginExpirySecs/60,
+		)
+		if err := sendTelegramMessage(telegramChatID, text); err != nil {
+			db.Exec("DELETE FROM magic_login_tokens WHERE token=?", token)
+			log.Printf("magic: telegram send failed for user %d (%s): %v", user.ID, user.Username, err)
+			writeError(w, "Failed to send login link: "+err.Error(), http.StatusBadGateway)
+			return
+		}
+	default: // "email"
+		body := fmt.Sprintf(
+			"Hello %s,\n\nclick the link below to log in without a password:\n\n%s\n\nThis link expires in %d minutes and can only be used once.\n",
+			user.Username, magicURL, config.Server.MagicLoginExpirySecs/60,
+		)
+		if err := SendEmail(user.Email, "Your login link", body); err != nil {
+			db.Exec("DELETE FROM magic_login_tokens WHERE token=?", token)
+			log.Printf("magic: send failed for user %d (%s): %v", user.ID, user.Username, err)
+			writeError(w, "Failed to send login link: "+err.Error(), http.StatusBadGateway)
+			return
+		}
 	}
 
-	log.Printf("magic: sent login link to user %d (%s)", user.ID, user.Username)
+	log.Printf("magic: sent login link to user %d (%s) via %s", user.ID, user.Username, req.Channel)
 	w.WriteHeader(http.StatusNoContent)
 }
 

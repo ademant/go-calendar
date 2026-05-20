@@ -27,7 +27,7 @@ func getClientIP(r *http.Request) string {
 type LoginPageData struct {
 	ErrorKey  string
 	Username  string
-	MagicSent bool
+	MagicSent string // "email" or "telegram" when a link was just sent
 	Next      string
 }
 
@@ -64,7 +64,7 @@ func loginPageHandler(cfg *Config, tmpls *Templates, i18n *I18n) http.HandlerFun
 		}
 		title := i18n.T(r, "login_title")
 		renderTemplate(w, tmpls.login, tmplData(r, cfg, i18n, title, LoginPageData{
-			MagicSent: r.URL.Query().Get("magic_sent") == "1",
+			MagicSent: r.URL.Query().Get("magic_sent"),
 			Next:      r.URL.Query().Get("next"),
 		}))
 	}
@@ -150,10 +150,14 @@ func magicRequestHandler(cfg *Config, tmpls *Templates, client *DansalClient, i1
 			return
 		}
 		identifier := r.FormValue("identifier")
-		if identifier != "" {
-			_ = client.RequestMagicLogin(r.Context(), identifier)
+		channel := r.FormValue("channel")
+		if channel == "" {
+			channel = "email"
 		}
-		http.Redirect(w, r, "/login?magic_sent=1", http.StatusSeeOther)
+		if identifier != "" {
+			_ = client.RequestMagicLogin(r.Context(), identifier, channel)
+		}
+		http.Redirect(w, r, "/login?magic_sent="+channel, http.StatusSeeOther)
 	}
 }
 

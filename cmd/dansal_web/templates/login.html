@@ -5,7 +5,7 @@
 <div class="login-wrap">
   {{with .Data}}
   {{if .ErrorKey}}<p class="login-error" role="alert">{{$.Strings.T .ErrorKey}}</p>{{end}}
-  {{if .MagicSent}}<p class="login-info" role="status">{{$.Strings.T "login_magic_sent"}}</p>{{end}}
+  {{if .MagicSent}}<p class="login-info" role="status">{{if eq .MagicSent "telegram"}}{{$.Strings.T "login_magic_sent_telegram"}}{{else}}{{$.Strings.T "login_magic_sent"}}{{end}}</p>{{end}}
   <form method="post" action="/login" class="login-form" autocomplete="on">
     {{with .Next}}<input type="hidden" name="next" value="{{.}}">{{end}}
     <label for="username">{{$.Strings.T "login_username"}}</label>
@@ -22,7 +22,10 @@
     <form method="post" action="/magic" class="login-form" style="margin-top:.75rem">
       <label for="magic-identifier">{{$.Strings.T "login_magic_identifier"}}</label>
       <input id="magic-identifier" type="text" name="identifier" required autocomplete="username email">
-      <button type="submit">{{$.Strings.T "login_magic_submit"}}</button>
+      <div class="magic-btns">
+        <button type="submit" name="channel" value="email">{{$.Strings.T "login_magic_submit"}}</button>
+        <button type="submit" name="channel" value="telegram" class="btn-telegram">{{$.Strings.T "login_magic_submit_telegram"}}</button>
+      </div>
     </form>
   </details>
   {{end}}
@@ -40,5 +43,9 @@
 .login-form button:hover{background:#0d4a80}
 .magic-section{margin-top:1.25rem;background:#fff;border:1px solid #ddd;border-radius:6px;padding:.75rem 1.5rem}
 .magic-section summary{cursor:pointer;font-size:.9rem;color:#555;font-weight:600}
+.magic-btns{display:flex;gap:.5rem;flex-wrap:wrap}
+.magic-btns button{flex:1;margin-top:.4rem}
+.btn-telegram{background:#2ca5e0!important}
+.btn-telegram:hover{background:#1a8abf!important}
 </style>
 {{end}}

@@ -906,12 +906,15 @@ func (c *DansalClient) GetTelegramVerifyLink(ctx context.Context, id int, baseUR
 	return result.DeepLink, nil
 }
 
-func (c *DansalClient) RequestMagicLogin(ctx context.Context, identifier string) error {
+func (c *DansalClient) RequestMagicLogin(ctx context.Context, identifier, channel string) error {
 	var payload map[string]string
 	if strings.Contains(identifier, "@") {
 		payload = map[string]string{"email": identifier}
 	} else {
 		payload = map[string]string{"username": identifier}
+	}
+	if channel != "" && channel != "email" {
+		payload["channel"] = channel
 	}
 	body, _ := json.Marshal(payload)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.BaseURL+"/api/v1/login/magic",
