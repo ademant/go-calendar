@@ -162,7 +162,7 @@
       m.bindPopup(
         '<div style="max-width:220px;font-size:.85rem">' + label + '</div>' +
         '<button type="button" style="margin-top:.4rem;padding:.2rem .6rem;background:#1a6eb5;color:#fff;border:none;border-radius:3px;cursor:pointer" ' +
-        'onclick="window._geoSelect(' + item.lat + ',' + item.lon + ')">↙ Übernehmen</button>'
+        'onclick="window._geoSelect(' + idx + ')">↙ Übernehmen</button>'
       );
       resultMarkers.push(m);
     });
@@ -170,8 +170,18 @@
   }
 
   /* exposed for popup buttons */
-  window._geoSelect = function(lat, lon) {
-    placeSelected(parseFloat(lat), parseFloat(lon));
+  var _geoItems = [];
+  window._geoSelect = function(idx) {
+    var item = _geoItems[idx];
+    if (!item) return;
+    placeSelected(parseFloat(item.lat), parseFloat(item.lon));
+    var a = item.address || {};
+    var road = [a.house_number, a.road].filter(Boolean).join(' ');
+    if (road)                                    document.getElementById('address').value = road;
+    if (a.postcode)                              document.getElementById('zipcode').value = a.postcode;
+    var city = a.city||a.town||a.village||a.hamlet||a.municipality||'';
+    if (city)                                    document.getElementById('town').value = city;
+    if (a.country)                               document.getElementById('country').value = a.country;
     clearResultMarkers();
     results.innerHTML = '';
     map.closePopup();
@@ -183,7 +193,7 @@
     if (!q) return;
     btn.disabled = true;
     results.innerHTML = '<li style="color:#666">…</li>';
-    fetch('https://nominatim.openstreetmap.org/search?q=' + encodeURIComponent(q) + '&format=json&limit=8&addressdetails=0', {
+    fetch('https://nominatim.openstreetmap.org/search?q=' + encodeURIComponent(q) + '&format=json&limit=8&addressdetails=1', {
       headers: {'Accept-Language': document.documentElement.lang || 'de'}
     })
     .then(function(r){ return r.json(); })
@@ -193,6 +203,7 @@
         results.innerHTML = '<li style="color:#999">–</li>';
         return;
       }
+      _geoItems = data;
       showResultsOnMap(data);
       data.forEach(function(item, idx){
         var li = document.createElement('li');
@@ -205,7 +216,7 @@
         copyBtn.type = 'button';
         copyBtn.textContent = '↙';
         copyBtn.addEventListener('click', function(){
-          window._geoSelect(item.lat, item.lon);
+          window._geoSelect(idx);
         });
         li.appendChild(name);
         li.appendChild(coords);
