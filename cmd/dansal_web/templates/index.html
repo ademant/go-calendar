@@ -9,12 +9,21 @@
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha384-sHL9NAb7lN7rfvG5lfHpm643Xkcjzp4jFvuavGOndn6pjVqS6ny56CAt3nsEVT4H" crossorigin="anonymous">
 <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" integrity="sha384-wgw+aLYNQ7dlhK47ZPK7FRACiq7ROZwgFNg0m04avm4CaXS+Z9Y7nMu8yNjBKYC+" crossorigin="anonymous">
 
-<!-- Type selector -->
+<!-- Filters -->
 <div class="type-selector">
-  <button type="button" class="type-btn type-active" data-type="">{{$.Strings.T "filter_all_types"}}</button>
-  <button type="button" class="type-btn" data-type="ball">{{$.Strings.T "filter_type_ball"}}</button>
-  <button type="button" class="type-btn" data-type="workshop">{{$.Strings.T "filter_type_workshop"}}</button>
-  <button type="button" class="type-btn" data-type="festival">{{$.Strings.T "filter_type_festival"}}</button>
+  <button type="button" class="type-btn type-active" data-type="ball">{{$.Strings.T "filter_type_ball"}}</button>
+  <button type="button" class="type-btn type-active" data-type="workshop">{{$.Strings.T "filter_type_workshop"}}</button>
+  <button type="button" class="type-btn type-active" data-type="festival">{{$.Strings.T "filter_type_festival"}}</button>
+  <select id="f-dance" aria-label="All dance styles">
+    <option value="">All dance styles</option>
+    {{range .Dances}}<option value="{{.Name}}">{{.Name}}</option>{{end}}
+  </select>
+  <select id="f-fee" aria-label="{{$.Strings.T "filter_all_fees"}}">
+    <option value="">{{$.Strings.T "filter_all_fees"}}</option>
+    <option value="free">{{$.Strings.T "filter_fee_free"}}</option>
+    <option value="donation">{{$.Strings.T "filter_fee_donation"}}</option>
+    <option value="paid">{{$.Strings.T "filter_fee_paid"}}</option>
+  </select>
 </div>
 
 <!-- Map -->
@@ -31,29 +40,6 @@
   <div id="week-mini-cal"></div>
 </div>
 
-<!-- Text filters -->
-<div class="filters" style="margin-top:1.5rem">
-  <div class="filter-row">
-    <input type="search" id="f-search" placeholder="{{$.Strings.T "filter_search_placeholder"}}" aria-label="{{$.Strings.T "filter_search_placeholder"}}">
-    <input type="date"   id="f-from"   aria-label="{{$.Strings.T "filter_from_label"}}">
-    <input type="date"   id="f-to"     aria-label="{{$.Strings.T "filter_to_label"}}">
-    <select id="f-country" aria-label="{{$.Strings.T "filter_all_countries"}}">
-      <option value="">{{$.Strings.T "filter_all_countries"}}</option>
-      {{range countryList .Events}}<option value="{{.}}">{{.}}</option>{{end}}
-    </select>
-    <select id="f-dance" aria-label="All dance styles">
-      <option value="">All dance styles</option>
-      {{range .Dances}}<option value="{{.Name}}">{{.Name}}</option>{{end}}
-    </select>
-    <select id="f-fee" aria-label="{{$.Strings.T "filter_all_fees"}}">
-      <option value="">{{$.Strings.T "filter_all_fees"}}</option>
-      <option value="free">{{$.Strings.T "filter_fee_free"}}</option>
-      <option value="donation">{{$.Strings.T "filter_fee_donation"}}</option>
-      <option value="paid">{{$.Strings.T "filter_fee_paid"}}</option>
-    </select>
-    <button type="button" id="f-clear">{{$.Strings.T "filter_clear"}}</button>
-  </div>
-</div>
 
 <!-- Event table -->
 <div class="table-wrap">
@@ -187,10 +173,11 @@
 .feed-hint{color:var(--fg-hint)}
 .fed-source{font-size:.75rem;color:var(--fg-muted);margin-left:.35rem;white-space:nowrap}
 .federated-event td{color:var(--fg-2)}
-.type-selector{display:flex;gap:.4rem;margin-bottom:.6rem;flex-wrap:wrap}
+.type-selector{display:flex;gap:.4rem;margin-bottom:.6rem;flex-wrap:wrap;align-items:center}
 .type-btn{padding:.3rem .9rem;border:1px solid var(--border-mid);border-radius:20px;background:var(--btn-bg);cursor:pointer;font-size:.88rem;color:var(--fg-2);transition:background .15s,color .15s}
 .type-btn:hover{background:var(--btn-bg-h)}
 .type-btn.type-active{background:var(--heading);color:#fff;border-color:var(--heading)}
+.type-selector select{padding:.3rem .5rem;border:1px solid var(--border-mid);border-radius:4px;font-size:.88rem;background:var(--bg-card);color:var(--fg)}
 #map-container{height:400px;border-radius:6px;overflow:hidden;border:1px solid var(--border)}
 .map-toolbar{display:flex;align-items:center;gap:1rem;margin-top:.4rem}
 .map-toolbar button{padding:.3rem .9rem;border:1px solid var(--link);border-radius:4px;background:var(--bg-card);color:var(--link);cursor:pointer;font-size:.85rem}
@@ -278,6 +265,8 @@ tr.mc-week:hover td{background:var(--bg-hover)}
 tr.mc-week.mc-sel td{background:var(--cal-today);font-weight:600}
 .mc-other{color:var(--fg-hint)!important;font-weight:400!important}
 .mc-today{color:var(--link)!important;font-weight:700!important}
+.mc-grid td{line-height:1.1;vertical-align:top}
+.mc-dot{display:block;width:4px;height:4px;border-radius:50%;background:var(--link);margin:.15rem auto 0}
 @media(max-width:640px){
   .col-org,.col-actions,.col-fee{display:none}
   .event-table td:nth-child(6),.event-table td:nth-child(7),.event-table td:nth-child(8){display:none}
@@ -299,7 +288,7 @@ tr.mc-week.mc-sel td{background:var(--cal-today);font-weight:600}
   var sortCol = 'date', sortDir = 1;
   var weekOffset = 0;
   var weekKeys = [];
-  var currentType = '';
+  var typeFilter = {ball:true, workshop:true, festival:true};
 
   function pad(n){ return n < 10 ? '0'+n : ''+n; }
   function dateToIso(d){ return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate()); }
@@ -434,12 +423,26 @@ tr.mc-week.mc-sel td{background:var(--cal-today);font-weight:600}
     miniCalYear=thu.getFullYear(); miniCalMonth=thu.getMonth();
   }
 
+  function getEventDates(){
+    var s={};
+    rows.forEach(function(r){
+      var d=r.dataset.date; if(d) s[d]=1;
+      var e=r.dataset.endDate; if(e&&e>d){
+        var cur=new Date(d); var end=new Date(e);
+        cur.setDate(cur.getDate()+1);
+        while(cur<=end){s[dateToIso(cur)]=1;cur.setDate(cur.getDate()+1);}
+      }
+    });
+    return s;
+  }
+
   function renderMiniCal(){
     var lang=document.documentElement.lang||'de';
     var ws=getWeekStart(weekOffset);
     var wsIso=dateToIso(ws);
     var weIso=dateToIso(new Date(ws.getTime()+6*86400000));
     var today=todayIso();
+    var evtDates=getEventDates();
     var monthDate=new Date(miniCalYear,miniCalMonth,1);
     var fmtMY=new Intl.DateTimeFormat(lang,{month:'long',year:'numeric'});
     var fmtWd=new Intl.DateTimeFormat(lang,{weekday:'narrow'});
@@ -468,7 +471,8 @@ tr.mc-week.mc-sel td{background:var(--cal-today);font-weight:600}
       for(var col=0;col<7;col++){
         var iso=dateToIso(cur);
         var cls=(cur.getMonth()!==miniCalMonth?'mc-other':'')+(iso===today?' mc-today':'');
-        html+='<td'+(cls?' class="'+cls.trim()+'"':'')+'>'+cur.getDate()+'</td>';
+        var dot=evtDates[iso]?'<span class="mc-dot"></span>':'';
+        html+='<td'+(cls?' class="'+cls.trim()+'"':'')+'>'+cur.getDate()+dot+'</td>';
         cur.setDate(cur.getDate()+1);
       }
       html+='</tr>';
@@ -625,52 +629,44 @@ tr.mc-week.mc-sel td{background:var(--cal-today);font-weight:600}
   // ── Type selector ─────────────────────────────────────────────────────────
   document.querySelectorAll('.type-btn').forEach(function(btn){
     btn.addEventListener('click',function(){
-      currentType = this.dataset.type;
-      document.querySelectorAll('.type-btn').forEach(function(b){ b.classList.remove('type-active'); });
-      this.classList.add('type-active');
-      mapFitted = false;
+      var t=this.dataset.type;
+      typeFilter[t]=!typeFilter[t];
+      this.classList.toggle('type-active',typeFilter[t]);
+      mapFitted=false;
       applyFilters();
     });
   });
 
   // ── Filters ───────────────────────────────────────────────────────────────
   function clear(){
-    document.getElementById('f-search').value  = '';
-    document.getElementById('f-from').value    = '';
-    document.getElementById('f-to').value      = '';
-    document.getElementById('f-country').value = '';
-    document.getElementById('f-dance').value   = '';
-    document.getElementById('f-fee').value     = '';
-    currentType = '';
-    document.querySelectorAll('.type-btn').forEach(function(b){ b.classList.remove('type-active'); });
-    document.querySelector('.type-btn[data-type=""]').classList.add('type-active');
-    mapFitted = false;
+    document.getElementById('f-dance').value = '';
+    document.getElementById('f-fee').value   = '';
+    typeFilter.ball=true; typeFilter.workshop=true; typeFilter.festival=true;
+    document.querySelectorAll('.type-btn').forEach(function(b){ b.classList.add('type-active'); });
+    mapFitted=false;
     applyFilters();
   }
 
   function applyFilters(){
-    var search  = document.getElementById('f-search').value.trim().toLowerCase();
-    var from    = document.getElementById('f-from').value;
-    var to      = document.getElementById('f-to').value;
-    var country = document.getElementById('f-country').value.toLowerCase();
-    var dance   = document.getElementById('f-dance').value.toLowerCase();
+    var dance     = document.getElementById('f-dance').value.toLowerCase();
     var feeFilter = document.getElementById('f-fee').value;
+    var allOn  = typeFilter.ball && typeFilter.workshop && typeFilter.festival;
+    var noneOn = !typeFilter.ball && !typeFilter.workshop && !typeFilter.festival;
 
     visible = rows.filter(function(r){
-      if(search){
-        var hay = (r.dataset.title+' '+r.dataset.location+' '+r.dataset.tags+' '+r.dataset.organizer).toLowerCase();
-        if(hay.indexOf(search)<0) return false;
+      if(!allOn && !noneOn){
+        var typed = r.dataset.ball==='1' || r.dataset.workshop==='1' || r.dataset.festival==='1';
+        if(typed){
+          var match = (typeFilter.ball      && r.dataset.ball     ==='1') ||
+                      (typeFilter.workshop  && r.dataset.workshop ==='1') ||
+                      (typeFilter.festival  && r.dataset.festival ==='1');
+          if(!match) return false;
+        }
       }
-      if(from && r.dataset.date<from) return false;
-      if(to   && r.dataset.date>to)   return false;
-      if(country && r.dataset.country.toLowerCase()!==country) return false;
       if(dance){
         var dances = (r.dataset.dances||'').toLowerCase();
         if(dances.indexOf(dance)<0) return false;
       }
-      if(currentType==='ball'     && r.dataset.ball    !=='1') return false;
-      if(currentType==='workshop' && r.dataset.workshop!=='1') return false;
-      if(currentType==='festival' && r.dataset.festival!=='1') return false;
       // Fee filter: unknown fee events (data-fee="") are not excluded by this filter
       if(feeFilter && r.dataset.fee && r.dataset.fee!==feeFilter) return false;
       return true;
@@ -732,13 +728,12 @@ tr.mc-week.mc-sel td{background:var(--cal-today);font-weight:600}
     });
   });
 
-  ['f-search','f-from','f-to','f-country','f-dance','f-fee'].forEach(function(id){
+  ['f-dance','f-fee'].forEach(function(id){
     var el=document.getElementById(id);
     el.addEventListener('input',  applyFilters);
     el.addEventListener('change', applyFilters);
   });
 
-  document.getElementById('f-clear').addEventListener('click',clear);
   document.getElementById('clear-filters-empty').addEventListener('click',clear);
 
   document.getElementById('load-more').addEventListener('click',function(){
