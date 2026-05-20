@@ -1,6 +1,7 @@
 package main
 
 import (
+	"database/sql"
 	"flag"
 	"log"
 	"os"
@@ -36,9 +37,10 @@ type Config struct {
 	DarkMode         string `yaml:"dark_mode"`          // "auto" (default), "light", "dark"
 
 	pagesContent *PagesContent
+	configPath   string // path from which config was loaded; used for reload
 
-	// Loaded from web.db at startup; overridden via admin site-config page.
-	SiteName       string
+	// Loaded from web.yaml; overridden via admin site-config page (stored in web.db).
+	SiteName        string `yaml:"site_name"`
 	ContactOverride string
 }
 
@@ -94,5 +96,52 @@ func loadConfig() *Config {
 		log.Fatal("dansal_url is required (set via config file or DANSAL_URL env var)")
 	}
 
+	cfg.configPath = configPath
+	return cfg
+}
+
+// reloadConfig re-reads the YAML file at path and applies DB overrides.
+// Returns nil on any error so the caller can keep the current config.
+func reloadConfig(path string, db *sql.DB) *Config {
+	cfg := &Config{
+		Listen:           ":8080",
+		DBPath:           "web.db",
+		PollSecs:         300,
+		ImagesDir:        "/var/lib/dansal-web",
+		BannerHeightMain: 200,
+		BannerHeightSub:  0,
+		LogoHeightMain:   48,
+		LogoHeightSub:    32,
+		DarkMode:         "auto",
+	}
+	if path != "" {
+		data, err := os.ReadFile(path)
+		if err != nil {
+			log.Printf("reload: read %s: %v", path, err)
+			return nil
+		}
+		if err := yaml.Unmarshal(data, cfg); err != nil {
+			log.Printf("reload: parse %s: %v", path, err)
+			return nil
+		}
+	}
+	if v := os.Getenv("DANSAL_DOMAIN"); v != "" {
+		cfg.Domain = v
+	}
+	if v := os.Getenv("DANSAL_URL"); v != "" {
+		cfg.DansalURL = v
+	}
+	if cfg.Domain == "" || cfg.DansalURL == "" {
+		log.Print("reload: domain and dansal_url are required; keeping current config")
+		return nil
+	}
+	if v := getSiteSetting(db, "site_name"); v != "" {
+		cfg.SiteName = v
+	}
+	if v := getSiteSetting(db, "contact"); v != "" {
+		cfg.ContactOverride = v
+	}
+	cfg.pagesContent = loadPagesContent(cfg.PagesFile)
+	cfg.configPath = path
 	return cfg
 }
