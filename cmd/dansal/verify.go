@@ -241,7 +241,8 @@ func sendTelegramVerification(user User, verifyURL string) error {
 	return nil
 }
 
-func sendMatrixVerification(user User, verifyURL string) error {
+// sendMatrixMessage opens a DM room with matrixID and sends text.
+func sendMatrixMessage(matrixID, text string) error {
 	homeserver := strings.TrimRight(config.Server.MatrixHomeserver, "/")
 	accessToken := config.Server.MatrixAccessToken
 	if homeserver == "" || accessToken == "" {
@@ -250,10 +251,9 @@ func sendMatrixVerification(user User, verifyURL string) error {
 
 	client := &http.Client{Timeout: 30 * time.Second}
 
-	// Create a direct message room and invite the user.
 	createBody, _ := json.Marshal(map[string]any{
 		"is_direct": true,
-		"invite":    []string{user.Matrix},
+		"invite":    []string{matrixID},
 		"preset":    "trusted_private_chat",
 	})
 	req, _ := http.NewRequest("POST", homeserver+"/_matrix/client/v3/createRoom", bytes.NewReader(createBody))
@@ -275,17 +275,10 @@ func sendMatrixVerification(user User, verifyURL string) error {
 		return fmt.Errorf("Matrix createRoom failed: %s", roomResult.Error)
 	}
 
-	// Send the verification message.
 	txnID := strconv.FormatInt(time.Now().UnixNano(), 10)
 	sendURL := fmt.Sprintf("%s/_matrix/client/v3/rooms/%s/send/m.room.message/%s",
 		homeserver, url.PathEscape(roomResult.RoomID), txnID)
-	msgBody, _ := json.Marshal(map[string]any{
-		"msgtype": "m.text",
-		"body": fmt.Sprintf(
-			"Hello %s, please verify your Matrix account:\n\n%s\n\nThis link expires in %d hours.",
-			user.Username, verifyURL, config.Server.VerificationExpiryHours,
-		),
-	})
+	msgBody, _ := json.Marshal(map[string]any{"msgtype": "m.text", "body": text})
 	req2, _ := http.NewRequest("PUT", sendURL, bytes.NewReader(msgBody))
 	req2.Header.Set("Authorization", "Bearer "+accessToken)
 	req2.Header.Set("Content-Type", "application/json")
@@ -299,4 +292,11 @@ func sendMatrixVerification(user User, verifyURL string) error {
 		return fmt.Errorf("Matrix send message: HTTP %d", resp2.StatusCode)
 	}
 	return nil
+}
+
+func sendMatrixVerification(user User, verifyURL string) error {
+	return sendMatrixMessage(user.Matrix, fmt.Sprintf(
+		"Hello %s, please verify your Matrix account:\n\n%s\n\nThis link expires in %d hours.",
+		user.Username, verifyURL, config.Server.VerificationExpiryHours,
+	))
 }
