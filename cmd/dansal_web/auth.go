@@ -32,14 +32,14 @@ type LoginPageData struct {
 }
 
 // safeNext returns next only when it is a local path with no host or scheme,
-// preventing open redirects. Prefix checks alone are insufficient (e.g. "//evil.com"
-// starts with "/" but has a host), so url.Parse is used as the authoritative check.
+// preventing open redirects. url.Parse is the authoritative check; "//evil.com"
+// has an empty Scheme but a non-empty Host, so u.Host alone is sufficient.
 func safeNext(next string) string {
-	if next == "" || !strings.HasPrefix(next, "/") {
+	if next == "" {
 		return "/"
 	}
 	u, err := url.Parse(next)
-	if err != nil || u.Host != "" || u.Scheme != "" {
+	if err != nil || u.Host != "" || u.Scheme != "" || !strings.HasPrefix(u.Path, "/") {
 		return "/"
 	}
 	return next
