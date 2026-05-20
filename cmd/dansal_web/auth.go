@@ -32,17 +32,28 @@ type LoginPageData struct {
 }
 
 // safeNext returns next only when it is a local path with no host or scheme,
-// preventing open redirects. url.Parse is the authoritative check; "//evil.com"
-// has an empty Scheme but a non-empty Host, so u.Host alone is sufficient.
+// preventing open redirects.
 func safeNext(next string) string {
 	if next == "" {
 		return "/"
 	}
-	u, err := url.Parse(next)
-	if err != nil || u.Host != "" || u.Scheme != "" || !strings.HasPrefix(u.Path, "/") {
+
+	// Some clients/browsers may treat backslashes as path separators.
+	normalized := strings.ReplaceAll(next, "\\", "/")
+
+	u, err := url.Parse(normalized)
+	if err != nil {
 		return "/"
 	}
-	return next
+	if u.Scheme != "" || u.Host != "" || u.User != nil {
+		return "/"
+	}
+	if !strings.HasPrefix(u.Path, "/") {
+		return "/"
+	}
+
+	// Return canonical parsed form, not raw user input.
+	return u.String()
 }
 
 func loginPageHandler(cfg *Config, tmpls *Templates, i18n *I18n) http.HandlerFunc {
