@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -291,6 +292,9 @@ func folkdanceJSONProbe(rawURL string) bool {
 
 // httpContentType fetches only the Content-Type header of a URL.
 func httpContentType(rawURL string) string {
+	if u, err := url.Parse(rawURL); err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+		return ""
+	}
 	resp, err := fetchClient.Head(rawURL)
 	if err != nil {
 		return ""

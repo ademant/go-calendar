@@ -601,7 +601,20 @@ func apObjectToFederatedEvent(obj map[string]any, actorID string) FederatedEvent
 	}
 }
 
+// validateAPURL returns an error if rawURL is not a valid https URL with a non-empty host.
+// All outbound ActivityPub fetches must use https to prevent SSRF via non-HTTP schemes.
+func validateAPURL(rawURL string) error {
+	u, err := url.Parse(rawURL)
+	if err != nil || u.Scheme != "https" || u.Host == "" {
+		return fmt.Errorf("ActivityPub URL must be https with a non-empty host: %q", rawURL)
+	}
+	return nil
+}
+
 func resolveInboxURL(ctx context.Context, client *DansalClient, actorURI string) (string, error) {
+	if err := validateAPURL(actorURI); err != nil {
+		return "", err
+	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, actorURI, nil)
 	if err != nil {
 		return "", err
@@ -773,6 +786,9 @@ func resolveActorFromInput(ctx context.Context, httpClient *http.Client, input s
 		}
 		resource := "acct:" + parts[0] + "@" + parts[1]
 		wfURL := "https://" + parts[1] + "/.well-known/webfinger?resource=" + url.QueryEscape(resource)
+		if err := validateAPURL(wfURL); err != nil {
+			return "", "", fmt.Errorf("invalid webfinger domain: %w", err)
+		}
 		req, err := http.NewRequestWithContext(ctx, http.MethodGet, wfURL, nil)
 		if err != nil {
 			return "", "", err
@@ -808,6 +824,9 @@ func resolveActorFromInput(ctx context.Context, httpClient *http.Client, input s
 		return "", "", fmt.Errorf("expected @user@host or https:// URL")
 	}
 
+	if err := validateAPURL(apID); err != nil {
+		return "", "", fmt.Errorf("invalid actor URL: %w", err)
+	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, apID, nil)
 	if err != nil {
 		return "", "", err

@@ -12,6 +12,7 @@ import (
 	"encoding/pem"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strings"
 	"sync"
 	"time"
@@ -29,6 +30,11 @@ var (
 )
 
 func fetchActorPublicKey(ctx context.Context, httpClient *http.Client, actorURL string) (string, error) {
+	// actorURL comes from the keyId field in an HTTP Signature header — validate
+	// it is a proper https URL before making an outbound request.
+	if u, err := url.Parse(actorURL); err != nil || u.Scheme != "https" || u.Host == "" {
+		return "", fmt.Errorf("actor URL must be https with a non-empty host: %q", actorURL)
+	}
 	pubKeyCacheMu.Lock()
 	if e, ok := pubKeyCache[actorURL]; ok && time.Since(e.fetchedAt) < pubKeyCacheTTL {
 		pubKeyCacheMu.Unlock()

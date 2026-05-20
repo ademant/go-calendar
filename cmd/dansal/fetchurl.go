@@ -325,6 +325,11 @@ func patchFetchSource(w http.ResponseWriter, r *http.Request) {
 
 // importFromSource dispatches to the correct importer based on src.Type.
 func importFromSource(src FetchSource) ([]Event, bool, error) {
+	// Defense-in-depth: re-validate scheme even though the URL was validated at
+	// storage time, guarding against any future path that bypasses the handler check.
+	if u, err := url.Parse(src.URL); err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+		return nil, false, fmt.Errorf("fetch URL must use http or https: %q", src.URL)
+	}
 	switch src.Type {
 	case "folkdance-json":
 		return importFromFolkdanceJSON(src)
