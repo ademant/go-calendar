@@ -198,6 +198,7 @@
           <th>{{$.Strings.T "tt_title"}}</th>
           <th>{{$.Strings.T "tt_desc"}}</th>
           <th>{{$.Strings.T "tt_room"}}</th>
+          <th>{{$.Strings.T "tt_location"}}</th>
           <th></th>
         </tr>
       </thead>
@@ -208,6 +209,7 @@
           <td><input type="text" name="tt_title" placeholder="{{$.Strings.T "tt_title_placeholder"}}" oninput="growTTTable(this)"></td>
           <td><input type="text" name="tt_desc" placeholder="{{$.Strings.T "tt_desc_placeholder"}}"></td>
           <td><input type="text" name="tt_room" placeholder="{{$.Strings.T "tt_room_placeholder"}}"></td>
+          <td><select name="tt_loc_id" id="tt-loc-template"></select></td>
           <td><button type="button" class="btn-del-row" onclick="delRow(this)" title="Remove">×</button></td>
         </tr>
       </tbody>
@@ -292,6 +294,23 @@ function togglePricing(){
   document.getElementById('pricing-multiple').hidden=(v!=='multiple');
 }
 
+var _ttLocs={{locationsJSON .Locations}};
+var _ttDefaultLocID=0;
+function _buildLocOpts(selectedID){
+  var orgEl=document.getElementById('org_id');
+  var orgID=orgEl?parseInt(orgEl.value,10)||0:0;
+  var h='<option value="">—</option>';
+  _ttLocs.forEach(function(l){
+    if(orgID&&l.orgID&&l.orgID!==orgID)return;
+    h+='<option value="'+l.id+'"'+(l.id===selectedID?' selected':'')+'>'+l.label+'</option>';
+  });
+  return h;
+}
+function _refreshTTLocSelects(){
+  document.querySelectorAll('#tt-body select[name="tt_loc_id"]').forEach(function(s){
+    var cur=parseInt(s.value,10)||0;s.innerHTML=_buildLocOpts(cur);
+  });
+}
 // Growing timetable
 function growTTTable(el){
   var tbody=document.getElementById('tt-body');
@@ -310,9 +329,17 @@ function addTTRow(){
     '<td><input type="text" name="tt_title" oninput="growTTTable(this)"></td>'+
     '<td><input type="text" name="tt_desc"></td>'+
     '<td><input type="text" name="tt_room"></td>'+
+    '<td><select name="tt_loc_id">'+_buildLocOpts(_ttDefaultLocID)+'</select></td>'+
     '<td><button type="button" class="btn-del-row" onclick="delRow(this)" title="Remove">×</button></td>';
   tbody.appendChild(row);
 }
+(function(){
+  var s=document.getElementById('tt-loc-template');if(s)s.innerHTML=_buildLocOpts(0);
+  var orgEl=document.getElementById('org_id');
+  if(orgEl)orgEl.addEventListener('change',_refreshTTLocSelects);
+  var locEl=document.getElementById('loc_id');
+  if(locEl)locEl.addEventListener('change',function(){_ttDefaultLocID=parseInt(this.value,10)||0;});
+})();
 function delRow(btn){
   var row=btn.closest('tr');
   var tbody=row.parentNode;

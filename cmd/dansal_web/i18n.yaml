@@ -194,6 +194,7 @@ languages:
       tt_title_placeholder: "Komz"
       tt_desc_placeholder: "Munudoù"
       tt_room_placeholder: "Sal A"
+      tt_location: "Lec'h"
       view_list: "Listenn"
       view_week: "Sizhun"
       view_map: "Kartenn"
@@ -613,6 +614,7 @@ languages:
       tt_title_placeholder: "Vortrag"
       tt_desc_placeholder: "Details"
       tt_room_placeholder: "Saal A"
+      tt_location: "Ort"
       # View toggle
       view_list: "Liste"
       view_week: "Woche"
@@ -1018,6 +1020,7 @@ languages:
       tt_title_placeholder: "Kaoz"
       tt_desc_placeholder: "Munudoù"
       tt_room_placeholder: "Sal A"
+      tt_location: "Lec'h"
       # View toggle
       view_list: "Roll"
       view_week: "Sizhun"
@@ -1441,6 +1444,7 @@ languages:
       tt_title_placeholder: "Talk"
       tt_desc_placeholder: "Details"
       tt_room_placeholder: "Hall A"
+      tt_location: "Location"
       # View toggle
       view_list: "List"
       view_week: "Week"
@@ -1858,6 +1862,7 @@ languages:
       tt_title_placeholder: "Charla"
       tt_desc_placeholder: "Detalles"
       tt_room_placeholder: "Sala A"
+      tt_location: "Lugar"
       view_list: "Lista"
       view_week: "Semana"
       view_map: "Mapa"
@@ -2277,6 +2282,7 @@ languages:
       tt_title_placeholder: "Conférence"
       tt_desc_placeholder: "Détails"
       tt_room_placeholder: "Salle A"
+      tt_location: "Lieu"
       # View toggle
       view_list: "Liste"
       view_week: "Semaine"
@@ -2694,6 +2700,7 @@ languages:
       tt_title_placeholder: "Conferenza"
       tt_desc_placeholder: "Dettagli"
       tt_room_placeholder: "Sala A"
+      tt_location: "Luogo"
       view_list: "Lista"
       view_week: "Settimana"
       view_map: "Mappa"
@@ -3106,6 +3113,7 @@ languages:
       tt_title_placeholder: "Lezing"
       tt_desc_placeholder: "Details"
       tt_room_placeholder: "Zaal A"
+      tt_location: "Locatie"
       view_list: "Lijst"
       view_week: "Week"
       view_map: "Kaart"

@@ -303,6 +303,30 @@ var tmplFuncMap = template.FuncMap{
 		}
 		return *p
 	},
+	"locationsJSON": func(locs []Location) template.JS {
+		type locItem struct {
+			ID    int    `json:"id"`
+			Label string `json:"label"`
+			OrgID int    `json:"orgID"`
+		}
+		items := make([]locItem, len(locs))
+		for i, l := range locs {
+			label := l.Location
+			if l.ShortName != "" {
+				label = l.ShortName
+			}
+			if l.Town != "" {
+				label += ", " + l.Town
+			}
+			orgID := 0
+			if l.OrganizationID != nil {
+				orgID = *l.OrganizationID
+			}
+			items[i] = locItem{ID: l.ID, Label: label, OrgID: orgID}
+		}
+		b, _ := json.Marshal(items)
+		return template.JS(b)
+	},
 	// mastodonURL converts "@user@instance.tld" → "https://instance.tld/@user".
 	// If the value already starts with "http", it is returned unchanged.
 	"mastodonURL": func(handle string) string {

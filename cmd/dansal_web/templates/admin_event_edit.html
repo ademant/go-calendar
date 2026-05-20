@@ -306,17 +306,19 @@
           <th>{{$.Strings.T "tt_title"}}</th>
           <th>{{$.Strings.T "tt_desc"}}</th>
           <th>{{$.Strings.T "tt_room"}}</th>
+          <th>{{$.Strings.T "tt_location"}}</th>
           <th></th>
         </tr>
       </thead>
       <tbody id="tt-body">
-        {{range .Event.Timetable}}
+        {{range .Event.Timetable}}{{$entry := .}}
         <tr class="tt-row">
           <td><input type="time" name="tt_start" value="{{.StartTime}}"></td>
           <td><input type="time" name="tt_end" value="{{.EndTime}}"></td>
           <td><input type="text" name="tt_title" value="{{.Title}}" oninput="growTTTable(this)"></td>
           <td><input type="text" name="tt_desc" value="{{.Description}}"></td>
           <td><input type="text" name="tt_room" value="{{.Room}}"></td>
+          <td><select name="tt_loc_id"><option value="">—</option>{{range $.Data.Locations}}<option value="{{.ID}}"{{if and $entry.LocationID (eq .ID (derefInt $entry.LocationID))}} selected{{end}}>{{if .ShortName}}{{.ShortName}}{{else}}{{.Location}}{{end}}{{if .Town}}, {{.Town}}{{end}}</option>{{end}}</select></td>
           <td><button type="button" class="btn-del-row" onclick="delRow(this)" title="Remove">×</button></td>
         </tr>
         {{end}}
@@ -326,6 +328,7 @@
           <td><input type="text" name="tt_title" placeholder="{{$.Strings.T "tt_title_placeholder"}}" oninput="growTTTable(this)"></td>
           <td><input type="text" name="tt_desc" placeholder="{{$.Strings.T "tt_desc_placeholder"}}"></td>
           <td><input type="text" name="tt_room" placeholder="{{$.Strings.T "tt_room_placeholder"}}"></td>
+          <td><select name="tt_loc_id" id="tt-loc-template"></select></td>
           <td><button type="button" class="btn-del-row" onclick="delRow(this)" title="Remove">×</button></td>
         </tr>
       </tbody>
@@ -449,6 +452,18 @@ function geocodeLocation(){
     .finally(function(){btn.disabled=false;});
 }
 
+var _ttLocs={{locationsJSON $.Data.Locations}};
+var _ttDefaultLocID={{if $.Data.Event.LocationID}}{{derefInt $.Data.Event.LocationID}}{{else}}0{{end}};
+function _buildLocOpts(selectedID){
+  var orgEl=document.getElementById('org_id');
+  var orgID=orgEl?parseInt(orgEl.value,10)||0:0;
+  var h='<option value="">—</option>';
+  _ttLocs.forEach(function(l){
+    if(orgID&&l.orgID&&l.orgID!==orgID)return;
+    h+='<option value="'+l.id+'"'+(l.id===selectedID?' selected':'')+'>'+l.label+'</option>';
+  });
+  return h;
+}
 // Growing timetable
 function growTTTable(el){
   var tbody=document.getElementById('tt-body');
@@ -467,9 +482,19 @@ function addTTRow(){
     '<td><input type="text" name="tt_title" oninput="growTTTable(this)"></td>'+
     '<td><input type="text" name="tt_desc"></td>'+
     '<td><input type="text" name="tt_room"></td>'+
+    '<td><select name="tt_loc_id">'+_buildLocOpts(_ttDefaultLocID)+'</select></td>'+
     '<td><button type="button" class="btn-del-row" onclick="delRow(this)" title="Remove">×</button></td>';
   tbody.appendChild(row);
 }
+(function(){
+  var s=document.getElementById('tt-loc-template');if(s)s.innerHTML=_buildLocOpts(_ttDefaultLocID);
+  var orgEl=document.getElementById('org_id');
+  if(orgEl)orgEl.addEventListener('change',function(){
+    document.querySelectorAll('#tt-body select[name="tt_loc_id"]').forEach(function(sel){
+      var cur=parseInt(sel.value,10)||0;sel.innerHTML=_buildLocOpts(cur);
+    });
+  });
+})();
 function delRow(btn){
   var row=btn.closest('tr');
   var tbody=row.parentNode;

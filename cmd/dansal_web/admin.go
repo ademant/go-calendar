@@ -1770,6 +1770,7 @@ func adminEventCreateHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *
 		titles := r.MultipartForm.Value["tt_title"]
 		descs := r.MultipartForm.Value["tt_desc"]
 		rooms := r.MultipartForm.Value["tt_room"]
+		locIDs := r.MultipartForm.Value["tt_loc_id"]
 		var ttEntries []TimetableEntryReq
 		for i, s := range starts {
 			s = strings.TrimSpace(s)
@@ -1789,6 +1790,11 @@ func adminEventCreateHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *
 			}
 			if i < len(rooms) {
 				entry.Room = strings.TrimSpace(rooms[i])
+			}
+			if i < len(locIDs) {
+				if v, err := strconv.Atoi(strings.TrimSpace(locIDs[i])); err == nil && v > 0 {
+					entry.LocationID = &v
+				}
 			}
 			ttEntries = append(ttEntries, entry)
 		}
@@ -2085,6 +2091,7 @@ func adminEventSaveHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *Da
 		titles := r.MultipartForm.Value["tt_title"]
 		descs := r.MultipartForm.Value["tt_desc"]
 		rooms := r.MultipartForm.Value["tt_room"]
+		locIDs := r.MultipartForm.Value["tt_loc_id"]
 		var ttEntries []TimetableEntryReq
 		for i, s := range starts {
 			s = strings.TrimSpace(s)
@@ -2104,6 +2111,11 @@ func adminEventSaveHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *Da
 			}
 			if i < len(rooms) {
 				entry.Room = strings.TrimSpace(rooms[i])
+			}
+			if i < len(locIDs) {
+				if v, err := strconv.Atoi(strings.TrimSpace(locIDs[i])); err == nil && v > 0 {
+					entry.LocationID = &v
+				}
 			}
 			ttEntries = append(ttEntries, entry)
 		}
