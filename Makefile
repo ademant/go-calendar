@@ -1,6 +1,7 @@
 VERSION    := $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
 BUILD_TIME := $(shell date -u +"%Y-%m-%dT%H:%M:%SZ")
 LDFLAGS    := -ldflags "-X main.Version=$(VERSION) -X main.BuildTime=$(BUILD_TIME)"
+BUILDFLAGS := -trimpath -buildvcs=false
 
 SERVICE    := dansal
 BINDIR     := /usr/bin
@@ -8,18 +9,28 @@ SYSCONFDIR := /etc/dansal
 STATEDIR   := /var/lib/dansal
 SYSTEMDDIR := /etc/systemd/system
 
-.PHONY: build build-dansal build-dansal_web build-dansal_admin run clean install install-web update deb
+.DEFAULT_GOAL := build
 
-build: build-dansal build-dansal_web build-dansal_admin
+.PHONY: build build-dansal build-dansal_web build-dansal_admin \
+        run fmt vet clean install install-web update deb
+
+build:
+	$(MAKE) -j3 build-dansal build-dansal_web build-dansal_admin
 
 build-dansal:
-	go build $(LDFLAGS) -buildvcs=false -o dansal ./cmd/dansal
+	go build $(LDFLAGS) $(BUILDFLAGS) -o dansal ./cmd/dansal
 
 build-dansal_web:
-	go build -buildvcs=false -o dansal_web ./cmd/dansal_web
+	go build $(LDFLAGS) $(BUILDFLAGS) -o dansal_web ./cmd/dansal_web
 
 build-dansal_admin:
-	go build -buildvcs=false -o dansal_admin ./cmd/dansal_admin
+	go build $(LDFLAGS) $(BUILDFLAGS) -o dansal_admin ./cmd/dansal_admin
+
+fmt:
+	go fmt ./...
+
+vet:
+	go vet ./...
 
 run: build-dansal
 	./dansal --config ./config.yaml
@@ -28,6 +39,7 @@ clean:
 	rm -f dansal dansal_web dansal_admin *.deb
 
 install: build
+	@[ "$(shell id -u)" = "0" ] || { echo "install requires root"; exit 1; }
 	# system user
 	id -u $(SERVICE) >/dev/null 2>&1 || \
 		adduser --system --group --no-create-home --home-dir $(STATEDIR) \
@@ -69,6 +81,7 @@ install: build
 	fi
 
 install-web: build-dansal_web
+	@[ "$(shell id -u)" = "0" ] || { echo "install-web requires root"; exit 1; }
 	install -d -m 750 -o $(SERVICE) -g $(SERVICE) /var/lib/dansal-web
 	@if [ ! -f $(SYSCONFDIR)/web.yaml ]; then \
 		install -m 640 -o root -g $(SERVICE) packaging/web.yaml $(SYSCONFDIR)/web.yaml; \
@@ -82,6 +95,7 @@ install-web: build-dansal_web
 	systemctl enable --now dansal-web.service
 
 update: build
+	@[ "$(shell id -u)" = "0" ] || { echo "update requires root"; exit 1; }
 	install -m 755 dansal        $(BINDIR)/dansal
 	install -m 755 dansal_admin  $(BINDIR)/dansal_admin
 	install -m 755 dansal_web    $(BINDIR)/dansal-web
@@ -94,42 +108,38 @@ DEB_VERSION ?= $(shell git describe --tags --always 2>/dev/null | \
                 sed 's/^v//; s/-\([0-9]*\)-g[0-9a-f]*/+\1/' | \
                 grep -E '^[0-9]' || echo "0.0~git.$(shell date +%Y%m%d).$(shell git rev-parse --short HEAD 2>/dev/null)")
 DEB_ARCH    ?= amd64
-DEB_DIR     := /tmp/dansal-deb-$(shell date +%s%N)
 
 deb: build-dansal build-dansal_web build-dansal_admin
-	# Package tree
-	mkdir -p $(DEB_DIR)/DEBIAN
-	mkdir -p $(DEB_DIR)/usr/bin
-	mkdir -p $(DEB_DIR)/usr/lib/dansal
-	mkdir -p $(DEB_DIR)/$(SYSTEMDDIR)
-	mkdir -p $(DEB_DIR)/etc/dansal
-	mkdir -p $(DEB_DIR)/etc/fail2ban/filter.d
-	mkdir -p $(DEB_DIR)/etc/fail2ban/jail.d
-	# Control files
+	@set -e; \
+	DEB_DIR=$$(mktemp -d /tmp/dansal-deb-XXXXXX); \
+	trap 'rm -rf $$DEB_DIR' EXIT; \
+	\
+	mkdir -p $$DEB_DIR/DEBIAN \
+	         $$DEB_DIR/usr/bin \
+	         $$DEB_DIR/usr/lib/dansal \
+	         $$DEB_DIR/$(SYSTEMDDIR) \
+	         $$DEB_DIR/etc/dansal \
+	         $$DEB_DIR/etc/fail2ban/filter.d \
+	         $$DEB_DIR/etc/fail2ban/jail.d; \
+	\
 	sed 's/VERSION_PLACEHOLDER/$(DEB_VERSION)/; s/amd64/$(DEB_ARCH)/' \
-	    packaging/control > $(DEB_DIR)/DEBIAN/control
-	cp  packaging/conffiles                          $(DEB_DIR)/DEBIAN/conffiles
-	install -m 755 packaging/preinst                 $(DEB_DIR)/DEBIAN/preinst
-	install -m 755 packaging/postinst                $(DEB_DIR)/DEBIAN/postinst
-	install -m 755 packaging/prerm                   $(DEB_DIR)/DEBIAN/prerm
-	install -m 755 packaging/postrm                  $(DEB_DIR)/DEBIAN/postrm
-	# Preflight helper
-	install -m 755 packaging/preflight               $(DEB_DIR)/usr/lib/dansal/preflight
-	# Binaries
-	install -m 755 dansal                            $(DEB_DIR)/usr/bin/dansal
-	install -m 755 dansal_web                        $(DEB_DIR)/usr/bin/dansal-web
-	install -m 755 dansal_admin                      $(DEB_DIR)/usr/bin/dansal_admin
-	# Systemd units
-	install -m 644 dansal.service                    $(DEB_DIR)/$(SYSTEMDDIR)/dansal.service
-	install -m 644 dansal-web.service                $(DEB_DIR)/$(SYSTEMDDIR)/dansal-web.service
-	# Default configs (with Debian-friendly paths)
-	install -m 644 packaging/config.yaml             $(DEB_DIR)/etc/dansal/config.yaml
-	install -m 644 packaging/web.yaml                $(DEB_DIR)/etc/dansal/web.yaml
-	# fail2ban (optional — installed but only activated when fail2ban is present)
-	install -m 644 deploy/fail2ban/filter.d/dansal.conf $(DEB_DIR)/etc/fail2ban/filter.d/dansal.conf
-	install -m 644 deploy/fail2ban/jail.d/dansal.conf   $(DEB_DIR)/etc/fail2ban/jail.d/dansal.conf
-	# Build
-	dpkg-deb --build --root-owner-group $(DEB_DIR) \
-	    dansal_$(DEB_VERSION)_$(DEB_ARCH).deb
-	rm -rf $(DEB_DIR)
-	@echo "Built dansal_$(DEB_VERSION)_$(DEB_ARCH).deb"
+	    packaging/control > $$DEB_DIR/DEBIAN/control; \
+	cp  packaging/conffiles                              $$DEB_DIR/DEBIAN/conffiles; \
+	install -m 755 packaging/preinst                     $$DEB_DIR/DEBIAN/preinst; \
+	install -m 755 packaging/postinst                    $$DEB_DIR/DEBIAN/postinst; \
+	install -m 755 packaging/prerm                       $$DEB_DIR/DEBIAN/prerm; \
+	install -m 755 packaging/postrm                      $$DEB_DIR/DEBIAN/postrm; \
+	install -m 755 packaging/preflight                   $$DEB_DIR/usr/lib/dansal/preflight; \
+	install -m 755 dansal                                $$DEB_DIR/usr/bin/dansal; \
+	install -m 755 dansal_web                            $$DEB_DIR/usr/bin/dansal-web; \
+	install -m 755 dansal_admin                          $$DEB_DIR/usr/bin/dansal_admin; \
+	install -m 644 dansal.service                        $$DEB_DIR/$(SYSTEMDDIR)/dansal.service; \
+	install -m 644 dansal-web.service                    $$DEB_DIR/$(SYSTEMDDIR)/dansal-web.service; \
+	install -m 644 packaging/config.yaml                 $$DEB_DIR/etc/dansal/config.yaml; \
+	install -m 644 packaging/web.yaml                    $$DEB_DIR/etc/dansal/web.yaml; \
+	install -m 644 deploy/fail2ban/filter.d/dansal.conf  $$DEB_DIR/etc/fail2ban/filter.d/dansal.conf; \
+	install -m 644 deploy/fail2ban/jail.d/dansal.conf    $$DEB_DIR/etc/fail2ban/jail.d/dansal.conf; \
+	\
+	dpkg-deb --build --root-owner-group $$DEB_DIR \
+	    dansal_$(DEB_VERSION)_$(DEB_ARCH).deb; \
+	echo "Built dansal_$(DEB_VERSION)_$(DEB_ARCH).deb"
