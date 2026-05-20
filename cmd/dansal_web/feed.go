@@ -211,11 +211,23 @@ func feedAddEventToCalendar(cal *ics.Calendar, domain string, e Event) {
 	if e.Description != "" {
 		vevent.SetDescription(e.Description)
 	}
-	if t, err := time.Parse(time.RFC3339, e.StartTime); err == nil {
-		vevent.SetProperty(ics.ComponentPropertyDtStart, t.UTC().Format("20060102T150405Z"))
-	}
-	if t, err := time.Parse(time.RFC3339, e.EndTime); err == nil {
-		vevent.SetProperty(ics.ComponentPropertyDtEnd, t.UTC().Format("20060102T150405Z"))
+	tStart, startOK := time.Parse(time.RFC3339, e.StartTime)
+	tEnd, endOK := time.Parse(time.RFC3339, e.EndTime)
+	if startOK == nil && endOK == nil &&
+		tStart.Format("20060102") != tEnd.Format("20060102") {
+		// Multi-day event: use all-day DATE values so every calendar app
+		// shows the full span. DTEND is exclusive, so add one day.
+		vevent.SetProperty(ics.ComponentPropertyDtStart,
+			tStart.Format("20060102"), ics.WithValue("DATE"))
+		vevent.SetProperty(ics.ComponentPropertyDtEnd,
+			tEnd.AddDate(0, 0, 1).Format("20060102"), ics.WithValue("DATE"))
+	} else {
+		if startOK == nil {
+			vevent.SetProperty(ics.ComponentPropertyDtStart, tStart.UTC().Format("20060102T150405Z"))
+		}
+		if endOK == nil {
+			vevent.SetProperty(ics.ComponentPropertyDtEnd, tEnd.UTC().Format("20060102T150405Z"))
+		}
 	}
 	loc := e.Location
 	if loc == "" {
