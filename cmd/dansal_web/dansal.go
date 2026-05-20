@@ -240,18 +240,18 @@ type Musician struct {
 }
 
 type Location struct {
-	ID             int      `json:"id"`
-	Location       string   `json:"location"`
-	ShortName      string   `json:"short_name,omitempty"`
-	Address        string   `json:"address"`
-	Zipcode        string   `json:"zipcode"`
-	Town           string   `json:"town"`
-	Country        string   `json:"country,omitempty"`
-	Latitude       *float64 `json:"latitude,omitempty"`
-	Longitude      *float64 `json:"longitude,omitempty"`
-	Internetsite   string   `json:"internetsite"`
-	CreatedAt      string   `json:"created_at"`
-	OrganizationID *int     `json:"organization_id,omitempty"`
+	ID              int      `json:"id"`
+	Location        string   `json:"location"`
+	ShortName       string   `json:"short_name,omitempty"`
+	Address         string   `json:"address"`
+	Zipcode         string   `json:"zipcode"`
+	Town            string   `json:"town"`
+	Country         string   `json:"country,omitempty"`
+	Latitude        *float64 `json:"latitude,omitempty"`
+	Longitude       *float64 `json:"longitude,omitempty"`
+	Internetsite    string   `json:"internetsite"`
+	CreatedAt       string   `json:"created_at"`
+	OrganizationIDs []int    `json:"organization_ids,omitempty"`
 }
 
 type FetchSource struct {

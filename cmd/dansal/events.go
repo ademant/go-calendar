@@ -731,17 +731,19 @@ func fetchEventMusicians(eventID int) ([]Musician, error) {
 // fetchAllEventLocations returns locations for an event: the primary location
 // (events.location_id) first, followed by any entries in event_locations.
 func fetchAllEventLocations(eventID int) ([]Location, error) {
-	const cols = `l.id, l.location, COALESCE(l.short_name,''), COALESCE(l.address,''),
+	const selCols = `SELECT l.id, l.location, COALESCE(l.short_name,''), COALESCE(l.address,''),
 		COALESCE(l.zipcode,''), COALESCE(l.town,''), COALESCE(l.country,''), l.latitude,
-		l.longitude, COALESCE(l.internetsite,''), l.created_at, l.organization_id`
+		l.longitude, COALESCE(l.internetsite,''), l.created_at,
+		COALESCE(GROUP_CONCAT(lo.organization_id),'')`
+	const joinOrg = ` LEFT JOIN location_organizations lo ON l.id=lo.location_id`
 
 	scanLoc := func(s scanner) (Location, error) {
 		var loc Location
-		var orgID sql.NullInt64
+		var orgIDsStr string
 		var lat, lng sql.NullFloat64
 		if err := s.Scan(&loc.ID, &loc.Location, &loc.ShortName, &loc.Address,
 			&loc.Zipcode, &loc.Town, &loc.Country, &lat, &lng,
-			&loc.Internetsite, &loc.CreatedAt, &orgID); err != nil {
+			&loc.Internetsite, &loc.CreatedAt, &orgIDsStr); err != nil {
 			return Location{}, err
 		}
 		if lat.Valid {
@@ -752,17 +754,14 @@ func fetchAllEventLocations(eventID int) ([]Location, error) {
 			v := lng.Float64
 			loc.Longitude = &v
 		}
-		if orgID.Valid {
-			v := int(orgID.Int64)
-			loc.OrganizationID = &v
-		}
+		loc.OrganizationIDs = parseOrgIDs(orgIDsStr)
 		return loc, nil
 	}
 
 	var locs []Location
 
 	primary, err := scanLoc(db.QueryRow(
-		"SELECT "+cols+" FROM locations l JOIN events e ON l.id = e.location_id WHERE e.id = ?",
+		selCols+" FROM locations l"+joinOrg+" JOIN events e ON l.id=e.location_id WHERE e.id=? GROUP BY l.id",
 		eventID,
 	))
 	if err == nil {
@@ -770,7 +769,7 @@ func fetchAllEventLocations(eventID int) ([]Location, error) {
 	}
 
 	rows, err := db.Query(
-		"SELECT "+cols+" FROM locations l JOIN event_locations el ON l.id = el.location_id WHERE el.event_id = ? ORDER BY l.id",
+		selCols+" FROM locations l"+joinOrg+" JOIN event_locations el ON l.id=el.location_id WHERE el.event_id=? GROUP BY l.id ORDER BY l.id",
 		eventID,
 	)
 	if err != nil {

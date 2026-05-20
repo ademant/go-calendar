@@ -57,13 +57,15 @@
   <label for="internetsite">{{$.Strings.T "loc_website"}}</label>
   <input id="internetsite" type="url" name="internetsite" value="{{.Location.Internetsite}}">
 
-  <label for="organization_id">{{$.Strings.T "fetch_org"}}</label>
-  <select id="organization_id" name="organization_id">
-    <option value="">{{$.Strings.T "loc_no_org"}}</option>
-    {{range .Orgs}}
-    <option value="{{.ID}}"{{if $.Data.Location.OrganizationID}}{{if eq (derefInt $.Data.Location.OrganizationID) .ID}} selected{{end}}{{end}}>{{.Name}}</option>
+  <label>{{$.Strings.T "fetch_org"}}</label>
+  <div style="display:flex;flex-direction:column;gap:.3rem">
+    {{range .Orgs}}{{$orgID := .ID}}
+    <label style="font-weight:normal;display:flex;align-items:center;gap:.5rem">
+      <input type="checkbox" name="organization_ids" value="{{.ID}}"{{range $.Data.Location.OrganizationIDs}}{{if eq . $orgID}} checked{{end}}{{end}}>
+      {{.Name}}
+    </label>
     {{end}}
-  </select>
+  </div>
 
   <div class="form-actions">
     <button type="submit" class="btn-primary">{{$.Strings.T "admin_save"}}</button>

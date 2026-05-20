@@ -1053,23 +1053,23 @@ func adminLocationCreateHandler(cfg *Config, tmpls *Templates, client *DansalCli
 			http.Error(w, "bad request", http.StatusBadRequest)
 			return
 		}
-		var orgID *int
-		if v := r.FormValue("organization_id"); v != "" {
+		var orgIDs []int
+		for _, v := range r.Form["organization_ids"] {
 			if n, err := strconv.Atoi(v); err == nil {
-				orgID = &n
+				orgIDs = append(orgIDs, n)
 			}
 		}
 		loc := Location{
-			Location:     strings.TrimSpace(r.FormValue("location")),
-			ShortName:    strings.TrimSpace(r.FormValue("short_name")),
-			Address:      strings.TrimSpace(r.FormValue("address")),
-			Zipcode:      strings.TrimSpace(r.FormValue("zipcode")),
-			Town:         strings.TrimSpace(r.FormValue("town")),
-			Country:      strings.TrimSpace(r.FormValue("country")),
-			Latitude:     parseLatLng(r.FormValue("latitude")),
-			Longitude:    parseLatLng(r.FormValue("longitude")),
-			Internetsite: strings.TrimSpace(r.FormValue("internetsite")),
-			OrganizationID: orgID,
+			Location:        strings.TrimSpace(r.FormValue("location")),
+			ShortName:       strings.TrimSpace(r.FormValue("short_name")),
+			Address:         strings.TrimSpace(r.FormValue("address")),
+			Zipcode:         strings.TrimSpace(r.FormValue("zipcode")),
+			Town:            strings.TrimSpace(r.FormValue("town")),
+			Country:         strings.TrimSpace(r.FormValue("country")),
+			Latitude:        parseLatLng(r.FormValue("latitude")),
+			Longitude:       parseLatLng(r.FormValue("longitude")),
+			Internetsite:    strings.TrimSpace(r.FormValue("internetsite")),
+			OrganizationIDs: orgIDs,
 		}
 		token := getSessionToken(r)
 		if _, err := client.CreateLocation(r.Context(), loc, token); err != nil {
@@ -1126,24 +1126,24 @@ func adminLocationSaveHandler(cfg *Config, tmpls *Templates, client *DansalClien
 			http.Error(w, "bad request", http.StatusBadRequest)
 			return
 		}
-		var orgID *int
-		if v := r.FormValue("organization_id"); v != "" {
+		var orgIDs []int
+		for _, v := range r.Form["organization_ids"] {
 			if n, err := strconv.Atoi(v); err == nil {
-				orgID = &n
+				orgIDs = append(orgIDs, n)
 			}
 		}
 		loc := Location{
-			ID:             id,
-			Location:       strings.TrimSpace(r.FormValue("location")),
-			ShortName:      strings.TrimSpace(r.FormValue("short_name")),
-			Address:        strings.TrimSpace(r.FormValue("address")),
-			Zipcode:        strings.TrimSpace(r.FormValue("zipcode")),
-			Town:           strings.TrimSpace(r.FormValue("town")),
-			Country:        strings.TrimSpace(r.FormValue("country")),
-			Latitude:       parseLatLng(r.FormValue("latitude")),
-			Longitude:      parseLatLng(r.FormValue("longitude")),
-			Internetsite:   strings.TrimSpace(r.FormValue("internetsite")),
-			OrganizationID: orgID,
+			ID:              id,
+			Location:        strings.TrimSpace(r.FormValue("location")),
+			ShortName:       strings.TrimSpace(r.FormValue("short_name")),
+			Address:         strings.TrimSpace(r.FormValue("address")),
+			Zipcode:         strings.TrimSpace(r.FormValue("zipcode")),
+			Town:            strings.TrimSpace(r.FormValue("town")),
+			Country:         strings.TrimSpace(r.FormValue("country")),
+			Latitude:        parseLatLng(r.FormValue("latitude")),
+			Longitude:       parseLatLng(r.FormValue("longitude")),
+			Internetsite:    strings.TrimSpace(r.FormValue("internetsite")),
+			OrganizationIDs: orgIDs,
 		}
 		token := getSessionToken(r)
 		if err := client.UpdateLocation(r.Context(), id, loc, token); err != nil {

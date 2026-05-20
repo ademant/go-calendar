@@ -305,9 +305,9 @@ var tmplFuncMap = template.FuncMap{
 	},
 	"locationsJSON": func(locs []Location) template.JS {
 		type locItem struct {
-			ID    int    `json:"id"`
-			Label string `json:"label"`
-			OrgID int    `json:"orgID"`
+			ID     int    `json:"id"`
+			Label  string `json:"label"`
+			OrgIDs []int  `json:"orgIDs"`
 		}
 		items := make([]locItem, len(locs))
 		for i, l := range locs {
@@ -318,11 +318,11 @@ var tmplFuncMap = template.FuncMap{
 			if l.Town != "" {
 				label += ", " + l.Town
 			}
-			orgID := 0
-			if l.OrganizationID != nil {
-				orgID = *l.OrganizationID
+			orgIDs := l.OrganizationIDs
+			if orgIDs == nil {
+				orgIDs = []int{}
 			}
-			items[i] = locItem{ID: l.ID, Label: label, OrgID: orgID}
+			items[i] = locItem{ID: l.ID, Label: label, OrgIDs: orgIDs}
 		}
 		b, _ := json.Marshal(items)
 		return template.JS(b)
@@ -796,8 +796,7 @@ func orgsHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n
 		firstTown := map[int]string{}
 		var mapPins []OrgMapPin
 		for _, l := range locs {
-			if l.OrganizationID != nil {
-				id := *l.OrganizationID
+			for _, id := range l.OrganizationIDs {
 				if firstTown[id] == "" && l.Town != "" {
 					firstTown[id] = l.Town
 				}

@@ -459,7 +459,7 @@ function _buildLocOpts(selectedID){
   var orgID=orgEl?parseInt(orgEl.value,10)||0:0;
   var h='<option value="">—</option>';
   _ttLocs.forEach(function(l){
-    if(orgID&&l.orgID&&l.orgID!==orgID)return;
+    if(orgID&&l.orgIDs.length>0&&l.orgIDs.indexOf(orgID)===-1)return;
     h+='<option value="'+l.id+'"'+(l.id===selectedID?' selected':'')+'>'+l.label+'</option>';
   });
   return h;

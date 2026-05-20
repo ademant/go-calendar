@@ -603,6 +603,15 @@ func migrateDB() {
 	db.Exec("ALTER TABLE events ADD COLUMN changed_at INTEGER")
 	db.Exec("ALTER TABLE events ADD COLUMN changed_by TEXT DEFAULT ''")
 	db.Exec("ALTER TABLE events ADD COLUMN fetch_source_id INTEGER REFERENCES fetch_sources(id) ON DELETE SET NULL")
+	db.Exec(`CREATE TABLE IF NOT EXISTS location_organizations (
+		location_id INTEGER NOT NULL,
+		organization_id INTEGER NOT NULL,
+		PRIMARY KEY (location_id, organization_id),
+		FOREIGN KEY (location_id) REFERENCES locations(id) ON DELETE CASCADE,
+		FOREIGN KEY (organization_id) REFERENCES organizations(id) ON DELETE CASCADE
+	)`)
+	db.Exec(`INSERT OR IGNORE INTO location_organizations (location_id, organization_id)
+		SELECT id, organization_id FROM locations WHERE organization_id IS NOT NULL`)
 }
 
 func createTables() error {
