@@ -117,8 +117,17 @@ type OrgListItem struct {
 	FirstTown     string
 }
 
+type OrgMapPin struct {
+	Lat     float64 `json:"lat"`
+	Lng     float64 `json:"lng"`
+	OrgName string  `json:"org"`
+	OrgSlug string  `json:"slug"`
+	LocName string  `json:"loc"`
+}
+
 type OrgsListData struct {
-	Items []OrgListItem
+	Items   []OrgListItem
+	MapPins []OrgMapPin
 }
 
 //go:embed templates
@@ -361,6 +370,13 @@ var tmplFuncMap = template.FuncMap{
 			return template.JS("[]")
 		}
 		b, _ := json.Marshal(geo)
+		return template.JS(b)
+	},
+	"orgsMapJSON": func(pins []OrgMapPin) template.JS {
+		if len(pins) == 0 {
+			return template.JS("[]")
+		}
+		b, _ := json.Marshal(pins)
 		return template.JS(b)
 	},
 	"orgName": func(orgMap map[int]Organization, id *int) string {
@@ -717,6 +733,15 @@ func orgFrontendHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *Dansa
 	}
 }
 
+func orgNameByID(orgs []Organization, id int) string {
+	for _, o := range orgs {
+		if o.ID == id {
+			return o.Name
+		}
+	}
+	return ""
+}
+
 func orgsHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var orgs []Organization
@@ -734,12 +759,31 @@ func orgsHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n
 			return
 		}
 
+		orgSlugMap := make(map[int]string, len(orgs))
+		for _, o := range orgs {
+			orgSlugMap[o.ID] = effectiveSlug(o)
+		}
+
 		firstTown := map[int]string{}
+		var mapPins []OrgMapPin
 		for _, l := range locs {
 			if l.OrganizationID != nil {
 				id := *l.OrganizationID
 				if firstTown[id] == "" && l.Town != "" {
 					firstTown[id] = l.Town
+				}
+				if l.Latitude != nil && l.Longitude != nil {
+					locName := l.ShortName
+					if locName == "" {
+						locName = l.Location
+					}
+					mapPins = append(mapPins, OrgMapPin{
+						Lat:     *l.Latitude,
+						Lng:     *l.Longitude,
+						OrgName: orgNameByID(orgs, id),
+						OrgSlug: orgSlugMap[id],
+						LocName: locName,
+					})
 				}
 			}
 		}
@@ -756,7 +800,7 @@ func orgsHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18n *I18n
 			}
 		}
 		title := i18n.T(r, "orgs_title")
-		renderTemplate(w, tmpls.orgs, tmplData(r, cfg, i18n, title, OrgsListData{Items: items}))
+		renderTemplate(w, tmpls.orgs, tmplData(r, cfg, i18n, title, OrgsListData{Items: items, MapPins: mapPins}))
 	}
 }
 

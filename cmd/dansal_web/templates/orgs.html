@@ -3,6 +3,14 @@
 <h1>{{.Strings.T "orgs_title"}}</h1>
 
 {{with .Data}}
+
+{{if .MapPins}}
+<div id="omap-wrap">
+  <div id="omap"></div>
+</div>
+<script type="application/json" id="omap-data">{{orgsMapJSON .MapPins}}</script>
+{{end}}
+
 {{if .Items}}
 <div class="orgs-grid">
 {{range .Items}}
@@ -28,5 +36,44 @@
 .org-card-town{font-size:.85rem;color:var(--fg-faint)}
 .org-card-desc{font-size:.85rem;color:var(--fg-dim);display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;line-height:1.5;margin:0}
 .org-card-meta{display:flex;flex-wrap:wrap;gap:.3rem;margin-top:.15rem}
+#omap-wrap{margin-bottom:1.5rem}
+#omap{height:340px;border-radius:6px;border:1px solid var(--border)}
 </style>
+
+{{if .Data.MapPins}}
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha384-sHL9NAb7lN7rfvG5lfHpm643Xkcjzp4jFvuavGOndn6pjVqS6ny56CAt3nsEVT4H" crossorigin="anonymous">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha384-cxOPjt7s7Iz04uaHJceBmS+qpjv2JkIHNVcuOrM+YHwZOmJGBXI00mdUXEq65HTH" crossorigin="anonymous"></script>
+<script>
+(function(){
+  var raw = document.getElementById('omap-data');
+  if(!raw) return;
+  var pins;
+  try { pins = JSON.parse(raw.textContent); } catch(_){ return; }
+  if(!pins || !pins.length) return;
+
+  var map = L.map('omap');
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
+    attribution:'© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+    maxZoom:18
+  }).addTo(map);
+
+  var bounds = [];
+  pins.forEach(function(p){
+    var ll = [p.lat, p.lng];
+    bounds.push(ll);
+    var popup = '<b><a href="/org/'+escHtml(p.slug)+'">'+escHtml(p.org)+'</a></b>'+
+      (p.loc ? '<br><small>'+escHtml(p.loc)+'</small>' : '');
+    L.marker(ll).bindPopup(popup,{maxWidth:220}).addTo(map);
+  });
+
+  if(bounds.length === 1){
+    map.setView(bounds[0], 12);
+  } else {
+    try { map.fitBounds(L.latLngBounds(bounds), {padding:[30,30], maxZoom:10}); } catch(_){}
+  }
+
+  function escHtml(s){ return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+})();
+</script>
+{{end}}
 {{end}}
