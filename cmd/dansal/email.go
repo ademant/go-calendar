@@ -11,6 +11,7 @@ import (
 	"mime"
 	"net"
 	"net/smtp"
+	"strconv"
 	"time"
 )
 
@@ -122,7 +123,7 @@ func SendEmail(to, subject, body string) error {
 		"Content-Type: text/plain; charset=UTF-8\r\n\r\n" +
 		body)
 
-	addr := fmt.Sprintf("%s:%d", cfg.Host, port)
+	addr := net.JoinHostPort(cfg.Host, strconv.Itoa(port))
 
 	if cfg.TLS == "tls" {
 		dialer := &net.Dialer{Timeout: timeout}
