@@ -2126,7 +2126,7 @@ func adminDancesHandler(cfg *Config, tmpls *Templates, client *DansalClient, i18
 			return
 		}
 		dances, _ := client.GetDances(r.Context())
-		title := "Dance Styles"
+		title := i18n.T(r, "admin_dances_title")
 		renderTemplate(w, tmpls.adminDances, tmplData(r, cfg, i18n, title, AdminDancesData{Dances: dances}))
 	}
 }
@@ -2220,7 +2220,7 @@ func adminSiteConfigHandler(cfg *Config, tmpls *Templates, db *sql.DB, client *D
 			DefaultDanceNames: defaultDanceNames,
 			Success:           r.URL.Query().Get("saved") == "1",
 		}
-		renderTemplate(w, tmpls.adminSiteConfig, tmplData(r, cfg, i18n, "Site Configuration", data))
+		renderTemplate(w, tmpls.adminSiteConfig, tmplData(r, cfg, i18n, i18n.T(r, "admin_site_config_title"), data))
 	}
 }
 

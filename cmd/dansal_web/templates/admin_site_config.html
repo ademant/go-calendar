@@ -1,89 +1,89 @@
 {{template "base" .}}
 {{define "content"}}
 <div class="page-header">
-  <h1>Site Configuration</h1>
+  <h1>{{.Strings.T "admin_site_config_title"}}</h1>
 </div>
 
 {{with .Data}}
-{{if .Success}}<div class="flash-ok">Settings saved.</div>{{end}}
+{{if .Success}}<div class="flash-ok">{{$.Strings.T "admin_site_config_saved"}}</div>{{end}}
 {{if .ErrorMsg}}<div class="flash-err">{{.ErrorMsg}}</div>{{end}}
 
 <form method="post" action="/admin/site-config" enctype="multipart/form-data" class="cfg-form">
 
   <section class="cfg-section">
-    <h2>Appearance</h2>
+    <h2>{{$.Strings.T "admin_site_config_appearance"}}</h2>
     <div class="field">
-      <label>Site name</label>
-      <input type="text" name="site_name" value="{{.SiteName}}" placeholder="Displayed in page title and nav">
-      <p class="hint">Leave blank to use the domain name.</p>
+      <label>{{$.Strings.T "admin_site_config_site_name"}}</label>
+      <input type="text" name="site_name" value="{{.SiteName}}" placeholder="{{$.Strings.T "admin_site_config_site_name_placeholder"}}">
+      <p class="hint">{{$.Strings.T "admin_site_config_site_name_hint"}}</p>
     </div>
     <div class="field">
-      <label>Logo <span class="hint-inline">(SVG only)</span></label>
+      <label>{{$.Strings.T "admin_site_config_logo"}} <span class="hint-inline">{{$.Strings.T "admin_site_config_svg_only"}}</span></label>
       <input type="file" name="logo" accept=".svg,image/svg+xml">
-      {{if .HasLogo}}<p class="hint">Custom logo is set. Upload a new file to replace.</p>{{end}}
+      {{if .HasLogo}}<p class="hint">{{$.Strings.T "admin_site_config_logo_set"}}</p>{{end}}
     </div>
     <div class="field">
-      <label>Banner <span class="hint-inline">(SVG only)</span></label>
+      <label>{{$.Strings.T "admin_site_config_banner"}} <span class="hint-inline">{{$.Strings.T "admin_site_config_svg_only"}}</span></label>
       <input type="file" name="banner" accept=".svg,image/svg+xml">
-      {{if .HasBanner}}<p class="hint">Custom banner is set. Upload a new file to replace.</p>{{end}}
+      {{if .HasBanner}}<p class="hint">{{$.Strings.T "admin_site_config_banner_set"}}</p>{{end}}
     </div>
     <div class="field">
-      <label>Favicon <span class="hint-inline">(SVG only)</span></label>
+      <label>{{$.Strings.T "admin_site_config_favicon"}} <span class="hint-inline">{{$.Strings.T "admin_site_config_svg_only"}}</span></label>
       <input type="file" name="favicon" accept=".svg,image/svg+xml">
-      {{if .HasFavicon}}<p class="hint">Custom favicon is set. Upload a new file to replace.</p>{{end}}
+      {{if .HasFavicon}}<p class="hint">{{$.Strings.T "admin_site_config_favicon_set"}}</p>{{end}}
     </div>
   </section>
 
   {{if .Dances}}
   <section class="cfg-section">
-    <h2>Default dance styles for new events</h2>
+    <h2>{{$.Strings.T "admin_site_config_default_dances"}}</h2>
     <div class="field">
       <div class="dance-checkboxes">
         {{range .Dances}}
         <label class="dance-cb"><input type="checkbox" name="default_dance_ids" value="{{.ID}}"{{if index $.Data.DefaultDanceNames .Name}} checked{{end}}> {{.Name}}</label>
         {{end}}
       </div>
-      <p class="hint">These styles are pre-selected when creating a new event.</p>
+      <p class="hint">{{$.Strings.T "admin_site_config_default_dances_hint"}}</p>
     </div>
   </section>
   {{end}}
 
   <section class="cfg-section">
-    <h2>Contact &amp; Footer</h2>
+    <h2>{{$.Strings.T "admin_site_config_contact"}}</h2>
     <div class="field">
-      <label>Contact information</label>
-      <textarea name="contact" rows="3" placeholder="Shown in the page footer">{{.Contact}}</textarea>
-      <p class="hint">Overrides any contact text from the pages config file.</p>
+      <label>{{$.Strings.T "admin_site_config_contact_label"}}</label>
+      <textarea name="contact" rows="3" placeholder="{{$.Strings.T "admin_site_config_contact_placeholder"}}">{{.Contact}}</textarea>
+      <p class="hint">{{$.Strings.T "admin_site_config_contact_hint"}}</p>
     </div>
   </section>
 
   <section class="cfg-section">
-    <h2>Telegram Bot</h2>
+    <h2>{{$.Strings.T "admin_site_config_telegram"}}</h2>
     <div class="field">
-      <label>Bot token</label>
+      <label>{{$.Strings.T "admin_site_config_telegram_token"}}</label>
       <input type="text" name="telegram_bot_token" value="{{.TelegramBotToken}}" autocomplete="off" spellcheck="false">
     </div>
     <div class="field">
-      <label>Bot name</label>
+      <label>{{$.Strings.T "admin_site_config_telegram_name"}}</label>
       <input type="text" name="telegram_bot_name" value="{{.TelegramBotName}}" autocomplete="off">
-      <p class="hint">The @username of the Telegram bot (without @).</p>
+      <p class="hint">{{$.Strings.T "admin_site_config_telegram_hint"}}</p>
     </div>
   </section>
 
   <section class="cfg-section">
-    <h2>Matrix</h2>
+    <h2>{{$.Strings.T "admin_site_config_matrix"}}</h2>
     <div class="field">
-      <label>Homeserver URL</label>
+      <label>{{$.Strings.T "admin_site_config_matrix_homeserver"}}</label>
       <input type="url" name="matrix_homeserver" value="{{.MatrixHomeserver}}" placeholder="https://matrix.example.org">
     </div>
     <div class="field">
-      <label>Access token</label>
+      <label>{{$.Strings.T "admin_site_config_matrix_token"}}</label>
       <input type="text" name="matrix_access_token" value="{{.MatrixAccessToken}}" autocomplete="off" spellcheck="false">
     </div>
   </section>
 
   <div class="cfg-actions">
-    <button type="submit" class="btn-primary">Save</button>
+    <button type="submit" class="btn-primary">{{$.Strings.T "admin_save"}}</button>
   </div>
 </form>
 {{end}}
